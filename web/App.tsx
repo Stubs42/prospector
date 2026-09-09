@@ -53,9 +53,11 @@ function fmtLog(state: GameState, e: GameState["log"][number]): string {
     case "defence":
       return d.autoRepel ? `${col(d.defender)} auto-repels` : `${col(d.defender)} raises shields +${d.shieldBoost}`;
     case "attackSucceeded":
-      return `${col(d.attacker)} hits ${col(d.defender)} (${d.attackTotal}–${d.defenceTotal}) — takes ${d.spoil}`;
+      return `${col(d.attacker)} hits ${col(d.defender)} (${d.attackTotal}–${d.defenceTotal}) — ${col(d.attacker)} takes a ${d.spoil} from ${col(d.defender)}`;
     case "attackFailed":
-      return `${col(d.attacker)} repelled by ${col(d.defender)} (${d.attackTotal}–${d.defenceTotal})`;
+      return `${col(d.attacker)}'s attack repelled by ${col(d.defender)} (${d.attackTotal}–${d.defenceTotal})${
+        d.defenceTotal === d.attackTotal ? " — tie, defender wins; they may counter-attack" : "; defender may counter-attack"
+      }`;
     case "defenderFled":
       return `${col(d.defender)} flees through hyperspace`;
     case "loaded":
@@ -525,10 +527,16 @@ export default function App() {
             {/* combat */}
             {pc && (
               <div className="combatbox">
-                <p className="hint">
-                  {mode.ships[state.players[pc.attackerId]!.colour].name} → {mode.ships[state.players[pc.defenderId]!.colour].name}
-                  {pc.attackerLaserBoost ? ` · attacker +${pc.attackerLaserBoost} laser` : ""}
-                  {pc.defShields ? ` · defender shields ${pc.defShields}` : ""}
+                <p style={{ margin: "0 0 0.3rem", fontWeight: 700 }}>
+                  {pc.round > 1 ? "Counter-attack — " : ""}
+                  {mode.ships[state.players[pc.attackerId]!.colour].name} attacks {mode.ships[state.players[pc.defenderId]!.colour].name}
+                  {seats[pc.defenderId] === "human" && pc.awaiting === "defend" ? " — your cargo is at stake" : ""}
+                </p>
+                <p className="hint" style={{ marginTop: 0 }}>
+                  attack {statsOf(state, state.players[pc.attackerId]!).lasers + pc.attackerLaserBoost} laser
+                  {pc.attackerLaserBoost ? ` (+${pc.attackerLaserBoost} card)` : ""} + d6
+                  {" vs "}
+                  defence {pc.defShields ?? statsOf(state, state.players[pc.defenderId]!).shields} shield + d6
                 </p>
                 {pc.awaiting === "defend" && seats[pc.defenderId] === "human" && (
                   <div className="actions">
@@ -621,20 +629,11 @@ export default function App() {
               </p>
             )}
             {!activeIsBot && highlight.kind === "load" && <p className="hint">Click a highlighted resource to load it.</p>}
-            {state.pendingCombat && (
-              <p className="hint">
-                combat: {state.players[state.pendingCombat.attackerId]!.colour} →{" "}
-                {state.players[state.pendingCombat.defenderId]!.colour} ({state.pendingCombat.awaiting})
-              </p>
-            )}
-            {lastCombat && (
+            {lastCombat && !state.pendingCombat && (
               <div className="combat-roll">
                 <Die value={Number(lastCombat.detail?.attackDie ?? 1)} tone="attack" />
                 <Die value={Number(lastCombat.detail?.defenceDie ?? 1)} tone="defence" />
-                <span className="hint">
-                  {Number(lastCombat.detail?.attackTotal)} vs {Number(lastCombat.detail?.defenceTotal)} —{" "}
-                  {lastCombat.event === "attackSucceeded" ? "hit" : "repelled"}
-                </span>
+                <span className="hint">{fmtLog(state, lastCombat)}</span>
               </div>
             )}
           </section>
