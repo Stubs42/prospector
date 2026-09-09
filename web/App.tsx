@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
-import { createGame, applyAction, score } from "../engine/game.js";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createGame, applyAction, score, statsOf } from "../engine/game.js";
 import { legalActions, greedyBot } from "../engine/index.js";
 import { hexKey } from "../engine/hex.js";
 import { driftTarget } from "../engine/movement.js";
-import { makeRng } from "../engine/rng.js";
+import { makeRng, type Rng } from "../engine/rng.js";
 import type { Action, Colour, GameState, Hex } from "../engine/index.js";
 import { Board } from "./components/Board.js";
 import { BoosterCardFace, Die, FuelTrack, TileChip } from "./components/kit.js";
@@ -24,8 +24,10 @@ const LABEL: Partial<Record<Action["type"], string>> = {
   declineCounter: "Decline counter-attack",
 };
 
-function newGame(nPlayers: number): GameState {
-  return createGame({ colours: ALL_COLOURS.slice(0, nPlayers), seed: (Math.random() * 1e9) | 0 });
+type Seat = "human" | "bot";
+
+function newGame(seats: Seat[]): GameState {
+  return createGame({ colours: ALL_COLOURS.slice(0, seats.length), seed: (Math.random() * 1e9) | 0 });
 }
 
 function keyToHex(k: string): Hex {
@@ -33,12 +35,20 @@ function keyToHex(k: string): Hex {
   return { q, r };
 }
 
+const mkSeats = (humans: number, bots: number): Seat[] => [
+  ...Array<Seat>(humans).fill("human"),
+  ...Array<Seat>(bots).fill("bot"),
+];
+
 export default function App() {
-  const [game0] = useState(() => newGame(3));
-  const [nPlayers, setNPlayers] = useState(3);
+  const [humans, setHumans] = useState(1);
+  const [bots, setBots] = useState(2);
+  const [seats, setSeats] = useState<Seat[]>(() => mkSeats(1, 2));
+  const [game0] = useState(() => newGame(mkSeats(1, 2)));
   const [state, setState] = useState<GameState>(game0);
   const [shownPlayer, setShownPlayer] = useState(game0.activePlayerIndex);
   const [hoverCell, setHoverCell] = useState<Hex | null>(null);
+  const botRng = useRef<Rng>(makeRng(0x5eed));
   const [prefs, setPrefsState] = useState<Prefs>(() => {
     const p = loadPrefs();
     if (typeof location !== "undefined" && new URLSearchParams(location.search).get("noauto") === "1") {
@@ -72,6 +82,7 @@ export default function App() {
     }
     setState(s);
     setShownPlayer(s.activePlayerIndex);
+    setSeats(Array<Seat>(s.players.length).fill("human")); // freeze bot autoplay for screenshots
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -89,11 +100,17 @@ export default function App() {
       setHoverCell(null);
     } else console.warn("rejected", a, r.error);
   }
-  function reset(n = nPlayers) {
-    const g = newGame(n);
+  function reset(nextSeats: Seat[] = seats) {
+    const g = newGame(nextSeats);
+    setSeats(nextSeats);
     setState(g);
     setShownPlayer(g.activePlayerIndex);
+    botRng.current = makeRng((Math.random() * 1e9) | 0);
   }
+
+  const humansCount = seats.filter((s) => s === "human").length;
+  const activeIsBot = seats[state.activePlayerIndex] === "bot";
+  const interactive = !activeIsBot; // affordances shown only on a human's turn
 
   // --- affordances from legalActions ------------------------------------
   const burnByCell = new Map<string, Extract<Action, { type: "burn" }>>();
@@ -146,7 +163,24 @@ export default function App() {
     if (burn) dispatch(burn);
   }
 
-  const needPassGate = !state.gameOver && shownPlayer !== state.activePlayerIndex;
+  // the pass-the-device gate only matters with 2+ humans sharing one screen
+  const needPassGate =
+    humansCount >= 2 &&
+    !state.gameOver &&
+    !activeIsBot &&
+    shownPlayer !== state.activePlayerIndex;
+
+  // bots take their turns automatically, with a visible beat between moves
+  useEffect(() => {
+    if (state.gameOver || !activeIsBot) return;
+    const id = setTimeout(() => {
+      const a = greedyBot(state, botRng.current);
+      const r = applyAction(state, a);
+      setState(r.ok ? r.state : applyAction(state, legalActions(state)[0]!).state);
+    }, reducedMotion ? 60 : 360);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, activeIsBot, reducedMotion]);
   const lastCombat = [...state.log].reverse().find((e) => e.event === "attackSucceeded" || e.event === "attackFailed");
 
   // auto-advance: when the player has no real choice, take the move for them
@@ -161,6 +195,7 @@ export default function App() {
     prefs.autoSingle &&
     !state.gameOver &&
     !needPassGate &&
+    !activeIsBot &&
     autoCandidates.length === 1 &&
     autoCandidates[0]!.type !== "scrapShip"
       ? autoCandidates[0]!
@@ -191,10 +226,38 @@ export default function App() {
         </span>
         <span className="spacer" />
         <label className="turn">
-          players{" "}
-          <select value={nPlayers} onChange={(e) => setNPlayers(Number(e.target.value))}>
-            {[2, 3, 4, 5, 6].map((n) => (
-              <option key={n} value={n}>{n}</option>
+          humans{" "}
+          <select
+            value={humans}
+            onChange={(e) => {
+              const h = Number(e.target.value);
+              const b = Math.min(bots, 6 - h);
+              setHumans(h);
+              setBots(b);
+              reset(mkSeats(h, b));
+            }}
+          >
+            {[1, 2, 3, 4, 5, 6].map((n) => (
+              <option key={n} value={n} disabled={n + bots > 6 || n + bots < 2}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="turn">
+          bots{" "}
+          <select
+            value={bots}
+            onChange={(e) => {
+              const b = Number(e.target.value);
+              setBots(b);
+              reset(mkSeats(humans, b));
+            }}
+          >
+            {[0, 1, 2, 3, 4, 5].map((n) => (
+              <option key={n} value={n} disabled={humans + n < 2 || humans + n > 6}>
+                {n}
+              </option>
             ))}
           </select>
         </label>
@@ -206,10 +269,10 @@ export default function App() {
         <div className="boardwrap">
           <Board
             state={state}
-            highlight={highlight}
-            burnTargets={burnTargets}
-            driftGhost={driftGhost}
-            burnPreview={burnPreview}
+            highlight={interactive ? highlight : { cells: [], kind: null }}
+            burnTargets={interactive ? burnTargets : []}
+            driftGhost={interactive ? driftGhost : null}
+            burnPreview={interactive ? burnPreview : null}
             reducedMotion={reducedMotion}
             onCell={onCell}
             onCellHover={setHoverCell}
@@ -228,7 +291,40 @@ export default function App() {
           )}
 
           <section>
-            <h2>Active ship</h2>
+            <h2>Players</h2>
+            <div className="roster">
+              {state.players.map((pl) => {
+                const s = statsOf(state, pl);
+                return (
+                  <div
+                    key={pl.id}
+                    className={`rosterrow${pl.id === state.activePlayerIndex ? " active" : ""}${pl.eliminated ? " out" : ""}`}
+                  >
+                    <i className="swatch" style={{ background: `var(--ship-${pl.colour})` }} />
+                    <span className="rname">
+                      {mode.ships[pl.colour].name}
+                      <em>{seats[pl.id] === "bot" ? "bot" : "you"}</em>
+                    </span>
+                    <span className="rmini" title="shield / laser / engine / cargo">
+                      {s.shields}/{s.lasers}/{s.engines}/{s.cargo}
+                    </span>
+                    <span className="rfuel" title={`fuel ${pl.fuel}/${pl.fuelMax}`}>
+                      <i style={{ width: `${(pl.fuel / pl.fuelMax) * 100}%` }} />
+                    </span>
+                    <span className="rcargo">
+                      {pl.cargo.map((c) => mode.resources.values[c]).join("") || "–"}
+                    </span>
+                    <span className="rscore" title="delivered value">
+                      {sc.byPlayer[pl.id]}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <section>
+            <h2>{activeIsBot ? "Bot ship" : "Active ship"}</h2>
             <div className="pill" style={{ fontWeight: 700 }}>
               <i className="swatch" style={{ background: `var(--ship-${p.colour})` }} />
               {baseStats.name} <span style={{ color: "var(--muted)", fontWeight: 400 }}>({p.colour})</span>
@@ -259,24 +355,37 @@ export default function App() {
           </section>
 
           <section>
-            <h2>Booster hand ({p.hand.length}/{boosterLimit})</h2>
-            {overLimit && <p className="hint">Over the limit — click a card to discard.</p>}
+            <h2>
+              Booster hand ({p.hand.length}/{boosterLimit})
+              {activeIsBot && <span className="hint"> — hidden</span>}
+            </h2>
+            {overLimit && !activeIsBot && <p className="hint">Over the limit — click a card to discard.</p>}
             <div className="hand">
-              {p.hand.length === 0 && <span className="hint">no cards</span>}
-              {p.hand.map((c) => (
-                <BoosterCardFace
-                  key={c.id}
-                  card={c}
-                  clickable={overLimit}
-                  onClick={overLimit ? () => dispatch({ type: "discardBooster", cardId: c.id }) : undefined}
-                />
-              ))}
+              {activeIsBot ? (
+                <span className="hint">{p.hand.length} card{p.hand.length === 1 ? "" : "s"}, face down</span>
+              ) : p.hand.length === 0 ? (
+                <span className="hint">no cards</span>
+              ) : (
+                p.hand.map((c) => (
+                  <BoosterCardFace
+                    key={c.id}
+                    card={c}
+                    clickable={overLimit}
+                    onClick={overLimit ? () => dispatch({ type: "discardBooster", cardId: c.id }) : undefined}
+                  />
+                ))
+              )}
             </div>
           </section>
 
           <section>
             <h2>Actions</h2>
-            <div className="actions">
+            {activeIsBot && (
+              <p className="hint">
+                🤖 <b>{baseStats.name}</b> ({p.colour}) is playing…
+              </p>
+            )}
+            <div className="actions" hidden={activeIsBot}>
               {plainActs.map((a) => (
                 <button
                   key={a.type}
@@ -292,11 +401,11 @@ export default function App() {
                 </button>
               ))}
             </div>
-            {placeCells.length > 0 && (
+            {!activeIsBot && placeCells.length > 0 && (
               <p className="hint">Launch: click a highlighted base cell to pick your starting field (or just Draw booster to keep the default).</p>
             )}
-            {driftGhost && <p className="hint">Gold outline = where you'll coast to if you drift.</p>}
-            {burnTargets.length > 0 && (
+            {!activeIsBot && driftGhost && <p className="hint">Gold outline = where you'll coast to if you drift.</p>}
+            {!activeIsBot && burnTargets.length > 0 && (
               <p className="hint">
                 Click a ring to burn there — <span style={{ color: "var(--ok)" }}>●</span> free ·{" "}
                 <span style={{ color: "#d7b13d" }}>●</span> 1 ·{" "}
@@ -304,7 +413,7 @@ export default function App() {
                 <span style={{ color: "#c1573c" }}>●</span> 3 fuel. Hover for the path.
               </p>
             )}
-            {highlight.kind === "load" && <p className="hint">Click a highlighted resource to load it.</p>}
+            {!activeIsBot && highlight.kind === "load" && <p className="hint">Click a highlighted resource to load it.</p>}
             {state.pendingCombat && (
               <p className="hint">
                 combat: {state.players[state.pendingCombat.attackerId]!.colour} →{" "}

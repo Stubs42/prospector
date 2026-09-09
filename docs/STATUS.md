@@ -122,3 +122,8 @@ Polish left for later: board could use more of the canvas; combat panel has no i
   on-field), and `legalActions` generates burn targets by BFS over the reachable disc, not
   just straight lines — the destination cells are every cell within the step budget. The UI
   shows each as a ring colour-coded by fuel cost (green free / yellow 1 / orange 2 / red 3).
+  `legalActions(state, { extraEngines, extraFuel })` widens the disc for armed boosters.
+- **Solo vs bots.** Topbar picks *humans* (1–6) and *bots* (0–5). Bot seats play themselves
+  (`greedyBot`, seeded ref, ~360 ms between moves); the pass-the-device gate only applies
+  with 2+ humans. A **Players roster** shows every seat's resolved stats / fuel / cargo /
+  score — persistent state is public, only booster hands are hidden (bot hands show a count).
