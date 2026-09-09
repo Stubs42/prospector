@@ -118,3 +118,7 @@ Polish left for later: board could use more of the canvas; combat panel has no i
   persisted to `localStorage`): *Auto-advance forced moves* (default on — when only one
   action is legal, take it without a click; `scrapShip` / `declineCounter` / `discardBooster`
   never auto), *Also auto-end the turn* (default off), *Animations* (follow system / on / off).
+- **Burns can turn.** `burn()` now requires every step to be a free inner cell (was
+  on-field), and `legalActions` generates burn targets by BFS over the reachable disc, not
+  just straight lines — the destination cells are every cell within the step budget. The UI
+  shows each as a ring colour-coded by fuel cost (green free / yellow 1 / orange 2 / red 3).

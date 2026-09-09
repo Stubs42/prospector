@@ -103,6 +103,15 @@ describe("burn", () => {
     expect(r.ok).toBe(false);
   });
 
+  it("accepts a burn that turns a corner (multi-direction path)", () => {
+    const p = { previous: hex(0, 0), current: hex(1, 0), atRest: false };
+    // E then S — a bent 2-cell path
+    const r = burn(p, [hex(2, 0), hex(2, 1)], board, freeEverywhere, { ...base, maxCells: 3 });
+    expect(r.ok).toBe(true);
+    expect(r.pose!.current).toEqual({ q: 2, r: 1 });
+    expect(r.fuelSpent).toBe(2);
+  });
+
   it("a zero-cell burn is a valid no-op", () => {
     const p = { previous: hex(0, 0), current: hex(1, 0), atRest: false };
     const r = burn(p, [], board, freeEverywhere, base);

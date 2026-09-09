@@ -80,18 +80,18 @@ export function burn(
   const cap = engineCap + freeAvail;
   if (cells > cap) return { ok: false, error: `burn of ${cells} exceeds cap ${cap}` };
 
+  // The burn may turn — the path is any chain of adjacent cells, each a free inner-field
+  // cell — not necessarily a straight line.
   let prev = pose.current;
   for (const step of path) {
     if (!areNeighbours(prev, step)) {
       return { ok: false, error: "burn path is not a chain of adjacent cells" };
     }
-    if (board.offField(step) || !isFreeAt(step)) {
+    if (!board.isInner(step) || !isFreeAt(step)) {
       return { ok: false, error: `burn passes through blocked cell ${step.q},${step.r}` };
     }
     prev = step;
   }
-  const dest = path[cells - 1]!;
-  if (!board.isInner(dest)) return { ok: false, error: "burn must end on an inner cell" };
 
   const freeUsed = Math.min(cells, freeAvail);
   const fuelSpent = cells - freeUsed;
@@ -101,7 +101,7 @@ export function burn(
 
   return {
     ok: true,
-    pose: { current: dest, previous: pose.previous, atRest: false },
+    pose: { current: path[cells - 1]!, previous: pose.previous, atRest: false },
     fuelSpent,
     freeUsed,
   };

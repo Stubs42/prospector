@@ -16,7 +16,8 @@ function hexPoints(cx: number, cy: number, size: number): string {
 
 export interface BoardProps {
   state: GameState;
-  highlight: { cells: Hex[]; kind: "burn" | "load" | null };
+  highlight: { cells: Hex[]; kind: "load" | "place" | null };
+  burnTargets: { cell: Hex; cost: number }[];
   driftGhost: { at: Hex; from: Hex } | null;
   burnPreview: { path: Hex[]; cost: number } | null;
   reducedMotion: boolean;
@@ -24,9 +25,13 @@ export interface BoardProps {
   onCellHover: (h: Hex | null) => void;
 }
 
+/** cost 0 = free (green), 1 = yellow, 2 = orange, 3 = red */
+const BURN_COST_COLOUR = ["var(--ok)", "#d7b13d", "#e08a3d", "#c1573c"];
+
 export function Board({
   state,
   highlight,
+  burnTargets,
   driftGhost,
   burnPreview,
   reducedMotion,
@@ -196,7 +201,24 @@ export function Board({
           );
         })}
 
-      {/* interaction markers */}
+      {/* burn targets — colour = fuel cost (green free, yellow 1, orange 2, red 3) */}
+      {burnTargets.map(({ cell, cost }) => {
+        const { x, y } = px(cell);
+        const col = BURN_COST_COLOUR[Math.min(cost, 3)]!;
+        return (
+          <g key={`burn-${hexKey(cell)}`} className="cell-hit burn-target"
+             onClick={() => onCell(cell)}
+             onMouseEnter={() => onCellHover(cell)}
+             onMouseLeave={() => onCellHover(null)}>
+            <circle cx={x} cy={y} r={S * 0.6} fill={col} fillOpacity={0.14} stroke={col} strokeWidth={2.6} />
+            <text x={x} y={y + 4} textAnchor="middle" fontSize={11} fontWeight={700} fill={col}>
+              {cost === 0 ? "◇" : cost}
+            </text>
+          </g>
+        );
+      })}
+
+      {/* load / launch markers */}
       {highlight.cells.map((hx) => {
         const { x, y } = px(hx);
         return (
@@ -208,7 +230,7 @@ export function Board({
             fill="none"
             stroke={highlight.kind === "load" ? "var(--ok)" : "var(--gold)"}
             strokeWidth={2}
-            strokeDasharray={highlight.kind === "load" ? "4 3" : undefined}
+            strokeDasharray={highlight.kind === "load" ? "4 3" : "3 3"}
             className="cell-hit"
             onClick={() => onCell(hx)}
             onMouseEnter={() => onCellHover(hx)}

@@ -39,7 +39,13 @@ export default function App() {
   const [state, setState] = useState<GameState>(game0);
   const [shownPlayer, setShownPlayer] = useState(game0.activePlayerIndex);
   const [hoverCell, setHoverCell] = useState<Hex | null>(null);
-  const [prefs, setPrefsState] = useState<Prefs>(loadPrefs);
+  const [prefs, setPrefsState] = useState<Prefs>(() => {
+    const p = loadPrefs();
+    if (typeof location !== "undefined" && new URLSearchParams(location.search).get("noauto") === "1") {
+      p.autoSingle = false;
+    }
+    return p;
+  });
 
   const setPrefs = (p: Prefs) => {
     setPrefsState(p);
@@ -56,10 +62,13 @@ export default function App() {
       const r = applyAction(s, greedyBot(s, rng));
       s = r.ok ? r.state : applyAction(s, legalActions(s)[0]!).state;
     }
-    // draw a booster so the drift preview is visible in screenshots
-    if (!s.gameOver && s.phase === "start" && !s.players[s.activePlayerIndex]!.turn.boosterDrawn) {
-      const r = applyAction(s, { type: "drawBooster" });
-      if (r.ok) s = r.state;
+    // advance into the burn phase so previews / burn rings are visible in screenshots
+    for (const step of [{ type: "drawBooster" }, { type: "drift" }] as Action[]) {
+      const legal = legalActions(s);
+      if (legal.some((a) => a.type === step.type)) {
+        const r = applyAction(s, step);
+        if (r.ok) s = r.state;
+      }
     }
     setState(s);
     setShownPlayer(s.activePlayerIndex);
@@ -100,28 +109,33 @@ export default function App() {
   const plainActs = acts.filter((a) => LABEL[a.type]);
   const overLimit = acts.length > 0 && acts.every((a) => a.type === "discardBooster");
 
+  // free base-departure cells reduce a burn's fuel cost
+  const freeCells = p.turn.moveStartedOnOwnBase
+    ? Math.max(0, state.config.core.movement.freeBaseDepartureCells - p.turn.freeBurnCellsUsed)
+    : 0;
+  const burnCost = (steps: number) => Math.max(0, steps - Math.min(steps, freeCells));
+
   const placeKeys = new Set(placeCells.map(hexKey));
-  const highlight: { cells: Hex[]; kind: "burn" | "load" | null } = placeCells.length
-    ? { cells: placeCells, kind: "burn" }
+  const burnTargets = [...burnByCell.entries()].map(([k, a]) => ({
+    cell: keyToHex(k),
+    cost: burnCost(a.path.length),
+  }));
+
+  const highlight: { cells: Hex[]; kind: "load" | "place" | null } = placeCells.length
+    ? { cells: placeCells, kind: "place" }
     : loadCells.length
       ? { cells: loadCells, kind: "load" }
-      : burnByCell.size
-        ? { cells: [...burnByCell.keys()].map(keyToHex), kind: "burn" }
-        : { cells: [], kind: null };
+      : { cells: [], kind: null };
 
   // drift preview — only meaningful for a ship that is actually coasting
   const canDrift = acts.some((a) => a.type === "drift");
   const driftGhost =
     canDrift && !p.pose.atRest ? { at: driftTarget(p.pose), from: p.pose.current } : null;
 
-  // burn hover — free base-departure cells reduce the fuel cost
-  const freeCells = p.turn.moveStartedOnOwnBase
-    ? Math.max(0, state.config.core.movement.freeBaseDepartureCells - p.turn.freeBurnCellsUsed)
-    : 0;
   let burnPreview: { path: Hex[]; cost: number } | null = null;
   if (hoverCell) {
     const b = burnByCell.get(hexKey(hoverCell));
-    if (b) burnPreview = { path: b.path, cost: Math.max(0, b.path.length - Math.min(b.path.length, freeCells)) };
+    if (b) burnPreview = { path: b.path, cost: burnCost(b.path.length) };
   }
 
   function onCell(h: Hex) {
@@ -186,6 +200,7 @@ export default function App() {
           <Board
             state={state}
             highlight={highlight}
+            burnTargets={burnTargets}
             driftGhost={driftGhost}
             burnPreview={burnPreview}
             reducedMotion={reducedMotion}
@@ -274,8 +289,13 @@ export default function App() {
               <p className="hint">Launch: click a highlighted base cell to pick your starting field (or just Draw booster to keep the default).</p>
             )}
             {driftGhost && <p className="hint">Gold outline = where you'll coast to if you drift.</p>}
-            {highlight.kind === "burn" && (
-              <p className="hint">Hover a highlighted cell to see fuel cost, click to burn.</p>
+            {burnTargets.length > 0 && (
+              <p className="hint">
+                Click a ring to burn there — <span style={{ color: "var(--ok)" }}>●</span> free ·{" "}
+                <span style={{ color: "#d7b13d" }}>●</span> 1 ·{" "}
+                <span style={{ color: "#e08a3d" }}>●</span> 2 ·{" "}
+                <span style={{ color: "#c1573c" }}>●</span> 3 fuel. Hover for the path.
+              </p>
             )}
             {highlight.kind === "load" && <p className="hint">Click a highlighted resource to load it.</p>}
             {state.pendingCombat && (
