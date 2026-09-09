@@ -1,0 +1,264 @@
+{
+ "meta": {
+  "generatedFrom": "config/default.config.json",
+  "note": "Do not hand-edit; re-run content/build_content.py."
+ },
+ "coordinateDice": {
+  "count": 3,
+  "steps": [
+   1,
+   2,
+   3
+  ],
+  "faceColours": [
+   "black",
+   "red",
+   "blue",
+   "white",
+   "green",
+   "yellow"
+  ],
+  "note": "one die per step value; every face is one board colour = its base direction"
+ },
+ "combatDice": {
+  "attack": {
+   "colour": "red",
+   "faces": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+   ],
+   "rolledBy": "attacker"
+  },
+  "defence": {
+   "colour": "blue",
+   "faces": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+   ],
+   "rolledBy": "defender"
+  }
+ },
+ "cones": [
+  {
+   "id": "cone-black-1",
+   "colour": "black"
+  },
+  {
+   "id": "cone-black-2",
+   "colour": "black"
+  },
+  {
+   "id": "cone-black-3",
+   "colour": "black"
+  },
+  {
+   "id": "cone-red-1",
+   "colour": "red"
+  },
+  {
+   "id": "cone-red-2",
+   "colour": "red"
+  },
+  {
+   "id": "cone-red-3",
+   "colour": "red"
+  },
+  {
+   "id": "cone-blue-1",
+   "colour": "blue"
+  },
+  {
+   "id": "cone-blue-2",
+   "colour": "blue"
+  },
+  {
+   "id": "cone-blue-3",
+   "colour": "blue"
+  },
+  {
+   "id": "cone-white-1",
+   "colour": "white"
+  },
+  {
+   "id": "cone-white-2",
+   "colour": "white"
+  },
+  {
+   "id": "cone-white-3",
+   "colour": "white"
+  },
+  {
+   "id": "cone-green-1",
+   "colour": "green"
+  },
+  {
+   "id": "cone-green-2",
+   "colour": "green"
+  },
+  {
+   "id": "cone-green-3",
+   "colour": "green"
+  },
+  {
+   "id": "cone-yellow-1",
+   "colour": "yellow"
+  },
+  {
+   "id": "cone-yellow-2",
+   "colour": "yellow"
+  },
+  {
+   "id": "cone-yellow-3",
+   "colour": "yellow"
+  }
+ ],
+ "resourceTiles": {
+  "perColour": 9,
+  "total": 27,
+  "tiles": [
+   {
+    "id": "tile-green-01",
+    "colour": "green",
+    "value": 1
+   },
+   {
+    "id": "tile-green-02",
+    "colour": "green",
+    "value": 1
+   },
+   {
+    "id": "tile-green-03",
+    "colour": "green",
+    "value": 1
+   },
+   {
+    "id": "tile-green-04",
+    "colour": "green",
+    "value": 1
+   },
+   {
+    "id": "tile-green-05",
+    "colour": "green",
+    "value": 1
+   },
+   {
+    "id": "tile-green-06",
+    "colour": "green",
+    "value": 1
+   },
+   {
+    "id": "tile-green-07",
+    "colour": "green",
+    "value": 1
+   },
+   {
+    "id": "tile-green-08",
+    "colour": "green",
+    "value": 1
+   },
+   {
+    "id": "tile-green-09",
+    "colour": "green",
+    "value": 1
+   },
+   {
+    "id": "tile-yellow-01",
+    "colour": "yellow",
+    "value": 2
+   },
+   {
+    "id": "tile-yellow-02",
+    "colour": "yellow",
+    "value": 2
+   },
+   {
+    "id": "tile-yellow-03",
+    "colour": "yellow",
+    "value": 2
+   },
+   {
+    "id": "tile-yellow-04",
+    "colour": "yellow",
+    "value": 2
+   },
+   {
+    "id": "tile-yellow-05",
+    "colour": "yellow",
+    "value": 2
+   },
+   {
+    "id": "tile-yellow-06",
+    "colour": "yellow",
+    "value": 2
+   },
+   {
+    "id": "tile-yellow-07",
+    "colour": "yellow",
+    "value": 2
+   },
+   {
+    "id": "tile-yellow-08",
+    "colour": "yellow",
+    "value": 2
+   },
+   {
+    "id": "tile-yellow-09",
+    "colour": "yellow",
+    "value": 2
+   },
+   {
+    "id": "tile-red-01",
+    "colour": "red",
+    "value": 3
+   },
+   {
+    "id": "tile-red-02",
+    "colour": "red",
+    "value": 3
+   },
+   {
+    "id": "tile-red-03",
+    "colour": "red",
+    "value": 3
+   },
+   {
+    "id": "tile-red-04",
+    "colour": "red",
+    "value": 3
+   },
+   {
+    "id": "tile-red-05",
+    "colour": "red",
+    "value": 3
+   },
+   {
+    "id": "tile-red-06",
+    "colour": "red",
+    "value": 3
+   },
+   {
+    "id": "tile-red-07",
+    "colour": "red",
+    "value": 3
+   },
+   {
+    "id": "tile-red-08",
+    "colour": "red",
+    "value": 3
+   },
+   {
+    "id": "tile-red-09",
+    "colour": "red",
+    "value": 3
+   }
+  ]
+ }
+}

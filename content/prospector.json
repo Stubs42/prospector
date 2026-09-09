@@ -1,0 +1,936 @@
+{
+ "meta": {
+  "generatedFrom": "config/default.config.json",
+  "note": "Do not hand-edit; re-run content/build_content.py."
+ },
+ "mode": "prospector",
+ "ships": [
+  {
+   "id": "ship-black",
+   "colour": "black",
+   "name": "Pirate",
+   "stats": {
+    "shields": 0,
+    "lasers": 2,
+    "fuelTanks": 10,
+    "cargo": 2,
+    "engines": 1,
+    "booster": 3
+   }
+  },
+  {
+   "id": "ship-white",
+   "colour": "white",
+   "name": "Dove",
+   "stats": {
+    "shields": 2,
+    "lasers": 0,
+    "fuelTanks": 10,
+    "cargo": 2,
+    "engines": 1,
+    "booster": 3
+   }
+  },
+  {
+   "id": "ship-blue",
+   "colour": "blue",
+   "name": "Polo",
+   "stats": {
+    "shields": 1,
+    "lasers": 0,
+    "fuelTanks": 13,
+    "cargo": 2,
+    "engines": 1,
+    "booster": 3
+   }
+  },
+  {
+   "id": "ship-red",
+   "colour": "red",
+   "name": "Hermes",
+   "stats": {
+    "shields": 0,
+    "lasers": 1,
+    "fuelTanks": 10,
+    "cargo": 2,
+    "engines": 2,
+    "booster": 3
+   }
+  },
+  {
+   "id": "ship-green",
+   "colour": "green",
+   "name": "Atlas",
+   "stats": {
+    "shields": 1,
+    "lasers": 0,
+    "fuelTanks": 10,
+    "cargo": 3,
+    "engines": 1,
+    "booster": 3
+   }
+  },
+  {
+   "id": "ship-yellow",
+   "colour": "yellow",
+   "name": "Joe",
+   "stats": {
+    "shields": 1,
+    "lasers": 1,
+    "fuelTanks": 10,
+    "cargo": 2,
+    "engines": 1,
+    "booster": 3
+   }
+  }
+ ],
+ "upgradeCaps": {
+  "lasers": 4,
+  "shields": 4,
+  "fuelTanks": 19,
+  "cargo": 4,
+  "engines": 3,
+  "booster": 7
+ },
+ "decks": {
+  "booster": {
+   "count": 45,
+   "cards": [
+    {
+     "id": "booster-shield-1-01",
+     "deck": "booster",
+     "type": "shield",
+     "value": 1,
+     "effect": "in combat, defence +1 (one-shot)"
+    },
+    {
+     "id": "booster-shield-1-02",
+     "deck": "booster",
+     "type": "shield",
+     "value": 1,
+     "effect": "in combat, defence +1 (one-shot)"
+    },
+    {
+     "id": "booster-shield-1-03",
+     "deck": "booster",
+     "type": "shield",
+     "value": 1,
+     "effect": "in combat, defence +1 (one-shot)"
+    },
+    {
+     "id": "booster-shield-1-04",
+     "deck": "booster",
+     "type": "shield",
+     "value": 1,
+     "effect": "in combat, defence +1 (one-shot)"
+    },
+    {
+     "id": "booster-shield-2-01",
+     "deck": "booster",
+     "type": "shield",
+     "value": 2,
+     "effect": "in combat, defence +2 (one-shot)"
+    },
+    {
+     "id": "booster-shield-2-02",
+     "deck": "booster",
+     "type": "shield",
+     "value": 2,
+     "effect": "in combat, defence +2 (one-shot)"
+    },
+    {
+     "id": "booster-shield-2-03",
+     "deck": "booster",
+     "type": "shield",
+     "value": 2,
+     "effect": "in combat, defence +2 (one-shot)"
+    },
+    {
+     "id": "booster-shield-3-01",
+     "deck": "booster",
+     "type": "shield",
+     "value": 3,
+     "effect": "in combat, defence +3 (one-shot)"
+    },
+    {
+     "id": "booster-shield-3-02",
+     "deck": "booster",
+     "type": "shield",
+     "value": 3,
+     "effect": "in combat, defence +3 (one-shot)"
+    },
+    {
+     "id": "booster-shield-99-01",
+     "deck": "booster",
+     "type": "shield",
+     "value": 99,
+     "effect": "in combat, defence +99 (one-shot)"
+    },
+    {
+     "id": "booster-shield-99-02",
+     "deck": "booster",
+     "type": "shield",
+     "value": 99,
+     "effect": "in combat, defence +99 (one-shot)"
+    },
+    {
+     "id": "booster-shield-99-03",
+     "deck": "booster",
+     "type": "shield",
+     "value": 99,
+     "effect": "in combat, defence +99 (one-shot)"
+    },
+    {
+     "id": "booster-laser-1-01",
+     "deck": "booster",
+     "type": "laser",
+     "value": 1,
+     "effect": "in combat, attack +1 (one-shot)"
+    },
+    {
+     "id": "booster-laser-1-02",
+     "deck": "booster",
+     "type": "laser",
+     "value": 1,
+     "effect": "in combat, attack +1 (one-shot)"
+    },
+    {
+     "id": "booster-laser-1-03",
+     "deck": "booster",
+     "type": "laser",
+     "value": 1,
+     "effect": "in combat, attack +1 (one-shot)"
+    },
+    {
+     "id": "booster-laser-1-04",
+     "deck": "booster",
+     "type": "laser",
+     "value": 1,
+     "effect": "in combat, attack +1 (one-shot)"
+    },
+    {
+     "id": "booster-laser-2-01",
+     "deck": "booster",
+     "type": "laser",
+     "value": 2,
+     "effect": "in combat, attack +2 (one-shot)"
+    },
+    {
+     "id": "booster-laser-2-02",
+     "deck": "booster",
+     "type": "laser",
+     "value": 2,
+     "effect": "in combat, attack +2 (one-shot)"
+    },
+    {
+     "id": "booster-laser-2-03",
+     "deck": "booster",
+     "type": "laser",
+     "value": 2,
+     "effect": "in combat, attack +2 (one-shot)"
+    },
+    {
+     "id": "booster-laser-3-01",
+     "deck": "booster",
+     "type": "laser",
+     "value": 3,
+     "effect": "in combat, attack +3 (one-shot)"
+    },
+    {
+     "id": "booster-laser-3-02",
+     "deck": "booster",
+     "type": "laser",
+     "value": 3,
+     "effect": "in combat, attack +3 (one-shot)"
+    },
+    {
+     "id": "booster-laser-50-01",
+     "deck": "booster",
+     "type": "laser",
+     "value": 50,
+     "effect": "in combat, attack +50 (one-shot)"
+    },
+    {
+     "id": "booster-laser-50-02",
+     "deck": "booster",
+     "type": "laser",
+     "value": 50,
+     "effect": "in combat, attack +50 (one-shot)"
+    },
+    {
+     "id": "booster-laser-50-03",
+     "deck": "booster",
+     "type": "laser",
+     "value": 50,
+     "effect": "in combat, attack +50 (one-shot)"
+    },
+    {
+     "id": "booster-reserveFuel-1-01",
+     "deck": "booster",
+     "type": "reserveFuel",
+     "value": 1,
+     "effect": "fuel = min(fuel + 1, fuelMax)"
+    },
+    {
+     "id": "booster-reserveFuel-1-02",
+     "deck": "booster",
+     "type": "reserveFuel",
+     "value": 1,
+     "effect": "fuel = min(fuel + 1, fuelMax)"
+    },
+    {
+     "id": "booster-reserveFuel-1-03",
+     "deck": "booster",
+     "type": "reserveFuel",
+     "value": 1,
+     "effect": "fuel = min(fuel + 1, fuelMax)"
+    },
+    {
+     "id": "booster-reserveFuel-1-04",
+     "deck": "booster",
+     "type": "reserveFuel",
+     "value": 1,
+     "effect": "fuel = min(fuel + 1, fuelMax)"
+    },
+    {
+     "id": "booster-reserveFuel-2-01",
+     "deck": "booster",
+     "type": "reserveFuel",
+     "value": 2,
+     "effect": "fuel = min(fuel + 2, fuelMax)"
+    },
+    {
+     "id": "booster-reserveFuel-2-02",
+     "deck": "booster",
+     "type": "reserveFuel",
+     "value": 2,
+     "effect": "fuel = min(fuel + 2, fuelMax)"
+    },
+    {
+     "id": "booster-reserveFuel-2-03",
+     "deck": "booster",
+     "type": "reserveFuel",
+     "value": 2,
+     "effect": "fuel = min(fuel + 2, fuelMax)"
+    },
+    {
+     "id": "booster-reserveFuel-3-01",
+     "deck": "booster",
+     "type": "reserveFuel",
+     "value": 3,
+     "effect": "fuel = min(fuel + 3, fuelMax)"
+    },
+    {
+     "id": "booster-reserveFuel-3-02",
+     "deck": "booster",
+     "type": "reserveFuel",
+     "value": 3,
+     "effect": "fuel = min(fuel + 3, fuelMax)"
+    },
+    {
+     "id": "booster-engine-1-01",
+     "deck": "booster",
+     "type": "engine",
+     "value": 1,
+     "effect": "burn cap +1 this turn"
+    },
+    {
+     "id": "booster-engine-1-02",
+     "deck": "booster",
+     "type": "engine",
+     "value": 1,
+     "effect": "burn cap +1 this turn"
+    },
+    {
+     "id": "booster-engine-1-03",
+     "deck": "booster",
+     "type": "engine",
+     "value": 1,
+     "effect": "burn cap +1 this turn"
+    },
+    {
+     "id": "booster-engine-1-04",
+     "deck": "booster",
+     "type": "engine",
+     "value": 1,
+     "effect": "burn cap +1 this turn"
+    },
+    {
+     "id": "booster-engine-2-01",
+     "deck": "booster",
+     "type": "engine",
+     "value": 2,
+     "effect": "burn cap +2 this turn"
+    },
+    {
+     "id": "booster-engine-2-02",
+     "deck": "booster",
+     "type": "engine",
+     "value": 2,
+     "effect": "burn cap +2 this turn"
+    },
+    {
+     "id": "booster-engine-2-03",
+     "deck": "booster",
+     "type": "engine",
+     "value": 2,
+     "effect": "burn cap +2 this turn"
+    },
+    {
+     "id": "booster-engine-3-01",
+     "deck": "booster",
+     "type": "engine",
+     "value": 3,
+     "effect": "burn cap +3 this turn"
+    },
+    {
+     "id": "booster-engine-3-02",
+     "deck": "booster",
+     "type": "engine",
+     "value": 3,
+     "effect": "burn cap +3 this turn"
+    },
+    {
+     "id": "booster-hyperspace-01",
+     "deck": "booster",
+     "type": "hyperspace",
+     "value": null,
+     "effect": "jump: reroll position via coordinate dice; also playable as combat defence"
+    },
+    {
+     "id": "booster-hyperspace-02",
+     "deck": "booster",
+     "type": "hyperspace",
+     "value": null,
+     "effect": "jump: reroll position via coordinate dice; also playable as combat defence"
+    },
+    {
+     "id": "booster-hyperspace-03",
+     "deck": "booster",
+     "type": "hyperspace",
+     "value": null,
+     "effect": "jump: reroll position via coordinate dice; also playable as combat defence"
+    }
+   ]
+  },
+  "equipment": {
+   "count": 36,
+   "cards": [
+    {
+     "id": "equip-shields-01",
+     "deck": "equipment",
+     "stat": "shields",
+     "amount": 1,
+     "effect": "permanent shields +1"
+    },
+    {
+     "id": "equip-shields-02",
+     "deck": "equipment",
+     "stat": "shields",
+     "amount": 1,
+     "effect": "permanent shields +1"
+    },
+    {
+     "id": "equip-shields-03",
+     "deck": "equipment",
+     "stat": "shields",
+     "amount": 1,
+     "effect": "permanent shields +1"
+    },
+    {
+     "id": "equip-shields-04",
+     "deck": "equipment",
+     "stat": "shields",
+     "amount": 1,
+     "effect": "permanent shields +1"
+    },
+    {
+     "id": "equip-shields-05",
+     "deck": "equipment",
+     "stat": "shields",
+     "amount": 1,
+     "effect": "permanent shields +1"
+    },
+    {
+     "id": "equip-shields-06",
+     "deck": "equipment",
+     "stat": "shields",
+     "amount": 1,
+     "effect": "permanent shields +1"
+    },
+    {
+     "id": "equip-lasers-01",
+     "deck": "equipment",
+     "stat": "lasers",
+     "amount": 1,
+     "effect": "permanent lasers +1"
+    },
+    {
+     "id": "equip-lasers-02",
+     "deck": "equipment",
+     "stat": "lasers",
+     "amount": 1,
+     "effect": "permanent lasers +1"
+    },
+    {
+     "id": "equip-lasers-03",
+     "deck": "equipment",
+     "stat": "lasers",
+     "amount": 1,
+     "effect": "permanent lasers +1"
+    },
+    {
+     "id": "equip-lasers-04",
+     "deck": "equipment",
+     "stat": "lasers",
+     "amount": 1,
+     "effect": "permanent lasers +1"
+    },
+    {
+     "id": "equip-lasers-05",
+     "deck": "equipment",
+     "stat": "lasers",
+     "amount": 1,
+     "effect": "permanent lasers +1"
+    },
+    {
+     "id": "equip-lasers-06",
+     "deck": "equipment",
+     "stat": "lasers",
+     "amount": 1,
+     "effect": "permanent lasers +1"
+    },
+    {
+     "id": "equip-fuelTanks-01",
+     "deck": "equipment",
+     "stat": "fuelTanks",
+     "amount": 3,
+     "effect": "permanent fuelTanks +3, and fuel += 3",
+     "grantFuel": 3
+    },
+    {
+     "id": "equip-fuelTanks-02",
+     "deck": "equipment",
+     "stat": "fuelTanks",
+     "amount": 3,
+     "effect": "permanent fuelTanks +3, and fuel += 3",
+     "grantFuel": 3
+    },
+    {
+     "id": "equip-fuelTanks-03",
+     "deck": "equipment",
+     "stat": "fuelTanks",
+     "amount": 3,
+     "effect": "permanent fuelTanks +3, and fuel += 3",
+     "grantFuel": 3
+    },
+    {
+     "id": "equip-fuelTanks-04",
+     "deck": "equipment",
+     "stat": "fuelTanks",
+     "amount": 3,
+     "effect": "permanent fuelTanks +3, and fuel += 3",
+     "grantFuel": 3
+    },
+    {
+     "id": "equip-fuelTanks-05",
+     "deck": "equipment",
+     "stat": "fuelTanks",
+     "amount": 3,
+     "effect": "permanent fuelTanks +3, and fuel += 3",
+     "grantFuel": 3
+    },
+    {
+     "id": "equip-fuelTanks-06",
+     "deck": "equipment",
+     "stat": "fuelTanks",
+     "amount": 3,
+     "effect": "permanent fuelTanks +3, and fuel += 3",
+     "grantFuel": 3
+    },
+    {
+     "id": "equip-cargo-01",
+     "deck": "equipment",
+     "stat": "cargo",
+     "amount": 1,
+     "effect": "permanent cargo +1"
+    },
+    {
+     "id": "equip-cargo-02",
+     "deck": "equipment",
+     "stat": "cargo",
+     "amount": 1,
+     "effect": "permanent cargo +1"
+    },
+    {
+     "id": "equip-cargo-03",
+     "deck": "equipment",
+     "stat": "cargo",
+     "amount": 1,
+     "effect": "permanent cargo +1"
+    },
+    {
+     "id": "equip-cargo-04",
+     "deck": "equipment",
+     "stat": "cargo",
+     "amount": 1,
+     "effect": "permanent cargo +1"
+    },
+    {
+     "id": "equip-cargo-05",
+     "deck": "equipment",
+     "stat": "cargo",
+     "amount": 1,
+     "effect": "permanent cargo +1"
+    },
+    {
+     "id": "equip-cargo-06",
+     "deck": "equipment",
+     "stat": "cargo",
+     "amount": 1,
+     "effect": "permanent cargo +1"
+    },
+    {
+     "id": "equip-engines-01",
+     "deck": "equipment",
+     "stat": "engines",
+     "amount": 1,
+     "effect": "permanent engines +1"
+    },
+    {
+     "id": "equip-engines-02",
+     "deck": "equipment",
+     "stat": "engines",
+     "amount": 1,
+     "effect": "permanent engines +1"
+    },
+    {
+     "id": "equip-engines-03",
+     "deck": "equipment",
+     "stat": "engines",
+     "amount": 1,
+     "effect": "permanent engines +1"
+    },
+    {
+     "id": "equip-engines-04",
+     "deck": "equipment",
+     "stat": "engines",
+     "amount": 1,
+     "effect": "permanent engines +1"
+    },
+    {
+     "id": "equip-engines-05",
+     "deck": "equipment",
+     "stat": "engines",
+     "amount": 1,
+     "effect": "permanent engines +1"
+    },
+    {
+     "id": "equip-engines-06",
+     "deck": "equipment",
+     "stat": "engines",
+     "amount": 1,
+     "effect": "permanent engines +1"
+    },
+    {
+     "id": "equip-booster-01",
+     "deck": "equipment",
+     "stat": "booster",
+     "amount": 1,
+     "effect": "permanent booster +1"
+    },
+    {
+     "id": "equip-booster-02",
+     "deck": "equipment",
+     "stat": "booster",
+     "amount": 1,
+     "effect": "permanent booster +1"
+    },
+    {
+     "id": "equip-booster-03",
+     "deck": "equipment",
+     "stat": "booster",
+     "amount": 1,
+     "effect": "permanent booster +1"
+    },
+    {
+     "id": "equip-booster-04",
+     "deck": "equipment",
+     "stat": "booster",
+     "amount": 1,
+     "effect": "permanent booster +1"
+    },
+    {
+     "id": "equip-booster-05",
+     "deck": "equipment",
+     "stat": "booster",
+     "amount": 1,
+     "effect": "permanent booster +1"
+    },
+    {
+     "id": "equip-booster-06",
+     "deck": "equipment",
+     "stat": "booster",
+     "amount": 1,
+     "effect": "permanent booster +1"
+    }
+   ]
+  },
+  "fuel": {
+   "note": "Physical representation only; engine tracks an integer pool.",
+   "cards": [
+    {
+     "id": "fuel-1-01",
+     "deck": "fuel",
+     "value": 1
+    },
+    {
+     "id": "fuel-1-02",
+     "deck": "fuel",
+     "value": 1
+    },
+    {
+     "id": "fuel-1-03",
+     "deck": "fuel",
+     "value": 1
+    },
+    {
+     "id": "fuel-1-04",
+     "deck": "fuel",
+     "value": 1
+    },
+    {
+     "id": "fuel-1-05",
+     "deck": "fuel",
+     "value": 1
+    },
+    {
+     "id": "fuel-1-06",
+     "deck": "fuel",
+     "value": 1
+    },
+    {
+     "id": "fuel-1-07",
+     "deck": "fuel",
+     "value": 1
+    },
+    {
+     "id": "fuel-1-08",
+     "deck": "fuel",
+     "value": 1
+    },
+    {
+     "id": "fuel-1-09",
+     "deck": "fuel",
+     "value": 1
+    },
+    {
+     "id": "fuel-1-10",
+     "deck": "fuel",
+     "value": 1
+    },
+    {
+     "id": "fuel-1-11",
+     "deck": "fuel",
+     "value": 1
+    },
+    {
+     "id": "fuel-1-12",
+     "deck": "fuel",
+     "value": 1
+    },
+    {
+     "id": "fuel-1-13",
+     "deck": "fuel",
+     "value": 1
+    },
+    {
+     "id": "fuel-1-14",
+     "deck": "fuel",
+     "value": 1
+    },
+    {
+     "id": "fuel-1-15",
+     "deck": "fuel",
+     "value": 1
+    },
+    {
+     "id": "fuel-1-16",
+     "deck": "fuel",
+     "value": 1
+    },
+    {
+     "id": "fuel-1-17",
+     "deck": "fuel",
+     "value": 1
+    },
+    {
+     "id": "fuel-1-18",
+     "deck": "fuel",
+     "value": 1
+    },
+    {
+     "id": "fuel-1-19",
+     "deck": "fuel",
+     "value": 1
+    },
+    {
+     "id": "fuel-1-20",
+     "deck": "fuel",
+     "value": 1
+    },
+    {
+     "id": "fuel-1-21",
+     "deck": "fuel",
+     "value": 1
+    },
+    {
+     "id": "fuel-1-22",
+     "deck": "fuel",
+     "value": 1
+    },
+    {
+     "id": "fuel-1-23",
+     "deck": "fuel",
+     "value": 1
+    },
+    {
+     "id": "fuel-1-24",
+     "deck": "fuel",
+     "value": 1
+    },
+    {
+     "id": "fuel-3-01",
+     "deck": "fuel",
+     "value": 3
+    },
+    {
+     "id": "fuel-3-02",
+     "deck": "fuel",
+     "value": 3
+    },
+    {
+     "id": "fuel-3-03",
+     "deck": "fuel",
+     "value": 3
+    },
+    {
+     "id": "fuel-3-04",
+     "deck": "fuel",
+     "value": 3
+    },
+    {
+     "id": "fuel-3-05",
+     "deck": "fuel",
+     "value": 3
+    },
+    {
+     "id": "fuel-3-06",
+     "deck": "fuel",
+     "value": 3
+    },
+    {
+     "id": "fuel-3-07",
+     "deck": "fuel",
+     "value": 3
+    },
+    {
+     "id": "fuel-3-08",
+     "deck": "fuel",
+     "value": 3
+    },
+    {
+     "id": "fuel-3-09",
+     "deck": "fuel",
+     "value": 3
+    },
+    {
+     "id": "fuel-3-10",
+     "deck": "fuel",
+     "value": 3
+    },
+    {
+     "id": "fuel-3-11",
+     "deck": "fuel",
+     "value": 3
+    },
+    {
+     "id": "fuel-3-12",
+     "deck": "fuel",
+     "value": 3
+    },
+    {
+     "id": "fuel-3-13",
+     "deck": "fuel",
+     "value": 3
+    },
+    {
+     "id": "fuel-3-14",
+     "deck": "fuel",
+     "value": 3
+    },
+    {
+     "id": "fuel-3-15",
+     "deck": "fuel",
+     "value": 3
+    },
+    {
+     "id": "fuel-3-16",
+     "deck": "fuel",
+     "value": 3
+    },
+    {
+     "id": "fuel-3-17",
+     "deck": "fuel",
+     "value": 3
+    },
+    {
+     "id": "fuel-3-18",
+     "deck": "fuel",
+     "value": 3
+    },
+    {
+     "id": "fuel-3-19",
+     "deck": "fuel",
+     "value": 3
+    }
+   ],
+   "sharedField": {
+    "count": 6,
+    "value": 3
+   }
+  }
+ },
+ "resourceSupplyByPlayers": {
+  "2": {
+   "perColour": 5,
+   "short": 4,
+   "long": 6,
+   "totalStandard": 15
+  },
+  "3": {
+   "perColour": 6,
+   "short": 5,
+   "long": 7,
+   "totalStandard": 18
+  },
+  "4": {
+   "perColour": 7,
+   "short": 6,
+   "long": 8,
+   "totalStandard": 21
+  },
+  "5": {
+   "perColour": 8,
+   "short": 7,
+   "long": 9,
+   "totalStandard": 24
+  },
+  "6": {
+   "perColour": 9,
+   "short": 8,
+   "long": 10,
+   "totalStandard": 27
+  }
+ }
+}

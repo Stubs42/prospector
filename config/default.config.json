@@ -1,0 +1,136 @@
+{
+  "$schema": "./config.schema.json",
+  "meta": {
+    "name": "Prospector — 2006 baseline",
+    "source": "rules.en.html Part I; docs/decisions.md",
+    "date": "2026-09-09"
+  },
+
+  "core": {
+    "board": {
+      "orientation": "pointy-top",
+      "radius": 11,
+      "innerRadius": 9,
+      "originCell": [0, 0],
+      "directions": [[-1, 0], [0, -1], [1, -1], [1, 0], [0, 1], [-1, 1]],
+      "colourOrder": ["black", "red", "blue", "white", "green", "yellow"],
+      "directionAnchor": "black=W (centre of left border), clockwise; compass W NW NE E SE SW. Confirmed against board.svg 2026-09-09.",
+      "homeBase": { "cellCount": 4, "anchorDistance": 9, "shape": "cluster" }
+    },
+    "dice": {
+      "coordinate": { "count": 3, "steps": [1, 2, 3], "faces": "colourOrder" },
+      "combat": {
+        "attack": { "faces": [1, 2, 3, 4, 5, 6], "rolledBy": "attacker", "colour": "red", "confirmed": true },
+        "defence": { "faces": [1, 2, 3, 4, 5, 6], "rolledBy": "defender", "colour": "blue", "confirmed": true }
+      }
+    },
+    "movement": {
+      "burnMaxCells": 3,
+      "fuelPerCell": 1,
+      "freeBaseDepartureCells": 1,
+      "hyperspace": { "engineThreshold": 4, "fuelCost": 4 }
+    },
+    "fuel": {
+      "model": "pool",
+      "refuelAtBase": "toMax",
+      "reserveMayExceedMax": false
+    },
+    "turn": {
+      "boostersDrawnPerTurn": 1,
+      "allowScrapBeforeDraw": true
+    },
+    "cards": {
+      "reshuffleDiscardWhenEmpty": true
+    }
+  },
+
+  "modes": {
+    "prospector": {
+      "statSchema": ["shields", "lasers", "fuelTanks", "cargo", "engines", "booster"],
+      "players": { "min": 2, "max": 6 },
+
+      "movementInputs": {
+        "burnCap": "engines",
+        "fuelCapacity": "fuelTanks"
+      },
+
+      "ships": {
+        "black":  { "name": "Pirate", "shields": 0, "lasers": 2, "fuelTanks": 10, "cargo": 2, "engines": 1, "booster": 3 },
+        "white":  { "name": "Dove",   "shields": 2, "lasers": 0, "fuelTanks": 10, "cargo": 2, "engines": 1, "booster": 3 },
+        "blue":   { "name": "Polo",   "shields": 1, "lasers": 0, "fuelTanks": 13, "cargo": 2, "engines": 1, "booster": 3 },
+        "red":    { "name": "Hermes", "shields": 0, "lasers": 1, "fuelTanks": 10, "cargo": 2, "engines": 2, "booster": 3 },
+        "green":  { "name": "Atlas",  "shields": 1, "lasers": 0, "fuelTanks": 10, "cargo": 3, "engines": 1, "booster": 3 },
+        "yellow": { "name": "Joe",    "shields": 1, "lasers": 1, "fuelTanks": 10, "cargo": 2, "engines": 1, "booster": 3 }
+      },
+
+      "upgradeCaps": { "lasers": 4, "shields": 4, "fuelTanks": 19, "cargo": 4, "engines": 3, "booster": 7 },
+
+      "startingFuel": "fuelMax",
+
+      "resources": {
+        "colours": ["green", "yellow", "red"],
+        "values": { "green": 1, "yellow": 2, "red": 3 },
+        "perColour": { "base": 3, "perPlayer": 1 },
+        "boxTilesPerColour": 9,
+        "gameLengthAdjust": { "short": -1, "long": 1 },
+        "seedOrder": ["green", "yellow", "red"],
+        "inPlayInvariant": 1,
+        "inPlayBasis": "initial-players",
+        "setupExtraGreen": 1
+      },
+
+      "decks": {
+        "booster": {
+          "shield":      { "1": 4, "2": 3, "3": 2, "99": 3 },
+          "laser":       { "1": 4, "2": 3, "3": 2, "50": 3 },
+          "reserveFuel": { "1": 4, "2": 3, "3": 2 },
+          "engine":      { "1": 4, "2": 3, "3": 2 },
+          "hyperspace":  3
+        },
+        "equipment": {
+          "perType": 6,
+          "types": { "shields": 1, "lasers": 1, "fuelTanks": 3, "cargo": 1, "engines": 1, "booster": 1 },
+          "fuelEquip": { "tankIncrease": 3, "grantFuel": 3 }
+        },
+        "fuel": { "denominations": { "1": 24, "3": 19 }, "sharedFieldCards": 6, "sharedFieldValue": 3 }
+      },
+
+      "combat": {
+        "winTest": "strict-greater",
+        "spoil": "most-valuable",
+        "counterattackOnFailedAttack": true,
+        "attacksPerTurn": 1,
+        "attackerNeedsFreeCargo": true,
+        "targetNeedsResource": true,
+        "laserBooster50SingleCardOnly": true,
+        "shieldBooster99AutoWin": true,
+        "hyperspaceDefenceAutoEscape": true
+      },
+
+      "loadRules": {
+        "maxPerTurn": 1,
+        "swapMoreValuableWhenFull": true,
+        "noCombatSameTurnIfLoaded": true
+      },
+
+      "homeBase": {
+        "refuel": true,
+        "equipmentDraw": 3,
+        "equipmentKeep": 1,
+        "setupEquipmentDraw": 3,
+        "setupEquipmentKeep": 1,
+        "deliveredResourcesSafe": true
+      },
+
+      "shipLoss": {
+        "rerollCargo": true,
+        "returnToBaseAtRest": true,
+        "eliminateIfSupplyEmpty": true
+      },
+
+      "postMoveActions": ["load", "attack"],
+      "scoring": "resource-value-sum",
+      "endTrigger": "supply-empty-and-delivered"
+    }
+  }
+}

@@ -1,0 +1,340 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prospector.game/config.schema.json",
+  "title": "Prospector game configuration",
+  "description": "Every tunable quantity. `core` is mode-independent; `modes.<name>` layers a mode on top. Defaults live in default.config.json.",
+  "type": "object",
+  "required": ["core", "modes"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "meta": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string" },
+        "source": { "type": "string" },
+        "date": { "type": "string" }
+      }
+    },
+
+    "core": {
+      "type": "object",
+      "required": ["board", "dice", "movement", "fuel", "turn", "cards"],
+      "additionalProperties": false,
+      "properties": {
+        "board": {
+          "type": "object",
+          "required": ["orientation", "radius", "innerRadius", "originCell", "directions", "colourOrder", "homeBase"],
+          "additionalProperties": false,
+          "properties": {
+            "orientation": { "enum": ["flat-top", "pointy-top"] },
+            "radius": { "type": "integer", "minimum": 1 },
+            "innerRadius": { "type": "integer", "minimum": 1 },
+            "originCell": { "$ref": "#/$defs/axial" },
+            "directions": {
+              "type": "array",
+              "minItems": 6,
+              "maxItems": 6,
+              "items": { "$ref": "#/$defs/axial" },
+              "description": "Six neighbour deltas, clockwise, index-aligned with colourOrder."
+            },
+            "colourOrder": {
+              "type": "array",
+              "minItems": 6,
+              "maxItems": 6,
+              "items": { "$ref": "#/$defs/colour" },
+              "description": "Ship/base colours clockwise; index i binds to directions[i]."
+            },
+            "directionAnchor": { "type": "string", "description": "Human note on the absolute anchor/rotation." },
+            "homeBase": {
+              "type": "object",
+              "required": ["cellCount", "anchorDistance"],
+              "additionalProperties": false,
+              "properties": {
+                "cellCount": { "type": "integer", "minimum": 1 },
+                "anchorDistance": { "type": "integer", "minimum": 0 },
+                "shape": { "type": "string" }
+              }
+            }
+          }
+        },
+
+        "dice": {
+          "type": "object",
+          "required": ["coordinate", "combat"],
+          "additionalProperties": false,
+          "properties": {
+            "coordinate": {
+              "type": "object",
+              "required": ["count", "steps", "faces"],
+              "additionalProperties": false,
+              "properties": {
+                "count": { "type": "integer", "minimum": 1 },
+                "steps": { "type": "array", "items": { "type": "integer", "minimum": 1 } },
+                "faces": { "const": "colourOrder", "description": "Each die face carries one colourOrder colour." }
+              }
+            },
+            "combat": {
+              "type": "object",
+              "required": ["attack", "defence"],
+              "additionalProperties": false,
+              "properties": {
+                "attack": { "$ref": "#/$defs/die" },
+                "defence": { "$ref": "#/$defs/die" }
+              }
+            }
+          }
+        },
+
+        "movement": {
+          "type": "object",
+          "required": ["burnMaxCells", "fuelPerCell", "freeBaseDepartureCells", "hyperspace"],
+          "additionalProperties": false,
+          "properties": {
+            "burnMaxCells": { "type": "integer", "minimum": 0 },
+            "fuelPerCell": { "type": "integer", "minimum": 0 },
+            "freeBaseDepartureCells": { "type": "integer", "minimum": 0 },
+            "hyperspace": {
+              "type": "object",
+              "required": ["engineThreshold", "fuelCost"],
+              "additionalProperties": false,
+              "properties": {
+                "engineThreshold": { "type": "integer", "minimum": 1 },
+                "fuelCost": { "type": "integer", "minimum": 0 }
+              }
+            }
+          }
+        },
+
+        "fuel": {
+          "type": "object",
+          "required": ["model", "refuelAtBase", "reserveMayExceedMax"],
+          "additionalProperties": false,
+          "properties": {
+            "model": { "enum": ["pool"] },
+            "refuelAtBase": { "enum": ["toMax", "none"] },
+            "reserveMayExceedMax": { "type": "boolean" }
+          }
+        },
+
+        "turn": {
+          "type": "object",
+          "required": ["boostersDrawnPerTurn", "allowScrapBeforeDraw"],
+          "additionalProperties": false,
+          "properties": {
+            "boostersDrawnPerTurn": { "type": "integer", "minimum": 0 },
+            "allowScrapBeforeDraw": { "type": "boolean" }
+          }
+        },
+
+        "cards": {
+          "type": "object",
+          "required": ["reshuffleDiscardWhenEmpty"],
+          "additionalProperties": false,
+          "properties": {
+            "reshuffleDiscardWhenEmpty": { "type": "boolean" }
+          }
+        }
+      }
+    },
+
+    "modes": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "$ref": "#/$defs/prospectorMode" },
+      "properties": { "prospector": { "$ref": "#/$defs/prospectorMode" } }
+    }
+  },
+
+  "$defs": {
+    "axial": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": { "type": "integer" }
+    },
+    "colour": { "enum": ["black", "red", "blue", "white", "green", "yellow"] },
+    "die": {
+      "type": "object",
+      "required": ["faces"],
+      "additionalProperties": false,
+      "properties": {
+        "faces": { "type": "array", "minItems": 1, "items": { "type": "integer" } },
+        "rolledBy": { "enum": ["attacker", "defender"] },
+        "colour": { "type": "string" },
+        "confirmed": { "type": "boolean" }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 },
+      "description": "Map of bonus-value (as string key) to card count."
+    },
+
+    "prospectorMode": {
+      "type": "object",
+      "required": ["statSchema", "movementInputs", "ships", "upgradeCaps", "resources", "decks", "combat", "loadRules", "homeBase", "shipLoss", "postMoveActions", "scoring", "endTrigger"],
+      "additionalProperties": false,
+      "properties": {
+        "statSchema": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "players": {
+          "type": "object",
+          "required": ["min", "max"],
+          "additionalProperties": false,
+          "properties": {
+            "min": { "type": "integer", "minimum": 1 },
+            "max": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "movementInputs": {
+          "type": "object",
+          "required": ["burnCap", "fuelCapacity"],
+          "additionalProperties": { "type": "string" },
+          "description": "Maps engine-consumed inputs to stat names in statSchema."
+        },
+        "ships": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "object",
+            "required": ["name"],
+            "additionalProperties": { "type": ["integer", "string"] },
+            "properties": { "name": { "type": "string" } }
+          }
+        },
+        "upgradeCaps": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        },
+        "startingFuel": { "enum": ["fuelMax", "zero"] },
+        "resources": {
+          "type": "object",
+          "required": ["colours", "values", "perColour", "seedOrder", "inPlayInvariant"],
+          "additionalProperties": false,
+          "properties": {
+            "colours": { "type": "array", "items": { "type": "string" } },
+            "values": { "type": "object", "additionalProperties": { "type": "integer" } },
+            "perColour": {
+              "type": "object",
+              "required": ["base", "perPlayer"],
+              "additionalProperties": false,
+              "properties": {
+                "base": { "type": "integer" },
+                "perPlayer": { "type": "integer" }
+              }
+            },
+            "gameLengthAdjust": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "short": { "type": "integer" },
+                "long": { "type": "integer" }
+              }
+            },
+            "seedOrder": { "type": "array", "items": { "type": "string" } },
+            "inPlayInvariant": { "type": "integer", "minimum": 0 },
+            "inPlayBasis": { "enum": ["initial-players", "active-players"] },
+            "boxTilesPerColour": { "type": "integer", "minimum": 1 },
+            "setupExtraGreen": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "decks": {
+          "type": "object",
+          "required": ["booster", "equipment", "fuel"],
+          "additionalProperties": false,
+          "properties": {
+            "booster": {
+              "type": "object",
+              "required": ["shield", "laser", "reserveFuel", "engine", "hyperspace"],
+              "additionalProperties": false,
+              "properties": {
+                "shield": { "$ref": "#/$defs/counts" },
+                "laser": { "$ref": "#/$defs/counts" },
+                "reserveFuel": { "$ref": "#/$defs/counts" },
+                "engine": { "$ref": "#/$defs/counts" },
+                "hyperspace": { "type": "integer", "minimum": 0 }
+              }
+            },
+            "equipment": {
+              "type": "object",
+              "required": ["perType", "types"],
+              "additionalProperties": false,
+              "properties": {
+                "perType": { "type": "integer", "minimum": 1 },
+                "types": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 1 } },
+                "fuelEquip": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "tankIncrease": { "type": "integer", "minimum": 0 },
+                    "grantFuel": { "type": "integer", "minimum": 0 }
+                  }
+                }
+              }
+            },
+            "fuel": {
+              "type": "object",
+              "required": ["denominations"],
+              "additionalProperties": false,
+              "properties": {
+                "denominations": { "$ref": "#/$defs/counts" },
+                "sharedFieldCards": { "type": "integer", "minimum": 0 },
+                "sharedFieldValue": { "type": "integer", "minimum": 1 }
+              }
+            }
+          }
+        },
+        "combat": {
+          "type": "object",
+          "required": ["winTest", "spoil", "attacksPerTurn"],
+          "additionalProperties": false,
+          "properties": {
+            "winTest": { "enum": ["strict-greater", "greater-or-equal"] },
+            "spoil": { "enum": ["most-valuable", "least-valuable", "random", "attacker-choice"] },
+            "counterattackOnFailedAttack": { "type": "boolean" },
+            "attacksPerTurn": { "type": "integer", "minimum": 0 },
+            "attackerNeedsFreeCargo": { "type": "boolean" },
+            "targetNeedsResource": { "type": "boolean" },
+            "laserBooster50SingleCardOnly": { "type": "boolean" },
+            "shieldBooster99AutoWin": { "type": "boolean" },
+            "hyperspaceDefenceAutoEscape": { "type": "boolean" }
+          }
+        },
+        "loadRules": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "maxPerTurn": { "type": "integer", "minimum": 0 },
+            "swapMoreValuableWhenFull": { "type": "boolean" },
+            "noCombatSameTurnIfLoaded": { "type": "boolean" }
+          }
+        },
+        "homeBase": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "refuel": { "type": "boolean" },
+            "equipmentDraw": { "type": "integer", "minimum": 0 },
+            "equipmentKeep": { "type": "integer", "minimum": 0 },
+            "setupEquipmentDraw": { "type": "integer", "minimum": 0 },
+            "setupEquipmentKeep": { "type": "integer", "minimum": 0 },
+            "deliveredResourcesSafe": { "type": "boolean" }
+          }
+        },
+        "shipLoss": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "rerollCargo": { "type": "boolean" },
+            "returnToBaseAtRest": { "type": "boolean" },
+            "eliminateIfSupplyEmpty": { "type": "boolean" }
+          }
+        },
+        "postMoveActions": { "type": "array", "items": { "type": "string" } },
+        "scoring": { "type": "string" },
+        "endTrigger": { "type": "string" }
+      }
+    }
+  }
+}

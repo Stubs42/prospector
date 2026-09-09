@@ -1,0 +1,5 @@
+node_modules/
+dist-web/
+board/board.png
+board/board.svg
+*.log

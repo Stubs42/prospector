@@ -1,0 +1,935 @@
+<title>Prospector Rulebook</title>
+<meta name="description" content="English working translation of the 2006 Prospector board-game rules, annotated as a foundation for a web re-implementation.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+
+<style>
+  :root {
+    --ground: #f4f4f1;
+    --surface: #ffffff;
+    --surface-sunk: #ecebe5;
+    --ink: #1d2530;
+    --ink-soft: #3f4a57;
+    --muted: #6b7480;
+    --line: #d9d8d0;
+    --line-strong: #c4c3b8;
+    --accent: #b3701a;
+    --accent-glow: #e6a13c;
+    --ore-green: #3f8f63;
+    --ore-yellow: #a9862a;
+    --ore-red: #b1492e;
+    --dev-bg: #fbf4e8;
+    --dev-border: #d99a3c;
+
+    --measure: 65ch;
+    --font-display: "Chakra Petch", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Source Serif 4", Georgia, "Times New Roman", serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0f1418;
+      --surface: #181f27;
+      --surface-sunk: #10161c;
+      --ink: #e5e7e6;
+      --ink-soft: #c3c9cd;
+      --muted: #94a0a9;
+      --line: #2a333c;
+      --line-strong: #3a444e;
+      --accent: #e6a13c;
+      --accent-glow: #f2b862;
+      --ore-green: #4faf7c;
+      --ore-yellow: #d4ad3c;
+      --ore-red: #c96a4c;
+      --dev-bg: #1e2028;
+      --dev-border: #b98232;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0f1418;
+    --surface: #181f27;
+    --surface-sunk: #10161c;
+    --ink: #e5e7e6;
+    --ink-soft: #c3c9cd;
+    --muted: #94a0a9;
+    --line: #2a333c;
+    --line-strong: #3a444e;
+    --accent: #e6a13c;
+    --accent-glow: #f2b862;
+    --ore-green: #4faf7c;
+    --ore-yellow: #d4ad3c;
+    --ore-red: #c96a4c;
+    --dev-bg: #1e2028;
+    --dev-border: #b98232;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 1.0625rem;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: clamp(1.5rem, 4vw, 4rem) clamp(1.1rem, 4vw, 2.5rem) 6rem;
+  }
+
+  /* ---------- masthead ---------- */
+  .masthead { border-bottom: 2px solid var(--ink); padding-bottom: 1.8rem; }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 0.9rem;
+  }
+
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(2.3rem, 8vw, 3.4rem);
+    letter-spacing: 0.06em;
+    line-height: 1.02;
+    margin: 0 0 0.6rem;
+    text-transform: uppercase;
+  }
+
+  .tagline {
+    font-size: 1.1rem;
+    color: var(--ink-soft);
+    margin: 0 0 1.6rem;
+    max-width: 34rem;
+  }
+
+  .specsheet {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+    gap: 0.4rem 1.4rem;
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+  }
+  .specsheet div { display: flex; flex-direction: column; gap: 0.1rem; }
+  .specsheet dt { color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.72rem; }
+  .specsheet dd { margin: 0; color: var(--ink); }
+
+  /* ---------- contents ---------- */
+  .contents {
+    margin: 2.4rem 0 0;
+    padding: 1.3rem 1.5rem;
+    background: var(--surface-sunk);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+  }
+  .contents h2 {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 0.8rem;
+    border: 0;
+    padding: 0;
+  }
+  .contents ol {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: toc;
+    columns: 2;
+    column-gap: 2rem;
+    font-family: var(--font-mono);
+    font-size: 0.86rem;
+  }
+  .contents li { counter-increment: toc; break-inside: avoid; margin-bottom: 0.3rem; }
+  .contents a {
+    color: var(--ink-soft);
+    text-decoration: none;
+    display: flex;
+    gap: 0.6rem;
+  }
+  .contents a::before {
+    content: counter(toc, decimal-leading-zero);
+    color: var(--accent);
+  }
+  .contents a:hover { color: var(--accent); }
+
+  /* ---------- sections ---------- */
+  main { margin-top: 3rem; }
+
+  section { margin-bottom: 3.2rem; scroll-margin-top: 1.5rem; }
+
+  h2.section-title {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 1.55rem;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+    margin: 0 0 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--line-strong);
+    text-wrap: balance;
+  }
+  h2.section-title .num {
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+    color: var(--accent);
+    margin-right: 0.7rem;
+    font-weight: 500;
+  }
+
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 1.1rem;
+    letter-spacing: 0.02em;
+    margin: 1.8rem 0 0.5rem;
+  }
+
+  p { margin: 0 0 1rem; max-width: var(--measure); }
+  main ul, main ol { max-width: var(--measure); padding-left: 1.4rem; }
+  main li { margin-bottom: 0.4rem; }
+
+  strong { font-weight: 600; color: var(--ink); }
+  em { color: var(--ink-soft); }
+
+  .lead {
+    font-size: 1.15rem;
+    color: var(--ink-soft);
+    border-left: 3px solid var(--accent);
+    padding-left: 1.1rem;
+    margin-left: -1.1rem;
+  }
+
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.86em;
+    background: var(--surface-sunk);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 0.08em 0.38em;
+  }
+
+  /* ---------- component table ---------- */
+  .tablewrap { overflow-x: auto; margin: 1rem 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.95rem; }
+  caption {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-align: left;
+    margin-bottom: 0.6rem;
+  }
+  th, td { text-align: left; padding: 0.5rem 0.9rem 0.5rem 0; border-bottom: 1px solid var(--line); vertical-align: baseline; }
+  th { font-family: var(--font-mono); font-weight: 500; font-size: 0.74rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  td.qty { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--accent); width: 4.5rem; }
+
+  /* ---------- ship stat block ---------- */
+  .statblock {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    overflow: hidden;
+    margin: 1.2rem 0;
+  }
+  .statblock div { background: var(--surface); padding: 0.9rem 1rem; }
+  .statblock .v { font-family: var(--font-mono); font-size: 1.5rem; font-weight: 600; color: var(--accent); line-height: 1; }
+  .statblock .k { font-family: var(--font-mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-top: 0.35rem; }
+
+  /* ---------- ore key ---------- */
+  .ore { display: inline-flex; align-items: baseline; gap: 0.35em; font-family: var(--font-mono); font-size: 0.9em; white-space: nowrap; }
+  .ore::before { content: ""; width: 0.7em; height: 0.7em; border-radius: 50%; align-self: center; }
+  .ore.g::before { background: var(--ore-green); }
+  .ore.y::before { background: var(--ore-yellow); }
+  .ore.r::before { background: var(--ore-red); }
+
+  /* ---------- dev notes ---------- */
+  .devnote {
+    background: var(--dev-bg);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--dev-border);
+    border-radius: 3px;
+    padding: 1rem 1.2rem;
+    margin: 1.4rem 0;
+    font-size: 0.95rem;
+  }
+  .devnote p { max-width: none; margin: 0; }
+  .devnote p + p { margin-top: 0.6rem; }
+  .devnote .tag {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+  }
+
+  /* ---------- turn log ---------- */
+  .turnlog { list-style: none; padding: 0; max-width: var(--measure); counter-reset: turn; }
+  .turnlog > li {
+    counter-increment: turn;
+    padding: 0.7rem 0 0.7rem 3.2rem;
+    border-bottom: 1px solid var(--line);
+    position: relative;
+    margin: 0;
+  }
+  .turnlog > li::before {
+    content: "T" counter(turn);
+    position: absolute;
+    left: 0;
+    top: 0.7rem;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  /* ---------- footer ---------- */
+  footer {
+    margin-top: 4rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--line-strong);
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--muted);
+    line-height: 1.8;
+  }
+
+  /* ---------- theme toggle ---------- */
+  .themetoggle {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    background: var(--surface);
+    color: var(--ink-soft);
+    border: 1px solid var(--line-strong);
+    border-radius: 3px;
+    padding: 0.4rem 0.7rem;
+    cursor: pointer;
+  }
+  .themetoggle:hover { color: var(--accent); border-color: var(--accent); }
+
+  a { color: var(--accent); }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { scroll-behavior: auto !important; }
+  }
+  html { scroll-behavior: smooth; }
+
+  @media (max-width: 34rem) {
+    .contents ol { columns: 1; }
+  }
+
+  /* ---------- contents: appendix sub-list ---------- */
+  .contents .sub-h {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 1rem 0 0.7rem;
+  }
+  .contents ol.appendix { counter-reset: toc; columns: 2; }
+  .contents ol.appendix a::before { content: counter(toc, upper-alpha); }
+  @media (max-width: 34rem) { .contents ol.appendix { columns: 1; } }
+
+  /* ---------- part divider ---------- */
+  .part-divider {
+    margin: 4.5rem 0 3rem;
+    padding-top: 2.5rem;
+    border-top: 2px solid var(--ink);
+  }
+  .part-divider .eyebrow { margin-bottom: 0.7rem; }
+  .part-divider h2 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(1.8rem, 5vw, 2.4rem);
+    letter-spacing: 0.04em;
+    line-height: 1.05;
+    text-transform: uppercase;
+    margin: 0 0 0.9rem;
+    text-wrap: balance;
+  }
+  .part-divider p { color: var(--ink-soft); max-width: var(--measure); margin: 0; }
+
+  /* ---------- phase list ---------- */
+  ol.phases { counter-reset: phase -1; list-style: none; padding-left: 0; max-width: var(--measure); }
+  ol.phases > li {
+    counter-increment: phase;
+    padding: 0.8rem 0 0.8rem 3.4rem;
+    border-bottom: 1px solid var(--line);
+    position: relative;
+  }
+  ol.phases > li::before {
+    content: "P" counter(phase);
+    position: absolute;
+    left: 0;
+    top: 0.85rem;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--accent);
+  }
+  ol.phases .done {
+    display: block;
+    margin-top: 0.35rem;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+
+  .hooklist { font-family: var(--font-mono); font-size: 0.86rem; }
+  .hooklist code { background: none; border: 0; padding: 0; color: var(--accent); }
+</style>
+
+<button class="themetoggle" id="themetoggle" type="button" aria-label="Toggle colour theme">Theme</button>
+
+<div class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">Field Manual &middot; English Working Translation</p>
+    <h1>Prospector</h1>
+    <p class="tagline">A space-mining board game of momentum, fuel and salvage &mdash; drifting a ship through an asteroid field on borrowed velocity.</p>
+    <dl class="specsheet">
+      <div><dt>Players</dt><dd>2&ndash;6</dd></div>
+      <div><dt>Age</dt><dd>10+</dd></div>
+      <div><dt>Designer</dt><dd>Dieter Stubler</dd></div>
+      <div><dt>Source</dt><dd>Draft, 13 Jan 2006</dd></div>
+      <div><dt>Status</dt><dd>Phase 0 frozen &middot; 2026-09-09</dd></div>
+    </dl>
+  </header>
+
+  <nav class="contents" aria-label="Contents">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#overview">The Job</a></li>
+      <li><a href="#components">Components</a></li>
+      <li><a href="#board">The Board</a></li>
+      <li><a href="#setup">Setup</a></li>
+      <li><a href="#seeding">Seeding Resources</a></li>
+      <li><a href="#ship-cards">Ship Cards</a></li>
+      <li><a href="#turn">Anatomy of a Turn</a></li>
+      <li><a href="#movement">Movement: Drift &amp; Burn</a></li>
+      <li><a href="#boosters">Booster Cards</a></li>
+      <li><a href="#loading">Loading Resources</a></li>
+      <li><a href="#equipment">Equipment Cards</a></li>
+      <li><a href="#hyperspace">Hyperspace</a></li>
+      <li><a href="#combat">Combat</a></li>
+      <li><a href="#homebase">Home Base</a></li>
+      <li><a href="#shiploss">Losing Your Ship</a></li>
+      <li><a href="#endgame">Game End &amp; Scoring</a></li>
+      <li><a href="#example">Worked Example</a></li>
+      <li><a href="#openquestions">Phase 0 Resolutions</a></li>
+    </ol>
+    <p class="sub-h">Part II &middot; Design &amp; Architecture</p>
+    <ol class="appendix">
+      <li><a href="#roadmap">Build Roadmap</a></li>
+      <li><a href="#parameters">Everything is a Parameter</a></li>
+      <li><a href="#simulation">Simulation &amp; Balancing</a></li>
+      <li><a href="#modes">Modes as Plugins</a></li>
+      <li><a href="#ships-scoped">Ships are Mode-Scoped</a></li>
+      <li><a href="#parity">Physical-Parity Gate</a></li>
+      <li><a href="#visuals">Visual Language</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <section id="overview">
+      <h2 class="section-title"><span class="num">01</span>The Job</h2>
+      <p class="lead">In the far future the inhabited planets have all but exhausted their mineral wealth. Prospectors are the spacefarers who push out into the empty deep to find raw material and dig it out.</p>
+      <p>Each player is one such prospector. Over the course of the game you try to claim as many valuable resources as you can and haul them back to your home base. Along the way your ship must be rebuilt, upgraded and tuned to your strategy. Careful navigation and clever use of scarce fuel are what keep you a nose ahead of the other players.</p>
+      <p>But take care &mdash; not every encounter out here is friendly. Hard-won cargo can be lost in moments to an aggressive rival.</p>
+    </section>
+
+    <section id="components">
+      <h2 class="section-title"><span class="num">02</span>Components</h2>
+      <div class="tablewrap">
+        <table>
+          <caption>Contents of the box</caption>
+          <thead><tr><th class="qty">Qty</th><th>Item</th></tr></thead>
+          <tbody>
+            <tr><td class="qty">1</td><td>Game board</td></tr>
+            <tr><td class="qty">6</td><td>Ship cards</td></tr>
+            <tr><td class="qty">6</td><td>Ships &mdash; 3 cones each, in 6 colours</td></tr>
+            <tr><td class="qty">1</td><td>Red attack die</td></tr>
+            <tr><td class="qty">1</td><td>Blue defence die</td></tr>
+            <tr><td class="qty">3</td><td>Coordinate dice &mdash; colour dice showing 1, 2 and 3 pips</td></tr>
+            <tr><td class="qty">27</td><td>Resource tiles &mdash; 9 each in <span class="ore g">green</span> <span class="ore y">yellow</span> <span class="ore r">red</span></td></tr>
+            <tr><td class="qty">43</td><td>Fuel cards &mdash; 24 &times; value 1, 19 &times; value 3</td></tr>
+            <tr><td class="qty">36</td><td>Equipment cards</td></tr>
+            <tr><td class="qty">45</td><td>Booster cards</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Resource values for scoring: <span class="ore g">green&nbsp;=&nbsp;1</span>, <span class="ore y">yellow&nbsp;=&nbsp;2</span>, <span class="ore r">red&nbsp;=&nbsp;3</span>.</p>
+    </section>
+
+    <section id="board">
+      <h2 class="section-title"><span class="num">03</span>The Board</h2>
+      <p>The board has an <strong>inner region</strong> and an <strong>outer region</strong>.</p>
+      <ul>
+        <li>The inner region is made of black cells plus the coloured <strong>home bases</strong> of the ships. This is where ships actually fly.</li>
+        <li>The outer region is made of grey cells and exists to orient ship movement &mdash; a ship that ends its drift here has left the playable field and must correct.</li>
+        <li>Around the field are holding areas for resources, booster cards, fuel cards and equipment cards, plus printed reference text and diagrams for key rules.</li>
+        <li>At the centre of the board is a single <strong>golden cell</strong>, used as the origin when rolling resources onto the board.</li>
+      </ul>
+      <h3>Geometry <span style="font-weight:400;color:var(--muted);font-size:0.85rem">(Phase 0&ndash;1)</span></h3>
+      <p>A hexagon of <strong>pointy-top cells</strong> on axial coordinates centred on the golden origin. <strong>Inner region:</strong> distance 0&ndash;9 (nine rings). <strong>Outer region:</strong> distance 10&ndash;11 (two rings). A drift ending beyond distance 11 loses the ship. The board hexagon has flat top/bottom edges and W/E vertices.</p>
+      <p>Six <strong>home bases</strong>, one per ship colour, sit at the hexagon's six corners inside the inner region (anchored around distance 9), each a 4-cell cluster. Clockwise from West: <strong>black&nbsp;W, red&nbsp;NW, blue&nbsp;NE, white&nbsp;E, green&nbsp;SE, yellow&nbsp;SW</strong> &mdash; opposite colours on opposite corners. Each base points toward its own colour's die direction (see&nbsp;5).</p>
+      <div class="devnote">
+        <span class="tag">Dev note &middot; open</span>
+        <p>The exact cells of each 4-cluster are generated deterministically by <code>board/build_board.py</code> and verified against the physical board's render.</p>
+      </div>
+    </section>
+
+    <section id="setup">
+      <h2 class="section-title"><span class="num">04</span>Setup</h2>
+      <ol>
+        <li>Place the resource tiles in the board's <strong>resource supply</strong> area. Equal numbers of each colour are played, scaled to the player count: <strong>2 players 5&times;3, 3 players 6&times;3, 4 players 7&times;3, 5 players 8&times;3, 6 players 9&times;3</strong> (that many of each colour). Tiles not played are returned to the box.</li>
+        <li>Shuffle the <strong>booster cards</strong> (star on the back) and place them face down on the booster field.</li>
+        <li>Shuffle the <strong>equipment cards</strong> (cone on the back). Deal 3 to each player; each keeps <strong>1</strong> and returns the other 2. Reshuffle the returned and remaining cards and place them face down on the equipment field.</li>
+        <li>Each player draws one of the 6 <strong>ship cards</strong> face down and places their ship (3 cones stacked) on a cell of the matching-colour home base.</li>
+        <li>Each player takes <strong>fuel cards</strong> equal to the fuel-tank count printed on their ship card. <code>10 = 2&times;3 + 4&times;1</code>. <code>13 = 3&times;3 + 4&times;1</code>.</li>
+        <li>Place six value-3 fuel cards on the board's <strong>fuel field</strong>.</li>
+        <li>Roll one <span class="ore g">green</span> resource onto the board for each player (see <a href="#seeding">Seeding Resources</a>).</li>
+        <li>Roll one additional <span class="ore g">green</span> resource onto the board.</li>
+        <li>Determine the start player by rolling.</li>
+        <li>The start player takes the first turn.</li>
+      </ol>
+      <h3>Game length</h3>
+      <p>The number of resources put into play sets the length of the game. For a <strong>shorter, luckier</strong> game, reduce the count by 1 resource per colour. For a <strong>longer, more strategic</strong> game, increase it by 1 per colour.</p>
+    </section>
+
+    <section id="seeding">
+      <h2 class="section-title"><span class="num">05</span>Seeding Resources</h2>
+      <p>Resources enter play at the start of the game and whenever a player delivers resources to a home base. The rule: <strong>there must always be exactly one more resource in play than the game's starting player count.</strong> A resource is &ldquo;in play&rdquo; if it is on the board or loaded as cargo on a ship card. The count uses the <strong>initial</strong> player number &mdash; it does not change when a player is eliminated &mdash; and seeding only ever adds resources, guaranteeing there is always something to chase.</p>
+      <p>The <strong>3 coordinate dice</strong> are one 1-pip die, one 2-pip die and one 3-pip die; every face carries one of the six ship/base colours. A roll gives three vectors of length 1, 2 and 3, each pointing toward that colour's home-base corner from the golden centre; add them to get the target cell. The order the dice are read in does not matter.</p>
+      <p>If the target cell is occupied, roll again until a free cell is found. Bring resources into play in colour order: <strong>green first, then yellow, then red.</strong></p>
+    </section>
+
+    <section id="ship-cards">
+      <h2 class="section-title"><span class="num">06</span>Ship Cards</h2>
+      <p>Each player is dealt one ship card in setup. It shows a ship of one colour and that ship's starting equipment, given as six symbols each with a number.</p>
+      <p>The six equipment ratings and what they govern:</p>
+      <ul>
+        <li><strong>Shields</strong> &mdash; defence strength in combat.</li>
+        <li><strong>Lasers</strong> &mdash; attack strength in combat.</li>
+        <li><strong>Fuel tanks</strong> &mdash; how many fuel cards the player holds.</li>
+        <li><strong>Cargo holds</strong> &mdash; how many resources the ship can carry.</li>
+        <li><strong>Engines</strong> &mdash; the ship's acceleration capacity (cells burnable per turn).</li>
+        <li><strong>Booster capacity</strong> &mdash; how many booster cards the player may hold in hand.</li>
+      </ul>
+      <h3>The six ships <span style="font-weight:400;color:var(--muted);font-size:0.85rem">(Phase 0 &mdash; designer's originals)</span></h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Ship</th><th>Shield</th><th>Laser</th><th>Fuel tanks</th><th>Cargo</th><th>Engine</th><th>Booster</th></tr></thead>
+          <tbody>
+            <tr><td>black &middot; <strong>Pirate</strong></td><td>0</td><td>2</td><td>10</td><td>2</td><td>1</td><td>3</td></tr>
+            <tr><td>white &middot; <strong>Dove</strong></td><td>2</td><td>0</td><td>10</td><td>2</td><td>1</td><td>3</td></tr>
+            <tr><td>blue &middot; <strong>Polo</strong></td><td>1</td><td>0</td><td>13</td><td>2</td><td>1</td><td>3</td></tr>
+            <tr><td>red &middot; <strong>Hermes</strong></td><td>0</td><td>1</td><td>10</td><td>2</td><td>2</td><td>3</td></tr>
+            <tr><td>green &middot; <strong>Atlas</strong></td><td>1</td><td>0</td><td>10</td><td>3</td><td>1</td><td>3</td></tr>
+            <tr><td>yellow &middot; <strong>Joe</strong></td><td>1</td><td>1</td><td>10</td><td>2</td><td>1</td><td>3</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Yellow (Joe) is the scan's example ship. Each hull leans a different way &mdash; Pirate to attack, Dove to defence, Polo to range, Hermes to speed, Atlas to capacity, Joe to nothing in particular. These vectors are the balancing baseline and may be adjusted if simulation shows one ship winning too often.</p>
+    </section>
+
+    <section id="turn">
+      <h2 class="section-title"><span class="num">07</span>Anatomy of a Turn</h2>
+      <ol>
+        <li><strong>Draw a booster card</strong> face down from the booster deck into your hand. If this puts you over your hand limit (your booster capacity), immediately play or discard one booster card face up to the booster discard pile.</li>
+        <li><strong>Move your ship</strong> &mdash; the drift phase, then the burn phase (see <a href="#movement">Movement</a>).</li>
+        <li><strong>After moving</strong>, you may either <strong>load one resource</strong> <em>or</em> <strong>attack one player</strong> &mdash; never both in the same turn.</li>
+      </ol>
+      <p>Alternative: at the very start of your turn, <em>before</em> drawing a booster card, you may <strong>scrap your ship</strong> &mdash; give it up and place it, empty of cargo, in your home base. Your turn then ends.</p>
+    </section>
+
+    <section id="movement">
+      <h2 class="section-title"><span class="num">08</span>Movement: Drift &amp; Burn</h2>
+      <p>Ship movement imitates flight in space. It has two phases: <strong>drift</strong>, then <strong>burn</strong>.</p>
+      <p>On the field a ship is shown with its 3 cones: <strong>two cones stacked mark the current position</strong>, and <strong>one cone marks the previous position</strong>. When a ship is at rest, all three cones are stacked and the drift phase is skipped.</p>
+
+      <h3>Drift</h3>
+      <p>The ship has coasted since your last turn at constant speed and heading. Carry that momentum forward:</p>
+      <ol>
+        <li>Lift the top cone off the current position and place it so that the previous-position cone, the remaining current cone and the new cone lie <strong>in a straight line</strong>, with the new cone <strong>the same distance</strong> from the remaining cone as the previous-position cone is. In vector terms: <code>new = current + (current &minus; previous)</code>.</li>
+        <li>Then move the previous-position cone onto the new cone.</li>
+      </ol>
+      <p>The current position has now shifted, and the old current position becomes the new previous position.</p>
+      <ul>
+        <li>If the new current position is <strong>not a free inner-field cell</strong>, this must be corrected by the following burn.</li>
+        <li>If the new current position is <strong>outside the outer field</strong>, the ship is lost &mdash; even if a burn could still reach a valid cell.</li>
+      </ul>
+
+      <h3>Burn</h3>
+      <p>After drifting, you may use engines and fuel to change speed and/or heading. This is <strong>mandatory</strong> if the ship did not land on a free inner-field cell after drift.</p>
+      <ul>
+        <li>Move the current position (the 2 stacked cones) in any direction.</li>
+        <li>Each cell of movement costs <strong>one fuel tank</strong>, flipped from full (green) to empty (red).</li>
+        <li>The maximum number of cells is your <strong>engine</strong> rating. Engine boosters can raise it. Absolute maximum burn is <strong>3 cells</strong>.</li>
+        <li>The destination cell must be free.</li>
+        <li>Spending <strong>4 engines and 4 fuel</strong> performs a <a href="#hyperspace">hyperspace jump</a>.</li>
+      </ul>
+      <p>On leaving a home base, the ship may burn <strong>one extra cell for free</strong>, without spending engines or fuel.</p>
+    </section>
+
+    <section id="boosters">
+      <h2 class="section-title"><span class="num">09</span>Booster Cards</h2>
+      <p>Booster cards are drawn face down and held in hand. Playing them gives a ship a <strong>one-time</strong> improvement to one of its ratings. The 45-card deck:</p>
+      <div class="tablewrap">
+        <table>
+          <caption>Booster deck composition</caption>
+          <thead><tr><th>Type</th><th>Cards</th></tr></thead>
+          <tbody>
+            <tr><td>Shields</td><td>4&times;&nbsp;+1, 3&times;&nbsp;+2, 2&times;&nbsp;+3, 3&times;&nbsp;+99</td></tr>
+            <tr><td>Lasers</td><td>4&times;&nbsp;+1, 3&times;&nbsp;+2, 2&times;&nbsp;+3, 3&times;&nbsp;+50</td></tr>
+            <tr><td>Reserve fuel</td><td>4&times;&nbsp;+1, 3&times;&nbsp;+2, 2&times;&nbsp;+3</td></tr>
+            <tr><td>Engines</td><td>4&times;&nbsp;+1, 3&times;&nbsp;+2, 2&times;&nbsp;+3</td></tr>
+            <tr><td>Hyperspace</td><td>3&times;</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Played boosters go face up to the booster discard pile on the field. When the booster deck runs out, shuffle the discard pile and place it face down as the new deck.</p>
+    </section>
+
+    <section id="loading">
+      <h2 class="section-title"><span class="num">10</span>Loading Resources</h2>
+      <p>If your ship ends its movement on a cell <strong>directly adjacent to a resource</strong>, you may load that resource. Loaded resources are placed on your ship card.</p>
+      <ul>
+        <li>Loaded resources may not exceed your <strong>cargo hold</strong> count.</li>
+        <li>If all holds are full and an <strong>adjacent resource is more valuable</strong> than one you carry, you may swap: load the more valuable one and place the less valuable one on the board on the cell your ship occupies.</li>
+        <li><strong>At most one resource may be loaded per turn.</strong></li>
+        <li>If you loaded a resource this turn, you may not start combat this turn.</li>
+      </ul>
+    </section>
+
+    <section id="equipment">
+      <h2 class="section-title"><span class="num">11</span>Equipment Cards</h2>
+      <p>Equipment cards <strong>permanently</strong> improve a ship's ratings. Each time you bring one or more resources to your home base, draw <strong>3 equipment cards</strong>, choose <strong>1</strong>, and place it face up beside your ship card. Only one equipment card per delivery, regardless of how many resources you delivered.</p>
+      <p>If you draw 3 identical cards and don't want that upgrade &mdash; or may not take it because the rating is already at its maximum &mdash; you may draw 3 new cards. Rejected cards go under the deck.</p>
+      <p>Choosing a <strong>fuel-tank</strong> equipment card also grants you one value-3 fuel card for your fuel supply.</p>
+      <div class="tablewrap">
+        <table>
+          <caption>Equipment deck &mdash; 36 cards</caption>
+          <thead><tr><th class="qty">Qty</th><th>Upgrade</th></tr></thead>
+          <tbody>
+            <tr><td class="qty">6</td><td>Shield +1</td></tr>
+            <tr><td class="qty">6</td><td>Laser +1</td></tr>
+            <tr><td class="qty">6</td><td>Fuel tanks +3</td></tr>
+            <tr><td class="qty">6</td><td>Cargo hold +1</td></tr>
+            <tr><td class="qty">6</td><td>Engine +1</td></tr>
+            <tr><td class="qty">6</td><td>Booster capacity +1</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>Maximum upgrade levels</h3>
+      <p>An equipment card may not be chosen if that rating &mdash; counting the ship's innate value plus equipment &mdash; is already at its cap:</p>
+      <div class="statblock">
+        <div><div class="v">4</div><div class="k">Lasers</div></div>
+        <div><div class="v">4</div><div class="k">Shields</div></div>
+        <div><div class="v">19</div><div class="k">Fuel tanks</div></div>
+        <div><div class="v">4</div><div class="k">Cargo holds</div></div>
+        <div><div class="v">3</div><div class="k">Engines</div></div>
+        <div><div class="v">7</div><div class="k">Booster</div></div>
+      </div>
+    </section>
+
+    <section id="hyperspace">
+      <h2 class="section-title"><span class="num">12</span>Hyperspace</h2>
+      <p>A ship jumps through hyperspace either by playing a <strong>Hyperspace booster card</strong> or by spending <strong>4 engines and 4 fuel</strong> during the burn phase.</p>
+      <ul>
+        <li>Remove the ship from the board. Roll the coordinate dice exactly as for <a href="#seeding">seeding resources</a> to determine a destination cell.</li>
+        <li>Place the ship <strong>at rest</strong> (all 3 cones stacked) on that cell.</li>
+        <li>If the destination cell is occupied, the ship is <strong>lost</strong> (see <a href="#shiploss">Losing Your Ship</a>).</li>
+      </ul>
+      <p>A Hyperspace booster may be played <strong>before the burn phase</strong> of your turn, or <strong>defensively in combat</strong>. If played before the burn phase, you may still perform a burn after the destination is determined.</p>
+    </section>
+
+    <section id="combat">
+      <h2 class="section-title"><span class="num">13</span>Combat</h2>
+      <p>If your ship ends its movement <strong>directly adjacent to the current position</strong> (2 stacked cones) of another player's ship, you may attack it.</p>
+      <p>To attack, the <strong>target ship</strong> must have <strong>at least 1 resource loaded</strong> &mdash; there is no point attacking a ship with nothing to steal. The <strong>attacker</strong> does not need any resource loaded, but must have <strong>more cargo holds than resources it currently carries</strong> (room for the spoils).</p>
+      <h3>Sequence &mdash; follow this order exactly</h3>
+      <ol>
+        <li>The <strong>attacker</strong> may play any number of <strong>Laser boosters</strong> to raise attack strength. A Laser&nbsp;+50 booster may only be played as a single card.</li>
+        <li>The <strong>defender</strong> may play <strong>Shield boosters</strong> to raise defence, or play a <strong>Hyperspace booster</strong> to flee. A Shield&nbsp;+99 booster or a Hyperspace booster means <strong>no dice are rolled and the attack fails</strong>.</li>
+        <li>Attacker and defender roll the attack die and defence die respectively. If<br><code>lasers (ship + boosters) + attack roll &gt; shields (ship + boosters) + defence roll</code><br>the attacker wins and takes the loser's <strong>most valuable loaded resource</strong>, placing it as cargo on the winning ship.</li>
+      </ol>
+      <ul>
+        <li>If an attack fails, the victorious defender may <strong>continue as attacker</strong> (counterattack).</li>
+        <li>Combat ends when an attack succeeds, or when the victorious defender declines to counterattack.</li>
+        <li><strong>Only one player may be attacked per turn.</strong></li>
+        <li>If combat took place this turn, you may not load a resource this turn.</li>
+      </ul>
+    </section>
+
+    <section id="homebase">
+      <h2 class="section-title"><span class="num">14</span>Home Base</h2>
+      <p>Each player has a home base of <strong>4 cells in their colour</strong> at the edge of the field. You start there and must return delivered resources there.</p>
+      <ul>
+        <li><strong>Departing:</strong> place the ship on any cell of the base. On leaving, the ship gets one extra free burn cell (no engines or fuel spent).</li>
+        <li><strong>Arriving:</strong> reaching any base cell at the end of the movement phase automatically brings the ship <strong>to rest</strong> (all 3 cones stacked).</li>
+        <li><strong>Refuel:</strong> reaching your home base lets you refill your fuel tanks &mdash; flip all your fuel cards green side up.</li>
+        <li><strong>Deliver:</strong> bringing one or more resources home lets you choose one <a href="#equipment">equipment card</a>. Place the delivered resources on the outer field beside your base. They are now permanently yours &mdash; safe, scored, and un-raidable.</li>
+        <li>For each resource delivered home, a new resource is rolled into play from the supply, as long as the supply still holds any.</li>
+      </ul>
+    </section>
+
+    <section id="shiploss">
+      <h2 class="section-title"><span class="num">15</span>Losing Your Ship</h2>
+      <p>A ship is lost when:</p>
+      <ul>
+        <li>a hyperspace jump fails (destination occupied);</li>
+        <li>it leaves the outer field during the drift phase;</li>
+        <li>no free inner-field cell can be reached after the burn phase.</li>
+      </ul>
+      <p>When this happens, any resources the ship was carrying are <strong>re-rolled into the supply</strong>, and the ship is placed <strong>at rest</strong> in the player's home base.</p>
+      <p>You may also <strong>voluntarily give up your ship</strong> at the start of your turn, before drawing a booster card.</p>
+      <p>If the <strong>last resource of the supply has already been distributed</strong>, then losing your ship ends the game <strong>for you</strong>: your ship is removed from the board. You still count the resources you have already delivered when the winner is determined.</p>
+    </section>
+
+    <section id="endgame">
+      <h2 class="section-title"><span class="num">16</span>Game End &amp; Scoring</h2>
+      <p>The game ends when <strong>all resources from the supply have been delivered</strong> to players' home bases.</p>
+      <p>Each player totals the value of the resources they delivered: <span class="ore g">green&nbsp;1</span>, <span class="ore y">yellow&nbsp;2</span>, <span class="ore r">red&nbsp;3</span>. The player with the highest total wins.</p>
+    </section>
+
+    <section id="example">
+      <h2 class="section-title"><span class="num">17</span>Worked Example &mdash; An Eight-Turn Run</h2>
+      <p>The yellow ship (1 engine) leaves home, collects one resource, and returns it. New players are strongly advised to perform each sub-step &mdash; drift step 1, drift step 2, burn &mdash; separately, as shown here.</p>
+      <ol class="turnlog">
+        <li>At rest in the home base, so the drift phase is skipped. Leaving the base grants 1 free burn cell, so with 1 fuel the ship burns <strong>2 cells</strong> outward.</li>
+        <li>Drift step 1: place the cone on a line, equal spacing. Drift step 2: bring the old position onto the new one. Then <strong>burn 1 cell</strong> (1 fuel).</li>
+        <li>Drift, then <strong>burn 1 cell</strong>.</li>
+        <li>Drift, then <strong>burn 1 cell</strong> &mdash; the ship is now adjacent to a resource and <strong>loads it</strong>.</li>
+        <li>Drift, then <strong>burn 1 cell</strong>, heading home.</li>
+        <li>The player has drawn an <strong>Engine +1</strong> booster and plays it: this turn the ship may burn <strong>2 cells</strong> (2 fuel).</li>
+        <li>Drift, then <strong>burn 1 cell</strong>.</li>
+        <li>The player plays an <strong>Engine +2</strong> booster: this turn the ship may burn <strong>3 cells</strong> (3 fuel), reaching the home base. The ship comes to rest and the resource is <strong>delivered</strong>.</li>
+      </ol>
+    </section>
+
+    <section id="openquestions">
+      <h2 class="section-title"><span class="num">18</span>Phase 0 Resolutions</h2>
+      <p>The gaps in the 2006 scan, now decided. Full rationale in the repo's <code>docs/decisions.md</code>; the numbers live in <code>config/default.config.json</code>.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Was open</th><th>Resolved</th></tr></thead>
+          <tbody>
+            <tr><td>Board geometry</td><td>Hexagon of pointy-top cells; inner distance 0&ndash;9, outer 10&ndash;11; golden origin at (0,0); six 4-cell bases at the corners, black centre-left (see&nbsp;3).</td></tr>
+            <tr><td>Dice &rarr; direction</td><td>Three dice of fixed length 1&nbsp;/&nbsp;2&nbsp;/&nbsp;3; each face a ship colour; each vector points to that colour's base corner. Order irrelevant.</td></tr>
+            <tr><td>Adjacency</td><td>The six hex neighbours at distance 1 &mdash; for loading and for combat targeting.</td></tr>
+            <tr><td>Drift at edges</td><td><code>next = current + (current &minus; previous)</code>. Off-field &rarr; ship lost. On an occupied or outer cell &rarr; burn is mandatory to a free inner cell, else lost.</td></tr>
+            <tr><td>Ship roster</td><td>All six recovered from the designer (see&nbsp;6). No redesign needed.</td></tr>
+            <tr><td>Fuel model</td><td>Integer pool clamped to <code>[0, fuelMax]</code>; card denominations are physical change-making only.</td></tr>
+            <tr><td>Combat dice</td><td>Standard 1&ndash;6; red rolled by the attacker, blue by the defender.</td></tr>
+            <tr><td>Hyperspace timing</td><td>Playable at the start of the burn phase (a normal burn may follow) or as combat defence; never once a burn has begun.</td></tr>
+            <tr><td>Seeding invariant</td><td>Target = <em>initial</em> player count + 1, fixed for the whole game; seeding only ever adds tiles.</td></tr>
+            <tr><td>Card art</td><td>Deferred to Phase 5; shared with any reprint. Not an engine blocker.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="part-divider">
+      <p class="eyebrow">Part II</p>
+      <h2>Design &amp; Architecture for the Digital Revival</h2>
+      <p>The rules above are the target specification for one game &mdash; the <strong>Prospector mode</strong>. This part records the decisions that govern how the digital version (and any future reprint) is built. The project is a <strong>movement-engine game system</strong>; Prospector is its first and flagship mode.</p>
+    </div>
+
+    <section id="roadmap">
+      <h2 class="section-title"><span class="num">A</span>Build Roadmap</h2>
+      <p>Each phase produces something checkable before the next depends on it.</p>
+      <ol class="phases" start="0">
+        <li><strong>Freeze the ruleset.</strong> <em>&#10003; Done 2026-09-09.</em> Every <a href="#openquestions">open question</a> resolved; rules split into <code>docs/rules-core.md</code> + <code>docs/rules-prospector.md</code>; parameters in <code>config/config.schema.json</code> + <code>config/default.config.json</code> (deck totals verified 45&nbsp;/&nbsp;36&nbsp;/&nbsp;43).
+          <span class="done">Done when: the document describes one unambiguous game.</span></li>
+        <li><strong>Model the board as data.</strong> Hex coordinate system, inner/outer boundary, golden origin, six 4-cell home bases, and the die-colour&rarr;direction map &mdash; expressed as <code>board.json</code>, with an SVG renderer that draws purely from that file. Support named per-mode overlays that mark special cells.
+          <span class="done">Done when: the board renders from data and the dice-direction rule is pinned down.</span></li>
+        <li><strong>Model the content as data.</strong> Per-mode content packs plus one shared components pack (dice, cones, generic tokens). A validator checks every count against the rulebook.
+          <span class="done">Done when: every component in the box exists as a data row that validates.</span></li>
+        <li><strong>Headless rules engine.</strong> <em>&#10003; Done 2026-09-09.</em> TypeScript + Vitest under <code>engine/</code>: hex math, seeded RNG, board model, dice, drift/burn/hyperspace, decks, combat, the <code>applyAction</code> reducer + <code>legalActions</code>, <code>simulate()</code> with bots. 61 tests green; the worked example replays move-for-move.
+          <span class="done">Done when: the test suite passes and the example replays move-for-move.</span></li>
+        <li><strong>Local hot-seat UI.</strong> <em>&#10003; First build 2026-09-09.</em> Vite + React over the engine (<code>web/</code>): SVG board from <code>board.json</code>, 3-cone ships with velocity lines, stat tiles / fuel track / typed booster cards, an action bar built entirely from <code>legalActions</code>, click-to-target burns and loads, and a pass-the-device gate. <code>npm run dev</code>.
+          <span class="done">Done when: a full game is playable start to finish by two people at one keyboard.</span></li>
+        <li><strong>Movement feel &amp; the component kit.</strong> Build the physical-object widget kit and the animation whitelist (see&nbsp;G) first. Animate the two drift sub-steps and the burn; preview the projected drift cell and the fuel cost before the player commits. Playtest and tune via parameter sweeps.
+          <span class="done">Done when: a new player understands drift without reading section&nbsp;8.</span></li>
+        <li><strong>Multiplayer</strong> <em>(optional, later)</em>. Move the engine behind an authoritative server; add rooms, turn sync, reconnection. Transport work, not redesign &mdash; the engine is already the rules authority.
+          <span class="done">Done when: two machines can play one synced game.</span></li>
+        <li><strong>AI opponent</strong> <em>(optional)</em>. A heuristic bot on top of the engine's legal-move API.
+          <span class="done">Done when: the bot finishes a game making only legal, non-random-looking moves.</span></li>
+      </ol>
+      <p>Threads that run through every phase: the rulebook is the single source of truth &mdash; decide there first, then code; the engine never imports the UI; the eight-turn example stays a permanent regression test; board layout and deck contents live in data files; and every rule and every mode must pass the <a href="#parity">Physical-Parity Gate</a>.</p>
+    </section>
+
+    <section id="parameters">
+      <h2 class="section-title"><span class="num">B</span>Everything is a Parameter</h2>
+      <p>Every quantity in the rules becomes a named parameter, with the 2006 value as its documented default. Nothing is hard-coded in the engine; the decks are <strong>generated from config</strong>, not hand-authored.</p>
+      <h3>Config layout</h3>
+      <ul>
+        <li><strong>core</strong> &mdash; board, dice, the generic card framework, the turn skeleton, and the few universal movement constants.</li>
+        <li><strong>modes.&lt;mode&gt;</strong> &mdash; <code>statSchema</code>, <code>ships</code>, <code>upgradeCaps</code>, <code>decks</code>, <code>setup</code>, and the objective / scoring rules.</li>
+      </ul>
+      <h3>Parameter catalogue &mdash; Prospector mode</h3>
+      <div class="tablewrap">
+        <table>
+          <caption>Defaults are the 2006 values</caption>
+          <thead><tr><th>System</th><th>Parameters (defaults)</th></tr></thead>
+          <tbody>
+            <tr><td>Board / space</td><td>inner-field radius, outer-ring width, home-base size, bases-used vs player count; coordinate dice count (3) and pip values (1/2/3); die-colour&rarr;direction map</td></tr>
+            <tr><td>Resource economy</td><td>tiles per colour as <code>base + slope&middot;players</code> (fits the 5&times;3&hellip;9&times;3 table); &ldquo;in play = players + N&rdquo; (N&nbsp;=&nbsp;1); colour values (1/2/3); seed order (green&rarr;yellow&rarr;red); redraw-on-occupied</td></tr>
+            <tr><td>Ship start vectors</td><td>6 ships &times; the mode stat schema; the rule that derives starting fuel composition from tank count</td></tr>
+            <tr><td>Upgrade caps</td><td>4 laser, 4 shield, 19 fuel tanks, 4 cargo, 3 engine, 7 booster</td></tr>
+            <tr><td>Movement</td><td>max burn (3), free base-departure cell (1), fuel per cell (1), hyperspace cost (4 engines + 4 fuel)</td></tr>
+            <tr><td>Booster deck (45)</td><td>every sub-count independently &mdash; shields {+1:4, +2:3, +3:2, +99:3}, lasers {+1:4, +2:3, +3:2, +50:3}, reserve fuel {4,3,2}, engines {4,3,2}, hyperspace 3; and the magic values +99 / +50 themselves</td></tr>
+            <tr><td>Equipment deck (36)</td><td>per-type count (6 &times; 6); fuel-equipment (+3 tanks, +3 fuel); setup deal-3-keep-1; delivery draw-3-keep-1; redraw-on-triple</td></tr>
+            <tr><td>Combat</td><td>attack / defence die faces (1&ndash;6 each); win test (<code>&gt;</code> vs <code>&ge;</code>); spoil rule (most-valuable / random / choice); counterattack on/off; attacks per turn (1)</td></tr>
+            <tr><td>Fuel</td><td>card denominations (24&times;1, 19&times;3); shared fuel field (6&times;value-3); refuel-only-at-base</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="simulation">
+      <h2 class="section-title"><span class="num">C</span>Simulation &amp; Balancing</h2>
+      <p>The <code>simulate()</code> function from phase&nbsp;3 runs thousands of games with scripted bots (random, greedy, greedy + combat), sweeping parameters <strong>per mode</strong>. It reports:</p>
+      <ul>
+        <li><strong>Fairness</strong> <em>(hard constraint)</em> &mdash; win-rate by ship and by seat position; target is roughly uniform.</li>
+        <li><strong>Balance &amp; feel</strong> &mdash; game-length distribution, lead volatility and comeback frequency, kingmaking incidents, resource-delivery rate.</li>
+        <li><strong>Mechanic usage</strong> &mdash; ship-loss rate, hyperspace rate, combat-initiation rate, the impact of a drawn +99 / +50.</li>
+        <li><strong>Skill vs variance</strong> &mdash; greedy should beat random, and greedy + combat should beat greedy, by a sensible margin. If a random bot wins about <code>1/N</code> at an <code>N</code>-player table, there is too much luck.</li>
+      </ul>
+      <div class="devnote">
+        <span class="tag">Dev note &middot; tuning the ships</span>
+        <p>All six starting vectors are the designer's originals (see&nbsp;6), so the simulator's job here is <em>checking</em>, not designing: if win-rate by ship is not roughly flat, perturb the roster and re-run. A tuned roster overrides <code>modes.prospector.ships</code>; the 2006 values stay as the documented baseline.</p>
+      </div>
+      <p>Balancing is per-mode; there is no cross-mode fairness to reconcile.</p>
+    </section>
+
+    <section id="modes">
+      <h2 class="section-title"><span class="num">D</span>Modes as Plugins</h2>
+      <p class="lead">The momentum engine <em>is</em> the game. The goal layer is data plus a few functions.</p>
+      <h3>Core &mdash; identical in every variant</h3>
+      <ul>
+        <li>hex board and coordinate system;</li>
+        <li>the drift / burn momentum engine (3 cones, <code>new = current + (current &minus; previous)</code>, fuel-per-cell burn, engine cap, hyperspace);</li>
+        <li>fuel economy (tanks, flip green&rarr;red, refuel points);</li>
+        <li>turn skeleton: <em>optional draw &rarr; move &rarr; optional post-move action</em>;</li>
+        <li>generic card framework (deck, hand, hand-limit, discard, reshuffle);</li>
+        <li>the ship stat vector and the upgrade mechanism;</li>
+        <li>movement-based loss conditions (left the field, no landing cell).</li>
+      </ul>
+      <h3>A mode module implements</h3>
+      <ul class="hooklist">
+        <li><code>setup()</code> &mdash; start positions, decks in play, initial board overlay</li>
+        <li><code>boardOverlay</code> &mdash; which cells are special (bases, start line, finish, checkpoints, hazards)</li>
+        <li><code>postMoveActions(state)</code> &mdash; collect / attack / tag checkpoint / claim / pass</li>
+        <li><code>checkEnd(state)</code> and <code>score(state)</code></li>
+        <li><code>movementInputs(ship)</code> &mdash; maps the mode's stats onto what the engine consumes (see&nbsp;E)</li>
+      </ul>
+      <h3>Candidate modes</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Mode</th><th>Shape</th></tr></thead>
+          <tbody>
+            <tr><td>Prospector <em>(flagship)</em></td><td>collect resources, deliver to home base, score by ore value; ends when the supply is exhausted</td></tr>
+            <tr><td>Race</td><td>start line &rarr; waypoint laps &rarr; finish; cards become slipstream / oil-slick / boost; &ldquo;bumping&rdquo; replaces combat</td></tr>
+            <tr><td>Rally</td><td>hit a sequence of dice-placed checkpoints in order</td></tr>
+            <tr><td>Courier</td><td>pick up at A, deliver to B, draw a new contract each time</td></tr>
+            <tr><td>Last Ship Flying</td><td>shrinking field, combat-focused, last ship on the board wins</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="ships-scoped">
+      <h2 class="section-title"><span class="num">E</span>Ships are Mode-Scoped</h2>
+      <p>The ship stat vector is an <strong>open <code>key&nbsp;&rarr;&nbsp;number</code> map</strong>, not a fixed structure. The core does not know the axes; it reads only through a mode-supplied adapter:</p>
+      <p class="hooklist"><code>mode.movementInputs(ship) &rarr; { burnCap, fuelCapacity, &hellip; }</code></p>
+      <div class="statblock">
+        <div><div class="v" style="font-size:0.9rem;line-height:1.5">shields&nbsp;&middot;&nbsp;lasers<br>fuelTanks&nbsp;&middot;&nbsp;cargo<br>engines&nbsp;&middot;&nbsp;booster</div><div class="k">Prospector ship</div></div>
+        <div><div class="v" style="font-size:0.9rem;line-height:1.5">handling&nbsp;&middot;&nbsp;topSpeed<br>fuel&nbsp;&middot;&nbsp;boost<br>drafting</div><div class="k">Race ship</div></div>
+      </div>
+      <p>The ship <strong>roster</strong>, the <strong>stat schema</strong>, the <strong>upgrade caps</strong>, and the <strong>equipment and booster decks that act on those stats</strong> all live under <code>modes.&lt;mode&gt;</code>. Section&nbsp;6 above is &ldquo;the Prospector mode's stat schema&rdquo; &mdash; not a global fact about the system.</p>
+    </section>
+
+    <section id="parity">
+      <h2 class="section-title"><span class="num">F</span>Physical-Parity Gate</h2>
+      <p>Every rule and every mode must pass this before it is accepted:</p>
+      <ol>
+        <li>All randomness comes from real dice or shuffled decks &mdash; never &ldquo;roll, then apply a formula the player cannot do in their head.&rdquo;</li>
+        <li>All state is visible or hand-holdable: cones, cards, tiles in tracks. Nothing that needs a running tally a person would want a spreadsheet for.</li>
+        <li>Every count parameter resolves to a fixed, printable component set for each player count. The simulator tunes <em>within what fits in a box</em>.</li>
+        <li>Strict turn order; no real-time or simultaneous resolution.</li>
+        <li>If the digital build auto-highlights legal moves, the printed rulebook gives a hand-followable procedure that produces the same answer &mdash; this mostly bites the drift construction and adjacency.</li>
+        <li>Hidden information is limited to hand-of-cards and face-down draws &mdash; things a card back and a screen can both do.</li>
+        <li>Misplays are take-backs; no hidden irreversible trigger.</li>
+      </ol>
+      <p>This constraint and the parameterisation of B&nbsp;/&nbsp;C pull against each other in a healthy way: the simulator explores the space, the parity gate bounds it to buildable configurations.</p>
+    </section>
+
+    <section id="visuals">
+      <h2 class="section-title"><span class="num">G</span>Visual Language: Physical Objects Only</h2>
+      <p>The renderer is a small kit of real-component widgets &mdash; <code>Card</code>, <code>Chip</code>, <code>Die</code>, <code>Cone</code>, <code>Tile</code>, <code>Track</code> &mdash; and every mode's screen is composed from it. That mirrors the core / module split on the visual side.</p>
+      <ul>
+        <li>Every on-screen element corresponds to something that would be in the box.</li>
+        <li>Every animation is a <strong>rigid-body motion of a physical object</strong>: a card flips, a die tumbles and settles, a chip slides, a cone is lifted and set down. No HUD, health bars, floating numbers, particle effects, or sci-fi glass UI.</li>
+        <li>&ldquo;If you can't do it to a cardboard chip, don't animate it.&rdquo; Short durations; respects <code>prefers-reduced-motion</code>.</li>
+        <li>Card fronts and backs, tile art and token art are the <strong>same assets a reprint needs</strong> &mdash; drawn once, used in both.</li>
+      </ul>
+      <p>This makes the digital build double as a &ldquo;how to play&rdquo; demonstrator for the physical game, and it applies the parity gate at the presentation layer.</p>
+    </section>
+
+  </main>
+
+  <footer>
+    <p>Prospector &mdash; board game by Dieter Stubler. Rules draft dated 13 January 2006.<br>
+    English working translation, September 2026. Part I reorganises and clarifies the original wording without changing its intent; Part II records design and architecture decisions for the digital revival, agreed in session.</p>
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    var btn = document.getElementById("themetoggle");
+    var root = document.documentElement;
+    function current() {
+      if (root.dataset.theme) return root.dataset.theme;
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    btn.addEventListener("click", function () {
+      var next = current() === "dark" ? "light" : "dark";
+      root.dataset.theme = next;
+      try { localStorage.setItem("prospector-theme", next); } catch (e) {}
+    });
+    try {
+      var saved = localStorage.getItem("prospector-theme");
+      if (saved === "dark" || saved === "light") root.dataset.theme = saved;
+    } catch (e) {}
+  })();
+</script>
