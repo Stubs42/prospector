@@ -7,6 +7,8 @@ import { makeRng } from "../engine/rng.js";
 import type { Action, Colour, GameState, Hex } from "../engine/index.js";
 import { Board } from "./components/Board.js";
 import { BoosterCardFace, Die, FuelTrack, TileChip } from "./components/kit.js";
+import { Settings } from "./components/Settings.js";
+import { loadPrefs, motionReduced, savePrefs, type Prefs } from "./prefs.js";
 
 const ALL_COLOURS: Colour[] = ["black", "red", "blue", "white", "green", "yellow"];
 const STAT_ORDER = ["shields", "lasers", "fuelTanks", "cargo", "engines", "booster"] as const;
@@ -37,11 +39,13 @@ export default function App() {
   const [state, setState] = useState<GameState>(game0);
   const [shownPlayer, setShownPlayer] = useState(game0.activePlayerIndex);
   const [hoverCell, setHoverCell] = useState<Hex | null>(null);
+  const [prefs, setPrefsState] = useState<Prefs>(loadPrefs);
 
-  const reducedMotion = useMemo(
-    () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches,
-    [],
-  );
+  const setPrefs = (p: Prefs) => {
+    setPrefsState(p);
+    savePrefs(p);
+  };
+  const reducedMotion = motionReduced(prefs);
 
   useEffect(() => {
     const n = Number(new URLSearchParams(location.search).get("demo") ?? 0);
@@ -131,6 +135,22 @@ export default function App() {
   const needPassGate = !state.gameOver && shownPlayer !== state.activePlayerIndex;
   const lastCombat = [...state.log].reverse().find((e) => e.event === "attackSucceeded" || e.event === "attackFailed");
 
+  // auto-advance: when the player has no real choice, take the move for them
+  const AUTO_SKIP = new Set<Action["type"]>(["scrapShip", "declineCounter", "discardBooster"]);
+  const autoCandidates = acts.filter(
+    (a) => !AUTO_SKIP.has(a.type) && (a.type !== "endTurn" || prefs.autoEndTurn),
+  );
+  const autoAction =
+    prefs.autoSingle && !state.gameOver && !needPassGate && autoCandidates.length === 1
+      ? autoCandidates[0]!
+      : null;
+  useEffect(() => {
+    if (!autoAction) return;
+    const id = setTimeout(() => dispatch(autoAction), reducedMotion ? 30 : 220);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, autoAction, reducedMotion]);
+
   const statTotal = (k: (typeof STAT_ORDER)[number]) => {
     const t = p.equipment.filter((e) => e.stat === k).reduce((acc, e) => acc + e.amount, baseStats[k]);
     return Math.min(t, caps[k] ?? t);
@@ -157,6 +177,7 @@ export default function App() {
             ))}
           </select>
         </label>
+        <Settings prefs={prefs} onChange={setPrefs} />
         <button onClick={() => reset()}>New game</button>
       </div>
 
