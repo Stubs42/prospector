@@ -124,6 +124,12 @@ Polish left for later: board could use more of the canvas; combat panel has no i
   shows each as a ring colour-coded by fuel cost (green free / yellow 1 / orange 2 / red 3).
   `legalActions(state, { extraEngines, extraFuel })` widens the disc for armed boosters.
 - **Solo vs bots.** Topbar picks *humans* (1–6) and *bots* (0–5). Bot seats play themselves
-  (`greedyBot`, seeded ref, ~360 ms between moves); the pass-the-device gate only applies
-  with 2+ humans. A **Players roster** shows every seat's resolved stats / fuel / cargo /
-  score — persistent state is public, only booster hands are hidden (bot hands show a count).
+  (`greedyBot`, seeded ref, ~340 ms between moves), including their side of a fight; the
+  pass-the-device gate only applies with 2+ humans. A **Players roster** shows every seat's
+  resolved stats / fuel / cargo / score — persistent state is public, only booster hands are
+  hidden (bot hands show a count).
+- **Booster play in the UI.** *Move:* click an engine / reserve-fuel card to arm it for the
+  coming burn — the reachable-disc rings widen live, and the cards are spent when you burn.
+  *Combat:* attacking now has a target → pick-lasers → declare flow; the defender picks
+  shields or flees via hyperspace; a "Roll the dice" step; counter-attack / decline. All
+  booster plays are logged, and the log now shows burns (cells + fuel) and combat detail.
