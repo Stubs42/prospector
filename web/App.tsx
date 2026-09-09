@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { createGame, applyAction, score } from "../engine/game.js";
 import { legalActions, greedyBot } from "../engine/index.js";
-import { makeRng } from "../engine/rng.js";
 import { hexKey } from "../engine/hex.js";
+import { driftTarget } from "../engine/movement.js";
+import { makeRng } from "../engine/rng.js";
 import type { Action, Colour, GameState, Hex } from "../engine/index.js";
 import { Board } from "./components/Board.js";
+import { BoosterCardFace, Die, FuelTrack, TileChip } from "./components/kit.js";
 
 const ALL_COLOURS: Colour[] = ["black", "red", "blue", "white", "green", "yellow"];
 const STAT_ORDER = ["shields", "lasers", "fuelTanks", "cargo", "engines", "booster"] as const;
@@ -24,12 +26,22 @@ function newGame(nPlayers: number): GameState {
   return createGame({ colours: ALL_COLOURS.slice(0, nPlayers), seed: (Math.random() * 1e9) | 0 });
 }
 
+function keyToHex(k: string): Hex {
+  const [q, r] = k.split(",").map(Number) as [number, number];
+  return { q, r };
+}
+
 export default function App() {
   const [nPlayers, setNPlayers] = useState(3);
   const [state, setState] = useState<GameState>(() => newGame(3));
   const [shownPlayer, setShownPlayer] = useState(0);
+  const [hoverCell, setHoverCell] = useState<Hex | null>(null);
 
-  // ?demo=N — let greedy bots play N actions on load, for screenshots / kicking the tyres
+  const reducedMotion = useMemo(
+    () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches,
+    [],
+  );
+
   useEffect(() => {
     const n = Number(new URLSearchParams(location.search).get("demo") ?? 0);
     if (!n) return;
@@ -39,6 +51,11 @@ export default function App() {
       const r = applyAction(s, greedyBot(s, rng));
       s = r.ok ? r.state : applyAction(s, legalActions(s)[0]!).state;
     }
+    // draw a booster so the drift preview is visible in screenshots
+    if (!s.gameOver && s.phase === "start" && !s.players[s.activePlayerIndex]!.turn.boosterDrawn) {
+      const r = applyAction(s, { type: "drawBooster" });
+      if (r.ok) s = r.state;
+    }
     setState(s);
     setShownPlayer(s.activePlayerIndex);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -46,60 +63,84 @@ export default function App() {
 
   const acts = useMemo(() => legalActions(state), [state]);
   const p = state.players[state.activePlayerIndex]!;
-  const stats = state.config.modes.prospector.ships[p.colour];
-  const caps = state.config.modes.prospector.upgradeCaps;
+  const mode = state.config.modes.prospector;
+  const baseStats = mode.ships[p.colour];
+  const caps = mode.upgradeCaps;
+  const sc = score(state);
 
   function dispatch(a: Action) {
     const r = applyAction(state, a);
-    if (r.ok) setState(r.state);
-    else console.warn("rejected", a, r.error);
+    if (r.ok) {
+      setState(r.state);
+      setHoverCell(null);
+    } else console.warn("rejected", a, r.error);
   }
-
   function reset(n = nPlayers) {
     const g = newGame(n);
     setState(g);
     setShownPlayer(g.activePlayerIndex);
   }
 
-  // --- derive UI affordances from legalActions -----------------------------
+  // --- affordances from legalActions ------------------------------------
   const burnByCell = new Map<string, Extract<Action, { type: "burn" }>>();
   for (const a of acts) {
     if (a.type !== "burn") continue;
-    const dest = a.path[a.path.length - 1]!;
-    const k = hexKey(dest);
+    const k = hexKey(a.path[a.path.length - 1]!);
     const prev = burnByCell.get(k);
     if (!prev || a.path.length < prev.path.length) burnByCell.set(k, a);
   }
   const loadCells: Hex[] = acts.flatMap((a) => (a.type === "loadResource" ? [a.from] : []));
   const attackActs = acts.filter((a) => a.type === "attack") as Extract<Action, { type: "attack" }>[];
-  const plainActs = acts.filter((a) => LABEL[a.type]) as Action[];
+  const plainActs = acts.filter((a) => LABEL[a.type]);
+  const overLimit = acts.length > 0 && acts.every((a) => a.type === "discardBooster");
 
   const highlight: { cells: Hex[]; kind: "burn" | "load" | null } = loadCells.length
     ? { cells: loadCells, kind: "load" }
     : burnByCell.size
-      ? { cells: [...burnByCell.keys()].map((k) => keyToHex(k)), kind: "burn" }
+      ? { cells: [...burnByCell.keys()].map(keyToHex), kind: "burn" }
       : { cells: [], kind: null };
+
+  // drift preview — only meaningful for a ship that is actually coasting
+  const canDrift = acts.some((a) => a.type === "drift");
+  const driftGhost =
+    canDrift && !p.pose.atRest ? { at: driftTarget(p.pose), from: p.pose.current } : null;
+
+  // burn hover — free base-departure cells reduce the fuel cost
+  const freeCells = p.turn.moveStartedOnOwnBase
+    ? Math.max(0, state.config.core.movement.freeBaseDepartureCells - p.turn.freeBurnCellsUsed)
+    : 0;
+  let burnPreview: { path: Hex[]; cost: number } | null = null;
+  if (hoverCell) {
+    const b = burnByCell.get(hexKey(hoverCell));
+    if (b) burnPreview = { path: b.path, cost: Math.max(0, b.path.length - Math.min(b.path.length, freeCells)) };
+  }
 
   function onCell(h: Hex) {
     const k = hexKey(h);
-    if (loadCells.some((c) => hexKey(c) === k)) {
-      dispatch({ type: "loadResource", from: h });
-      return;
-    }
+    if (loadCells.some((c) => hexKey(c) === k)) return dispatch({ type: "loadResource", from: h });
     const burn = burnByCell.get(k);
     if (burn) dispatch(burn);
   }
 
   const needPassGate = !state.gameOver && shownPlayer !== state.activePlayerIndex;
-  const overLimit = acts.length > 0 && acts.every((a) => a.type === "discardBooster");
-  const sc = score(state);
+  const lastCombat = [...state.log].reverse().find((e) => e.event === "attackSucceeded" || e.event === "attackFailed");
+
+  const statTotal = (k: (typeof STAT_ORDER)[number]) => {
+    const t = p.equipment.filter((e) => e.stat === k).reduce((acc, e) => acc + e.amount, baseStats[k]);
+    return Math.min(t, caps[k] ?? t);
+  };
+  const boosterLimit = statTotal("booster");
 
   return (
     <div className="app">
       <div className="topbar">
         <h1>Prospector</h1>
         <span className="turn">
-          turn {state.turnNumber} · <span className="pill"><i className="swatch" style={{ background: `var(--ship-${p.colour})` }} />{p.colour}</span>
+          turn {state.turnNumber} ·{" "}
+          <span className="pill">
+            <i className="swatch" style={{ background: `var(--ship-${p.colour})` }} />
+            {p.colour}
+          </span>
         </span>
         <span className="spacer" />
         <label className="turn">
@@ -115,7 +156,15 @@ export default function App() {
 
       <div className="stage">
         <div className="boardwrap">
-          <Board state={state} highlight={highlight} onCell={onCell} />
+          <Board
+            state={state}
+            highlight={highlight}
+            driftGhost={driftGhost}
+            burnPreview={burnPreview}
+            reducedMotion={reducedMotion}
+            onCell={onCell}
+            onCellHover={setHoverCell}
+          />
         </div>
 
         <div className="sidebar">
@@ -133,63 +182,45 @@ export default function App() {
             <h2>Active ship</h2>
             <div className="pill" style={{ fontWeight: 700 }}>
               <i className="swatch" style={{ background: `var(--ship-${p.colour})` }} />
-              {stats.name} <span style={{ color: "var(--muted)", fontWeight: 400 }}>({p.colour})</span>
+              {baseStats.name} <span style={{ color: "var(--muted)", fontWeight: 400 }}>({p.colour})</span>
             </div>
             <div className="stats">
-              {STAT_ORDER.map((k) => {
-                const total = p.equipment
-                  .filter((e) => e.stat === k)
-                  .reduce((acc, e) => acc + e.amount, stats[k]);
-                const capped = Math.min(total, caps[k] ?? total);
-                return (
-                  <div className="stat" key={k}>
-                    <b>{capped}</b>
-                    <span>{k}</span>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="fueltrack" title={`fuel ${p.fuel} / ${p.fuelMax}`}>
-              {Array.from({ length: p.fuelMax }, (_, i) => (
-                <i key={i} className={`fuelcell ${i < p.fuel ? "full" : "empty"}`} />
+              {STAT_ORDER.map((k) => (
+                <div className="stat" key={k}>
+                  <b>{statTotal(k)}</b>
+                  <span>{k}</span>
+                </div>
               ))}
             </div>
+            <FuelTrack fuel={p.fuel} max={p.fuelMax} />
             <div className="tiles">
               cargo:
               {p.cargo.length === 0 && <span className="hint" style={{ marginLeft: 4 }}>empty</span>}
               {p.cargo.map((c, i) => (
-                <i key={i} className="oretile" style={{ background: `var(--ore-${c})` }}>
-                  {state.config.modes.prospector.resources.values[c]}
-                </i>
+                <TileChip key={i} colour={c} value={mode.resources.values[c]} />
               ))}
             </div>
             <div className="tiles">
               delivered:
               {p.delivered.map((c, i) => (
-                <i key={i} className="oretile" style={{ background: `var(--ore-${c})` }}>
-                  {state.config.modes.prospector.resources.values[c]}
-                </i>
+                <TileChip key={i} colour={c} value={mode.resources.values[c]} />
               ))}
               <span className="hint" style={{ marginLeft: "auto" }}>score {sc.byPlayer[p.id]}</span>
             </div>
           </section>
 
           <section>
-            <h2>Booster hand ({p.hand.length}/{Math.min(stats.booster, caps.booster ?? stats.booster)})</h2>
+            <h2>Booster hand ({p.hand.length}/{boosterLimit})</h2>
             {overLimit && <p className="hint">Over the limit — click a card to discard.</p>}
             <div className="hand">
               {p.hand.length === 0 && <span className="hint">no cards</span>}
               {p.hand.map((c) => (
-                <div
+                <BoosterCardFace
                   key={c.id}
-                  className={`card booster-${c.type}`}
-                  style={{ cursor: overLimit ? "pointer" : "default" }}
+                  card={c}
+                  clickable={overLimit}
                   onClick={overLimit ? () => dispatch({ type: "discardBooster", cardId: c.id }) : undefined}
-                >
-                  <div className="ctype">{c.type}</div>
-                  <div className="cval">{c.value ?? "◇"}</div>
-                  <div className="ceff">{c.effect}</div>
-                </div>
+                />
               ))}
             </div>
           </section>
@@ -212,12 +243,26 @@ export default function App() {
                 </button>
               ))}
             </div>
-            {highlight.kind === "burn" && <p className="hint">Click a highlighted cell to burn there.</p>}
+            {driftGhost && <p className="hint">Gold outline = where you'll coast to if you drift.</p>}
+            {highlight.kind === "burn" && (
+              <p className="hint">Hover a highlighted cell to see fuel cost, click to burn.</p>
+            )}
             {highlight.kind === "load" && <p className="hint">Click a highlighted resource to load it.</p>}
             {state.pendingCombat && (
               <p className="hint">
-                combat: {state.players[state.pendingCombat.attackerId]!.colour} → {state.players[state.pendingCombat.defenderId]!.colour} ({state.pendingCombat.awaiting})
+                combat: {state.players[state.pendingCombat.attackerId]!.colour} →{" "}
+                {state.players[state.pendingCombat.defenderId]!.colour} ({state.pendingCombat.awaiting})
               </p>
+            )}
+            {lastCombat && (
+              <div className="combat-roll">
+                <Die value={Number(lastCombat.detail?.attackDie ?? 1)} tone="attack" />
+                <Die value={Number(lastCombat.detail?.defenceDie ?? 1)} tone="defence" />
+                <span className="hint">
+                  {Number(lastCombat.detail?.attackTotal)} vs {Number(lastCombat.detail?.defenceTotal)} —{" "}
+                  {lastCombat.event === "attackSucceeded" ? "hit" : "repelled"}
+                </span>
+              </div>
             )}
           </section>
 
@@ -239,8 +284,11 @@ export default function App() {
           <div className="sub">pass the device to</div>
           <div className="who">
             <span className="pill">
-              <i className="swatch" style={{ background: `var(--ship-${p.colour})`, width: "1.4rem", height: "1.4rem" }} />
-              {stats.name} · {p.colour}
+              <i
+                className="swatch"
+                style={{ background: `var(--ship-${p.colour})`, width: "1.4rem", height: "1.4rem" }}
+              />
+              {baseStats.name} · {p.colour}
             </span>
           </div>
           <button className="primary" onClick={() => setShownPlayer(state.activePlayerIndex)}>
@@ -250,9 +298,4 @@ export default function App() {
       )}
     </div>
   );
-}
-
-function keyToHex(k: string): Hex {
-  const [q, r] = k.split(",").map(Number) as [number, number];
-  return { q, r };
 }
