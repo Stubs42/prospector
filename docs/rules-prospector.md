@@ -144,9 +144,16 @@ Sequence — strict order:
 
 ## 10. Home base
 
-- Reaching any base cell at the end of the movement phase → ship **at rest** automatically.
-- On departure: core §5 free-departure cell applies.
-- **Refuel** `[homeBase.refuel]`: `fuel = fuelMax` (all tanks green).
+- **Launch:** on a player's first move of the game the ship is placed on **one base cell of
+  the player's choice** (the four base cells are otherwise equivalent). This is a one-time
+  setup choice; after that the base behaves normally.
+- **Arriving:** if the ship's current position at the **end of the movement phase** is one of
+  your base cells *and the move did **not** start on your base*, the ship stops instantly —
+  all three cones on that cell, **no fuel spent to decelerate**, whatever its speed was.
+- **Departing:** a move that *starts* on your own base does **not** brake, even if it ends on
+  another cell of the base cluster — you keep the velocity you have built up. Core §5's free
+  departure cell (one cell of burn without fuel or engines) applies.
+- **Refuel** (on arrival, and on launch) `[homeBase.refuel]`: `fuel = fuelMax` (all tanks green).
 - **Deliver:** placing carried resources by the base — they are permanently scored and
   cannot be raided `[homeBase.deliveredResourcesSafe]`. Then take one equipment card (§7)
   and trigger seeding (§5).

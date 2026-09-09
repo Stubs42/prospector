@@ -106,6 +106,7 @@ export function createGame(opts: CreateGameOptions = {}): GameState {
       id: i,
       colour,
       eliminated: false,
+      placed: false,
       pose: atRestPose(start),
       fuel: fuelMax,
       fuelMax,
@@ -342,6 +343,9 @@ function loseShip(state: GameState, board: BoardModel, p: PlayerState, reason: s
 function arriveHomeBaseIfAny(state: GameState, board: BoardModel, p: PlayerState): void {
   const mode = state.config.modes.prospector;
   if (board.baseOwnerAt(p.pose.current) !== p.colour) return;
+  // Only an *arrival* brakes the ship. A ship that began its move on its own base is
+  // departing — moving within the base cluster keeps the velocity it has built up.
+  if (p.turn.moveStartedOnOwnBase) return;
 
   p.pose = atRestPose(p.pose.current);
   if (mode.homeBase.refuel) p.fuel = p.fuelMax;
@@ -414,6 +418,17 @@ export function applyAction(prev: GameState, action: Action): StepResult {
 
   switch (action.type) {
     // ---- start phase -------------------------------------------------------
+    case "placeShip": {
+      if (state.phase !== "start" || p.turn.boosterDrawn) return fail("too late to choose a launch cell");
+      if (p.placed) return fail("launch cell already chosen");
+      const owns = board.baseCells(p.colour).some((c) => hexEq(c, action.cell));
+      if (!owns) return fail("not one of your base cells");
+      p.pose = atRestPose(action.cell);
+      p.placed = true;
+      log(state, "shipPlaced", { player: p.id, cell: action.cell });
+      return done();
+    }
+
     case "scrapShip": {
       if (state.phase !== "start" || p.turn.boosterDrawn) return fail("can only scrap at the very start of the turn");
       if (!state.config.core.turn.allowScrapBeforeDraw) return fail("scrapping disabled");
@@ -434,6 +449,7 @@ export function applyAction(prev: GameState, action: Action): StepResult {
         p.hand.push(...cards);
       });
       p.turn.boosterDrawn = true;
+      p.placed = true; // launch cell choice is locked once the turn proper begins
       return done();
     }
 
