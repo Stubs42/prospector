@@ -30,7 +30,14 @@ const DIR_KEYS: Hex[] = [
   { q: 0, r: 1 },
 ];
 
-export function legalActions(state: GameState): Action[] {
+export interface LegalOpts {
+  /** engine-booster value the player intends to arm this burn (widens the reachable disc) */
+  extraEngines?: number;
+  /** reserve-fuel-booster value the player intends to arm (raises the affordable range) */
+  extraFuel?: number;
+}
+
+export function legalActions(state: GameState, opts?: LegalOpts): Action[] {
   if (state.gameOver) return [];
   const board = boardFor(state);
   const p = state.players[state.activePlayerIndex]!;
@@ -74,7 +81,7 @@ export function legalActions(state: GameState): Action[] {
       return out;
     }
     if (!p.turn.moved) {
-      const cap = movementInputs(statsOf(state, p), mode).burnCap;
+      const cap = movementInputs(statsOf(state, p), mode).burnCap + Math.max(0, opts?.extraEngines ?? 0);
       const freeCells = Math.max(
         0,
         p.turn.moveStartedOnOwnBase
@@ -83,6 +90,7 @@ export function legalActions(state: GameState): Action[] {
       );
       const hardCap = state.config.core.movement.burnMaxCells;
       const stepBudget = Math.min(cap, hardCap) + freeCells;
+      const fuelBudget = Math.min(p.fuel + Math.max(0, opts?.extraFuel ?? 0), p.fuelMax);
 
       // A burn may turn: every cell reachable within `stepBudget` steps over free inner
       // cells is a candidate. BFS gives the shortest (= cheapest) path to each.
@@ -104,7 +112,7 @@ export function legalActions(state: GameState): Action[] {
       }
       for (const [k, d] of depth) {
         if (d === 0) continue;
-        if (d - Math.min(d, freeCells) > p.fuel) continue; // can't fuel it
+        if (d - Math.min(d, freeCells) > fuelBudget) continue; // can't fuel it
         const path: Hex[] = [];
         for (let node: Hex | undefined = parseHexKey(k); node && hexKey(node) !== startKey; node = parent.get(hexKey(node))) {
           path.unshift(node);
