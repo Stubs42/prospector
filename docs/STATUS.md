@@ -4,7 +4,7 @@
 (resource collection & delivery), revived from a 2006 print-only draft. Other modes
 (Race, Rally, Courier, Last Ship Flying) will reuse the same core.
 
-_Last updated: 2026-09-09 — Phase 4 (hot-seat UI) first working build._
+_Last updated: 2026-09-09 — Phase 5 (movement feel + component kit) done._
 
 ## Assets in the repo
 
@@ -98,4 +98,15 @@ _Run: `npm test` · `npm run check`_
 - [x] `?demo=N` — greedy bots auto-play N actions on load (screenshots / smoke).
 - Verified in headless Chrome: fresh game + a 140-action mid-game state both render correctly. 61 engine tests still green.
 
-Polish left for later: board could use more of the canvas; combat panel is minimal (no in-combat booster picker yet); no animation pass yet (Phase 5).
+### Phase 5 — movement feel & the component kit
+
+- [x] `web/components/kit.tsx` — `Cone`, `FuelTrack`, `TileChip`, `Die` (pip faces), `BoosterCardFace`; shared colour maps. Board + sidebar now compose from it.
+- [x] **Drift preview** — before committing to Drift, the board shows a translucent ghost of the coast-to cell + the projected velocity vector, with a one-line hint. Only shown for a ship that is actually moving.
+- [x] **Burn hover** — hovering a candidate cell draws the path as a polyline and a fuel-cost badge (`⛽N`), free base-departure cells discounted.
+- [x] **Cone animation** — ship groups tween `transform` (~320 ms) so drift/burn read as the piece being carried; `prefers-reduced-motion` disables it.
+- [x] **Chip settle** — resource chips scale-in with a slight overshoot when placed.
+- [x] Combat dice surfaced — `combatResolve` logs the roll; the sidebar shows the two `Die` with totals and hit/repelled.
+- [x] Animation whitelist recorded in `decisions.md` S5.
+- 61 engine tests green; web builds; verified in headless Chrome (drift ghost visible).
+
+Polish left for later: board could use more of the canvas; combat panel has no in-combat booster picker.

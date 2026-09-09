@@ -49,6 +49,23 @@ top-right, green bottom-right, yellow bottom-left.
 
 ---
 
+### S5 — Animation whitelist (Phase 5)  ·  DECIDED
+Every on-screen motion is a rigid-body move / flip / tumble a physical piece could make.
+Approved so far:
+- **cone slide** — ship groups tween `transform` (~320 ms ease) when a pose changes, so drift
+  and burn read as the piece being carried to its new cell.
+- **chip settle** — a resource chip placed on the board scales in from ~0.6 with a slight
+  overshoot (no fade — a chip has weight), ~220 ms.
+- **drift ghost** — a static translucent preview of the coast-to cell + a dashed vector,
+  shown before the player commits to Drift. Not animated; it is a projection, not a piece.
+- **burn hover** — the candidate path drawn as a polyline with a fuel-cost badge.
+- **die** — face shown statically for now; a tumble-settle is allowed later.
+All gated by `prefers-reduced-motion` (transitions and the chip keyframe are disabled).
+Forbidden: fades as the primary motion, particle effects, floating numbers, easing that
+overshoots position (only scale may overshoot), anything a cardboard piece could not do.
+
+---
+
 ## Open Questions
 
 ### Q1 — Board geometry  ·  DECIDED

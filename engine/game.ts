@@ -648,14 +648,24 @@ export function applyAction(prev: GameState, action: Action): StepResult {
       const defender = state.players[pc.defenderId]!;
       const attackerLasers = statsOf(state, attacker).lasers + pc.attackerLaserBoost;
 
-      const outcome = withRng(state, (rng) => {
-        const roll = rollCombat(rng, state.config.core);
-        return resolveCombat(
-          { attackerLasers, defenderShields: pc.defShields ?? 0, autoRepel: pc.autoRepel ?? false },
-          roll,
-          mode.combat.winTest,
-        );
+      const { outcome, roll } = withRng(state, (rng) => {
+        const r = rollCombat(rng, state.config.core);
+        return {
+          roll: r,
+          outcome: resolveCombat(
+            { attackerLasers, defenderShields: pc.defShields ?? 0, autoRepel: pc.autoRepel ?? false },
+            r,
+            mode.combat.winTest,
+          ),
+        };
       });
+      const rollDetail = {
+        attackDie: roll.attack,
+        defenceDie: roll.defence,
+        attackTotal: outcome.attackTotal,
+        defenceTotal: outcome.defenceTotal,
+        autoRepel: pc.autoRepel ?? false,
+      };
 
       if (outcome.attackerWins) {
         const spoil = withRng(state, (rng) =>
@@ -666,9 +676,9 @@ export function applyAction(prev: GameState, action: Action): StepResult {
           attacker.cargo.push(spoil);
         }
         state.pendingCombat = null;
-        log(state, "attackSucceeded", { attacker: attacker.id, defender: defender.id, spoil });
+        log(state, "attackSucceeded", { attacker: attacker.id, defender: defender.id, spoil, ...rollDetail });
       } else {
-        log(state, "attackFailed", { attacker: attacker.id, defender: defender.id });
+        log(state, "attackFailed", { attacker: attacker.id, defender: defender.id, ...rollDetail });
         if (mode.combat.counterattackOnFailedAttack) {
           pc.awaiting = "counter";
           pc.lastAttackFailed = true;

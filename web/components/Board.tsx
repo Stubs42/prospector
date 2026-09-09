@@ -1,22 +1,9 @@
 import { boardFor } from "../../engine/game.js";
 import { hexKey } from "../../engine/hex.js";
 import type { GameState, Hex, Colour, OreColour } from "../../engine/index.js";
+import { Cone, SHIP_VAR, ORE_VAR } from "./kit.js";
 
 const S = 26; // px per unit hex size (pointy-top, matches board.json x/y)
-
-const SHIP_FILL: Record<Colour, string> = {
-  black: "var(--ship-black)",
-  red: "var(--ship-red)",
-  blue: "var(--ship-blue)",
-  white: "var(--ship-white)",
-  green: "var(--ship-green)",
-  yellow: "var(--ship-yellow)",
-};
-const ORE_FILL: Record<OreColour, string> = {
-  green: "var(--ore-green)",
-  yellow: "var(--ore-yellow)",
-  red: "var(--ore-red)",
-};
 
 function hexPoints(cx: number, cy: number, size: number): string {
   const pts: string[] = [];
@@ -27,27 +14,25 @@ function hexPoints(cx: number, cy: number, size: number): string {
   return pts.join(" ");
 }
 
-function Cone({ x, y, fill, i }: { x: number; y: number; fill: string; i: number }) {
-  const dy = -i * 5; // stack upward
-  return (
-    <path
-      d={`M ${x} ${y - 9 + dy} L ${x - 6} ${y + 4 + dy} L ${x + 6} ${y + 4 + dy} Z`}
-      fill={fill}
-      stroke="rgba(0,0,0,0.55)"
-      strokeWidth={1}
-    />
-  );
+export interface BoardProps {
+  state: GameState;
+  highlight: { cells: Hex[]; kind: "burn" | "load" | null };
+  driftGhost: { at: Hex; from: Hex } | null;
+  burnPreview: { path: Hex[]; cost: number } | null;
+  reducedMotion: boolean;
+  onCell: (h: Hex) => void;
+  onCellHover: (h: Hex | null) => void;
 }
 
 export function Board({
   state,
   highlight,
+  driftGhost,
+  burnPreview,
+  reducedMotion,
   onCell,
-}: {
-  state: GameState;
-  highlight: { cells: Hex[]; kind: "burn" | "load" | null };
-  onCell: (h: Hex) => void;
-}) {
+  onCellHover,
+}: BoardProps) {
   const board = boardFor(state);
   const cells = board.allCells();
   const xs = cells.map((c) => c.x * S);
@@ -59,22 +44,21 @@ export function Board({
   const h = Math.max(...ys) - Math.min(...ys) + pad * 2;
 
   const hi = new Set(highlight.cells.map(hexKey));
-  const centre = (hx: Hex) => {
+  const px = (hx: Hex) => {
     const c = board.cell(hx)!;
-    return { cx: c.x * S, cy: c.y * S };
+    return { x: c.x * S, y: c.y * S };
   };
+  const shipTransition = reducedMotion ? "none" : "transform 320ms cubic-bezier(.4,0,.2,1)";
 
   return (
     <svg viewBox={`${minx} ${miny} ${w} ${h}`} width={w} height={h}>
-      <rect x={minx} y={miny} width={w} height={h} fill="none" />
-
       {cells.map((c) => {
         const cx = c.x * S;
         const cy = c.y * S;
         const key = hexKey(c);
         const isHi = hi.has(key);
         const fill = c.base
-          ? SHIP_FILL[c.base as Colour]
+          ? SHIP_VAR[c.base as Colour]
           : c.region === "outer"
             ? "#1c2b25"
             : "#0e1b15";
@@ -83,7 +67,7 @@ export function Board({
           : isHi
             ? "var(--gold)"
             : c.base
-              ? SHIP_FILL[c.base as Colour]
+              ? SHIP_VAR[c.base as Colour]
               : "#2b4034";
         return (
           <polygon
@@ -96,6 +80,8 @@ export function Board({
             strokeOpacity={c.base ? 0.9 : 1}
             className={isHi ? "cell-hit" : undefined}
             onClick={isHi ? () => onCell({ q: c.q, r: c.r }) : undefined}
+            onMouseEnter={isHi ? () => onCellHover({ q: c.q, r: c.r }) : undefined}
+            onMouseLeave={isHi ? () => onCellHover(null) : undefined}
           />
         );
       })}
@@ -103,66 +89,121 @@ export function Board({
       {/* resources */}
       {Object.entries(state.board.resources).map(([k, colour]) => {
         const [q, r] = k.split(",").map(Number) as [number, number];
-        const { cx, cy } = centre({ q, r });
+        const { x, y } = px({ q, r });
         return (
-          <g key={`res-${k}`}>
-            <circle cx={cx} cy={cy} r={S * 0.42} fill={ORE_FILL[colour]} stroke="rgba(0,0,0,0.4)" />
-            <text
-              x={cx}
-              y={cy + 4}
-              textAnchor="middle"
-              fontSize={11}
-              fontWeight={700}
-              fill="rgba(0,0,0,0.55)"
-            >
-              {state.config.modes.prospector.resources.values[colour]}
+          <g key={`res-${k}`} className="ore-chip">
+            <circle cx={x} cy={y} r={S * 0.42} fill={ORE_VAR[colour as OreColour]} stroke="rgba(0,0,0,0.4)" />
+            <text x={x} y={y + 4} textAnchor="middle" fontSize={11} fontWeight={700} fill="rgba(0,0,0,0.55)">
+              {state.config.modes.prospector.resources.values[colour as OreColour]}
             </text>
           </g>
         );
       })}
 
-      {/* ships */}
+      {/* drift preview: where the ship will coast if it drifts now */}
+      {driftGhost && (
+        <g pointerEvents="none">
+          {(() => {
+            const a = px(driftGhost.from);
+            const b = px(driftGhost.at);
+            return (
+              <>
+                <line
+                  x1={a.x}
+                  y1={a.y}
+                  x2={b.x}
+                  y2={b.y}
+                  stroke="var(--gold)"
+                  strokeWidth={1.5}
+                  strokeDasharray="2 4"
+                  opacity={0.7}
+                />
+                <polygon points={hexPoints(b.x, b.y, S * 0.9)} fill="var(--gold)" fillOpacity={0.09} stroke="var(--gold)" strokeDasharray="3 3" strokeWidth={1.5} />
+                <g transform={`translate(${b.x} ${b.y})`}>
+                  <Cone fill="var(--gold)" ghost />
+                  <Cone fill="var(--gold)" ghost lift={5} />
+                </g>
+              </>
+            );
+          })()}
+        </g>
+      )}
+
+      {/* burn hover: the path and its fuel cost */}
+      {burnPreview && burnPreview.path.length > 0 && (
+        <g pointerEvents="none">
+          <polyline
+            points={[state.players[state.activePlayerIndex]!.pose.current, ...burnPreview.path]
+              .map((hx) => {
+                const p = px(hx);
+                return `${p.x},${p.y}`;
+              })
+              .join(" ")}
+            fill="none"
+            stroke="var(--gold)"
+            strokeWidth={2.5}
+            strokeLinejoin="round"
+          />
+          {(() => {
+            const end = px(burnPreview.path[burnPreview.path.length - 1]!);
+            return (
+              <g transform={`translate(${end.x} ${end.y - S * 0.9})`}>
+                <rect x={-16} y={-11} width={32} height={20} rx={4} fill="#111" stroke="var(--gold)" />
+                <text x={0} y={4} textAnchor="middle" fontSize={11} fill="var(--gold)" fontWeight={700}>
+                  ⛽{burnPreview.cost}
+                </text>
+              </g>
+            );
+          })()}
+        </g>
+      )}
+
+      {/* ships — each in a translated group so position changes tween */}
       {state.players
         .filter((p) => !p.eliminated)
         .map((p) => {
-          const cur = centre(p.pose.current);
-          const prev = centre(p.pose.previous);
-          const fill = SHIP_FILL[p.colour];
+          const cur = px(p.pose.current);
+          const prev = px(p.pose.previous);
+          const fill = SHIP_VAR[p.colour];
+          const moving = !p.pose.atRest && !(prev.x === cur.x && prev.y === cur.y);
           return (
             <g key={`ship-${p.id}`}>
-              {p.pose.atRest ? (
-                [0, 1, 2].map((i) => <Cone key={i} x={cur.cx} y={cur.cy} fill={fill} i={i} />)
-              ) : (
-                <>
-                  <Cone x={prev.cx} y={prev.cy} fill={fill} i={0} />
-                  <Cone x={cur.cx} y={cur.cy} fill={fill} i={0} />
-                  <Cone x={cur.cx} y={cur.cy} fill={fill} i={1} />
-                  {!(prev.cx === cur.cx && prev.cy === cur.cy) && (
-                    <line
-                      x1={prev.cx}
-                      y1={prev.cy}
-                      x2={cur.cx}
-                      y2={cur.cy}
-                      stroke={fill}
-                      strokeWidth={1.5}
-                      strokeDasharray="3 3"
-                      opacity={0.6}
-                    />
-                  )}
-                </>
+              {moving && (
+                <line
+                  x1={prev.x}
+                  y1={prev.y}
+                  x2={cur.x}
+                  y2={cur.y}
+                  stroke={fill}
+                  strokeWidth={1.5}
+                  strokeDasharray="3 3"
+                  opacity={0.55}
+                />
               )}
+              {!p.pose.atRest && (
+                <g style={{ transition: shipTransition }} transform={`translate(${prev.x} ${prev.y})`}>
+                  <Cone fill={fill} />
+                </g>
+              )}
+              <g style={{ transition: shipTransition }} transform={`translate(${cur.x} ${cur.y})`}>
+                <ellipse cx={0} cy={4} rx={9} ry={4} fill="rgba(255,255,255,0.10)" />
+                <Cone fill={fill} />
+                {(p.pose.atRest ? [1, 2] : [1]).map((l) => (
+                  <Cone key={l} fill={fill} lift={l * 5} />
+                ))}
+              </g>
             </g>
           );
         })}
 
       {/* interaction markers */}
       {highlight.cells.map((hx) => {
-        const { cx, cy } = centre(hx);
+        const { x, y } = px(hx);
         return (
           <circle
             key={`hi-${hexKey(hx)}`}
-            cx={cx}
-            cy={cy}
+            cx={x}
+            cy={y}
             r={S * 0.5}
             fill="none"
             stroke={highlight.kind === "load" ? "var(--ok)" : "var(--gold)"}
@@ -170,6 +211,8 @@ export function Board({
             strokeDasharray={highlight.kind === "load" ? "4 3" : undefined}
             className="cell-hit"
             onClick={() => onCell(hx)}
+            onMouseEnter={() => onCellHover(hx)}
+            onMouseLeave={() => onCellHover(null)}
           />
         );
       })}
