@@ -127,6 +127,37 @@ describe("departing the home base", () => {
   });
 });
 
+describe("burn options can turn", () => {
+  it("legalActions offers reachable cells off the straight lines", () => {
+    let s = createGame({ seed: 7, colours: ["red", "black"], startPlayer: 0 });
+    s.board.resources = {};
+    const R = () => s.players[0]!;
+    R().pose = { current: { q: 0, r: 0 }, previous: { q: 0, r: 0 }, atRest: true }; // at rest, mid-field
+    R().placed = true;
+    R().fuel = R().fuelMax;
+    s = run(s, { type: "drawBooster" });
+    while (R().hand.length > 3) s = run(s, { type: "discardBooster", cardId: R().hand[0]!.id });
+    s = run(s, { type: "drift" });
+
+    const burns = legalActions(s).filter((a) => a.type === "burn") as Extract<Action, { type: "burn" }>[];
+    // Hermes has 2 engines -> reachable disc of radius 2 = 18 cells (minus none blocked)
+    expect(burns.length).toBeGreaterThan(12);
+    const bent = burns.find(
+      (b) => b.path.length === 2 && !areColinear(b.path[0]!, b.path[1]!, R().pose.current),
+    );
+    expect(bent).toBeTruthy();
+    // and the engine accepts the bent path
+    const applied = applyAction(s, bent!);
+    expect(applied.ok).toBe(true);
+  });
+});
+
+function areColinear(a: { q: number; r: number }, b: { q: number; r: number }, from: { q: number; r: number }) {
+  const d1 = { q: a.q - from.q, r: a.r - from.r };
+  const d2 = { q: b.q - a.q, r: b.r - a.r };
+  return d1.q === d2.q && d1.r === d2.r;
+}
+
 describe("legalActions always offers a move until the game ends", () => {
   it("never strands the active player over a 300-action random walk", () => {
     let s = createGame({ seed: 11, colours: ["black", "red", "blue"] });

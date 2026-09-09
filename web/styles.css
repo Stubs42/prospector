@@ -143,6 +143,8 @@ button.danger { border-color: #6a3a2f; }
 /* board bits */
 .cell-hit { cursor: pointer; }
 .cell-hit:hover { stroke: var(--gold); stroke-width: 2.5; }
+.burn-target { transition: opacity 120ms; }
+.burn-target:hover circle { fill-opacity: 0.3; }
 
 /* a chip being placed on the board settles in (scale, no fade — a real chip has weight) */
 .ore-chip { transform-box: fill-box; transform-origin: center; animation: chip-place 220ms cubic-bezier(.3,1.3,.5,1); }
