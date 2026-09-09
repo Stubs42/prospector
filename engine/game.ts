@@ -402,6 +402,15 @@ export function applyAction(prev: GameState, action: Action): StepResult {
   const fail = (error: string): StepResult => ({ state: prev, ok: false, error });
   const done = (): StepResult => ({ state, ok: true });
 
+  const logBoosters = (who: PlayerState, cards: readonly BoosterCard[], context: string): void => {
+    if (cards.length === 0) return;
+    log(state, "boosterPlayed", {
+      player: who.id,
+      context,
+      cards: cards.map((c) => ({ type: c.type, value: c.value })),
+    });
+  };
+
   const useBoosters = (ids: string[] | undefined, type: BoosterCard["type"]): BoosterCard[] | null => {
     if (!ids || ids.length === 0) return [];
     const picked: BoosterCard[] = [];
@@ -508,6 +517,14 @@ export function applyAction(prev: GameState, action: Action): StepResult {
       p.turn.freeBurnCellsUsed += r.freeUsed!;
       p.turn.moved = true;
       p.turn.mustBurn = false;
+      logBoosters(p, [...engineCards, ...reserveCards], "burn");
+      log(state, "burned", {
+        player: p.id,
+        cells: action.path.length,
+        fuelSpent: r.fuelSpent,
+        freeUsed: r.freeUsed,
+        ...(engineBoost ? { engineBoost } : {}),
+      });
       return done();
     }
 
@@ -519,6 +536,7 @@ export function applyAction(prev: GameState, action: Action): StepResult {
         if (!card) return fail("no hyperspace booster with that id");
         p.hand = p.hand.filter((c) => c.id !== card.id);
         state.decks.booster = discardCards(state.decks.booster, [card]);
+        logBoosters(p, [card], "hyperspace");
       } else {
         const stats = statsOf(state, p);
         const hs = state.config.core.movement.hyperspace;
@@ -618,7 +636,8 @@ export function applyAction(prev: GameState, action: Action): StepResult {
         lastAttackFailed: false,
       };
       if (!counter) p.turn.postMoveActionTaken = "attack";
-      log(state, "attackDeclared", { attacker: attacker.id, defender: target.id });
+      logBoosters(attacker, lasers as BoosterCard[], "attack");
+      log(state, "attackDeclared", { attacker: attacker.id, defender: target.id, laserBoost: boost });
       return done();
     }
 
@@ -639,6 +658,7 @@ export function applyAction(prev: GameState, action: Action): StepResult {
           else defender.pose = land.pose;
         });
         state.pendingCombat = null;
+        logBoosters(defender, [card], "defence");
         log(state, "defenderFled", { defender: defender.id });
         return done();
       }
@@ -654,6 +674,8 @@ export function applyAction(prev: GameState, action: Action): StepResult {
       pc.awaiting = "resolve";
       pc.defShields = statsOf(state, defender).shields + boost;
       pc.autoRepel = autoRepel;
+      logBoosters(defender, shields as BoosterCard[], "defence");
+      if (shields.length || autoRepel) log(state, "defence", { defender: defender.id, shieldBoost: boost, autoRepel });
       return done();
     }
 

@@ -47,7 +47,20 @@ export function legalActions(state: GameState, opts?: LegalOpts): Action[] {
   if (pc) {
     if (pc.awaiting === "defend") return [{ type: "combatDefend" }];
     if (pc.awaiting === "resolve") return [{ type: "combatResolve" }];
-    return [{ type: "declineCounter" }];
+    // awaiting counter: the victorious defender may attack back, or decline
+    const out2: Action[] = [{ type: "declineCounter" }];
+    const defender = state.players[pc.defenderId]!;
+    const orig = state.players[pc.attackerId]!;
+    const attCap = statsOf(state, defender).cargo;
+    if (
+      !orig.eliminated &&
+      areNeighbours(defender.pose.current, orig.pose.current) &&
+      orig.cargo.length >= (mode.combat.targetNeedsResource ? 1 : 0) &&
+      defender.cargo.length < attCap
+    ) {
+      out2.push({ type: "attack", targetPlayerId: pc.attackerId });
+    }
+    return out2;
   }
 
   const out: Action[] = [];

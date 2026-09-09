@@ -88,14 +88,16 @@ export function BoosterCardFace({
   card,
   onClick,
   clickable,
+  selected,
 }: {
   card: BoosterCardT;
   onClick?: (() => void) | undefined;
   clickable?: boolean | undefined;
+  selected?: boolean | undefined;
 }) {
   return (
     <div
-      className={`card booster-${card.type}`}
+      className={`card booster-${card.type}${selected ? " picked" : ""}`}
       style={{ cursor: clickable ? "pointer" : "default" }}
       onClick={onClick}
     >
