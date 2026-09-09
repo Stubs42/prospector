@@ -164,6 +164,28 @@ button.danger { border-color: #6a3a2f; }
 .die .pip { width: 5px; height: 5px; border-radius: 50%; align-self: center; justify-self: center; }
 .combat-roll { display: flex; align-items: center; gap: 8px; margin-top: 0.5rem; }
 
+/* preferences */
+.settings { position: relative; }
+.settings > button { padding: 0.35rem 0.6rem; font-size: 1rem; line-height: 1; }
+.settings-panel {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 40;
+  width: 260px;
+  background: var(--panel);
+  border: 1px solid var(--line-strong, var(--line));
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+  padding: 0.7rem;
+  display: flex; flex-direction: column; gap: 0.7rem;
+}
+.settings-panel label {
+  display: flex; gap: 0.55rem; align-items: flex-start;
+  font-size: 0.82rem; cursor: pointer;
+}
+.settings-panel label.disabled { opacity: 0.45; cursor: default; }
+.settings-panel label input { margin-top: 2px; }
+.settings-panel label em { display: block; color: var(--muted); font-style: normal; font-size: 0.72rem; margin-top: 2px; }
+.settings-row { display: flex; align-items: center; justify-content: space-between; font-size: 0.82rem; }
+
 @media (prefers-reduced-motion: reduce) {
   .ore-chip { animation: none; }
   * { transition: none !important; }

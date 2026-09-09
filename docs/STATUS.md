@@ -110,3 +110,11 @@ _Run: `npm test` · `npm run check`_
 - 61 engine tests green; web builds; verified in headless Chrome (drift ghost visible).
 
 Polish left for later: board could use more of the canvas; combat panel has no in-combat booster picker.
+
+### Post-phase-5 tweaks
+
+- Base-departure brake bug fixed; `placeShip` launch base-cell choice added (PR #2).
+- **Preferences menu** (`web/prefs.ts`, `web/components/Settings.tsx`, ⚙ in the topbar,
+  persisted to `localStorage`): *Auto-advance forced moves* (default on — when only one
+  action is legal, take it without a click; `scrapShip` / `declineCounter` / `discardBooster`
+  never auto), *Also auto-end the turn* (default off), *Animations* (follow system / on / off).
