@@ -150,12 +150,19 @@ export default function App() {
   const lastCombat = [...state.log].reverse().find((e) => e.event === "attackSucceeded" || e.event === "attackFailed");
 
   // auto-advance: when the player has no real choice, take the move for them
-  const AUTO_SKIP = new Set<Action["type"]>(["scrapShip", "declineCounter", "discardBooster"]);
+  // Never auto-resolve a genuine decision: declining a counter-attack, which booster to
+  // discard, or the turn-start scrap-vs-draw choice. scrapShip stays in the count so that
+  // "scrap or draw" reads as two options and auto-advance holds off.
+  const AUTO_HIDE = new Set<Action["type"]>(["declineCounter", "discardBooster"]);
   const autoCandidates = acts.filter(
-    (a) => !AUTO_SKIP.has(a.type) && (a.type !== "endTurn" || prefs.autoEndTurn),
+    (a) => !AUTO_HIDE.has(a.type) && (a.type !== "endTurn" || prefs.autoEndTurn),
   );
   const autoAction =
-    prefs.autoSingle && !state.gameOver && !needPassGate && autoCandidates.length === 1
+    prefs.autoSingle &&
+    !state.gameOver &&
+    !needPassGate &&
+    autoCandidates.length === 1 &&
+    autoCandidates[0]!.type !== "scrapShip"
       ? autoCandidates[0]!
       : null;
   useEffect(() => {
