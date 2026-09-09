@@ -138,6 +138,8 @@ export interface PlayerState {
   id: number;
   colour: Colour;
   eliminated: boolean;
+  /** false until the player has taken their one-time launch base-cell choice */
+  placed: boolean;
   pose: ShipPose;
   fuel: number;
   fuelMax: number;
@@ -212,6 +214,7 @@ export interface LogEntry {
 // ---------------------------------------------------------------------------
 
 export type Action =
+  | { type: "placeShip"; cell: Hex }
   | { type: "scrapShip" }
   | { type: "drawBooster" }
   | { type: "discardBooster"; cardId: string }

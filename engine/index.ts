@@ -56,6 +56,11 @@ export function legalActions(state: GameState): Action[] {
 
   if (state.phase === "start") {
     if (!p.turn.boosterDrawn) {
+      if (!p.placed) {
+        for (const c of board.baseCells(p.colour)) {
+          if (!hexEq(c, p.pose.current)) out.push({ type: "placeShip", cell: c });
+        }
+      }
       if (state.config.core.turn.allowScrapBeforeDraw) out.push({ type: "scrapShip" });
       out.push({ type: "drawBooster" });
       return out;

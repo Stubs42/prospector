@@ -32,9 +32,10 @@ function keyToHex(k: string): Hex {
 }
 
 export default function App() {
+  const [game0] = useState(() => newGame(3));
   const [nPlayers, setNPlayers] = useState(3);
-  const [state, setState] = useState<GameState>(() => newGame(3));
-  const [shownPlayer, setShownPlayer] = useState(0);
+  const [state, setState] = useState<GameState>(game0);
+  const [shownPlayer, setShownPlayer] = useState(game0.activePlayerIndex);
   const [hoverCell, setHoverCell] = useState<Hex | null>(null);
 
   const reducedMotion = useMemo(
@@ -90,15 +91,19 @@ export default function App() {
     if (!prev || a.path.length < prev.path.length) burnByCell.set(k, a);
   }
   const loadCells: Hex[] = acts.flatMap((a) => (a.type === "loadResource" ? [a.from] : []));
+  const placeCells: Hex[] = acts.flatMap((a) => (a.type === "placeShip" ? [a.cell] : []));
   const attackActs = acts.filter((a) => a.type === "attack") as Extract<Action, { type: "attack" }>[];
   const plainActs = acts.filter((a) => LABEL[a.type]);
   const overLimit = acts.length > 0 && acts.every((a) => a.type === "discardBooster");
 
-  const highlight: { cells: Hex[]; kind: "burn" | "load" | null } = loadCells.length
-    ? { cells: loadCells, kind: "load" }
-    : burnByCell.size
-      ? { cells: [...burnByCell.keys()].map(keyToHex), kind: "burn" }
-      : { cells: [], kind: null };
+  const placeKeys = new Set(placeCells.map(hexKey));
+  const highlight: { cells: Hex[]; kind: "burn" | "load" | null } = placeCells.length
+    ? { cells: placeCells, kind: "burn" }
+    : loadCells.length
+      ? { cells: loadCells, kind: "load" }
+      : burnByCell.size
+        ? { cells: [...burnByCell.keys()].map(keyToHex), kind: "burn" }
+        : { cells: [], kind: null };
 
   // drift preview — only meaningful for a ship that is actually coasting
   const canDrift = acts.some((a) => a.type === "drift");
@@ -117,6 +122,7 @@ export default function App() {
 
   function onCell(h: Hex) {
     const k = hexKey(h);
+    if (placeKeys.has(k)) return dispatch({ type: "placeShip", cell: h });
     if (loadCells.some((c) => hexKey(c) === k)) return dispatch({ type: "loadResource", from: h });
     const burn = burnByCell.get(k);
     if (burn) dispatch(burn);
@@ -243,6 +249,9 @@ export default function App() {
                 </button>
               ))}
             </div>
+            {placeCells.length > 0 && (
+              <p className="hint">Launch: click a highlighted base cell to pick your starting field (or just Draw booster to keep the default).</p>
+            )}
             {driftGhost && <p className="hint">Gold outline = where you'll coast to if you drift.</p>}
             {highlight.kind === "burn" && (
               <p className="hint">Hover a highlighted cell to see fuel cost, click to burn.</p>

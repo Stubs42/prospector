@@ -63,6 +63,70 @@ describe("a hand-driven turn", () => {
   });
 });
 
+describe("launch base-cell choice", () => {
+  it("lets the player pick any of their base cells on the first turn, once", () => {
+    let s = createGame({ seed: 8, colours: ["green", "black"], startPlayer: 0 });
+    const G = () => s.players[0]!;
+    expect(G().placed).toBe(false);
+    const opts = legalActions(s).filter((a) => a.type === "placeShip") as Extract<Action, { type: "placeShip" }>[];
+    expect(opts.length).toBeGreaterThan(0);
+
+    s = run(s, opts[0]!);
+    expect(G().placed).toBe(true);
+    expect(G().pose.current).toEqual(opts[0]!.cell);
+    expect(G().pose.atRest).toBe(true);
+
+    // no second choice, and drawing locks it anyway
+    expect(legalActions(s).some((a) => a.type === "placeShip")).toBe(false);
+    s = run(s, { type: "drawBooster" });
+    const r = applyAction(s, { type: "placeShip", cell: opts[0]!.cell });
+    expect(r.ok).toBe(false);
+  });
+
+  it("drawing without choosing keeps the default cell and locks the choice", () => {
+    let s = createGame({ seed: 2, colours: ["blue", "red"], startPlayer: 0 });
+    const before = { ...s.players[0]!.pose.current };
+    s = run(s, { type: "drawBooster" });
+    expect(s.players[0]!.placed).toBe(true);
+    expect(s.players[0]!.pose.current).toEqual(before);
+  });
+});
+
+describe("departing the home base", () => {
+  it("keeps velocity when accelerating within the base cluster (no wrongful brake)", () => {
+    let s = createGame({ seed: 3, colours: ["blue", "black"], startPlayer: 0 });
+    const B = () => s.players[0]!;
+    const start = { ...B().pose.current }; // (9,-9)
+    expect(B().pose.atRest).toBe(true);
+
+    s = run(s, { type: "drawBooster" });
+    while (B().hand.length > 3) s = run(s, { type: "discardBooster", cardId: B().hand[0]!.id });
+    s = run(s, { type: "drift" }); // at rest -> no-op
+
+    // free departure step onto another blue base cell
+    s = run(s, { type: "burn", path: [{ q: 8, r: -8 }] });
+    expect(B().fuel).toBe(B().fuelMax); // 1 cell, all free
+    s = run(s, { type: "endMove" });
+
+    // still departing -> ship is NOT braked, velocity is preserved
+    expect(B().pose.atRest).toBe(false);
+    expect(B().pose.current).toEqual({ q: 8, r: -8 });
+    expect(B().pose.previous).toEqual(start);
+    s = run(s, { type: "endTurn" });
+
+    // next turn it actually coasts
+    s = run(s, { type: "drawBooster" }); // black's turn
+    while (s.players[1]!.hand.length > 3) s = run(s, { type: "discardBooster", cardId: s.players[1]!.hand[0]!.id });
+    s = run(s, { type: "drift" });
+    s = run(s, { type: "endMove" });
+    s = run(s, { type: "endTurn" });
+
+    s = run(s, { type: "drawBooster" }); // blue again
+    s = run(s, { type: "drift" });
+    expect(B().pose.current).toEqual({ q: 7, r: -7 }); // (8,-8) + velocity (-1,+1)
+  });
+});
+
 describe("legalActions always offers a move until the game ends", () => {
   it("never strands the active player over a 300-action random walk", () => {
     let s = createGame({ seed: 11, colours: ["black", "red", "blue"] });
