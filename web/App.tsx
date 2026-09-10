@@ -60,7 +60,7 @@ export default function App() {
   const baseStats = mode.ships[p.colour];
   const sc = score(state);
   const inSetup = s.setup.open;
-  const anim = s.moveAnim != null; // a move is playing out — hold back prompts/targets
+  const anim = s.animLive; // a move is actively playing — hold back prompts/targets
   const interactive = !inSetup && !activeIsBot && !needPassGate;
   const overLimit = afford.overLimit;
   // turn 1: the ship must be placed on a base cell before anything else
@@ -291,7 +291,7 @@ export default function App() {
           world={!inSetup}
           reducedMotion={reducedMotion}
           moveAnim={s.moveAnim}
-          onMoveAnimEnd={s.clearMoveAnim}
+          onMoveAnimEnd={s.endMoveAnim}
           onCell={onCell}
           onCellHover={setHoverCell}
         />

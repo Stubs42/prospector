@@ -20,7 +20,7 @@ import {
   type Seat,
 } from "../client/index.js";
 import { legalActions } from "../engine/index.js";
-import { deriveMoveAnim, type MoveAnim } from "./anim.js";
+import { deriveMoveAnim, coastAnim, type MoveAnim } from "./anim.js";
 import { movePhaseMs, type Prefs } from "./prefs.js";
 
 const ALL_COLOURS: Colour[] = ["black", "red", "blue", "white", "green", "yellow"];
@@ -45,9 +45,21 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   const [armed, setArmed] = useState<Set<string>>(new Set());
   const [combatSel, setCombatSel] = useState<Set<string>>(new Set());
   const [attackTarget, setAttackTarget] = useState<number | null>(null);
+  // moveAnim: an in-flight (or a held, frozen-at-reach drift) move. animLive: an rAF is actually running.
   const [moveAnim, setMoveAnim] = useState<MoveAnim | null>(null);
+  const [animLive, setAnimLive] = useState(false);
   const botRng = useRef<Rng>(makeRng(0x5eed));
   const phaseMs = movePhaseMs(prefs);
+
+  function playAnim(a: MoveAnim | null) {
+    setMoveAnim(a);
+    setAnimLive(a != null);
+  }
+  function endAnim() {
+    // a finished drift stays on screen (frozen at full reach) until the slide resolves it
+    setMoveAnim((a) => (a && a.kind === "drift" ? a : null));
+    setAnimLive(false);
+  }
 
   const p = state.players[state.activePlayerIndex]!;
 
@@ -69,7 +81,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   const needPassGate =
     humansCount >= 2 && !state.gameOver && !activeIsBot && shownPlayer !== state.activePlayerIndex;
   const isWaitingOnBot =
-    !setupOpen && !moveAnim && !state.gameOver && !needPassGate && seats[waitingOn(state)] === "bot";
+    !setupOpen && !animLive && !state.gameOver && !needPassGate && seats[waitingOn(state)] === "bot";
 
   // --- state transitions -------------------------------------------------
   const clearStaging = () => {
@@ -80,7 +92,12 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   function dispatch(a: Action) {
     const r = applyAction(state, a);
     if (r.ok) {
-      setMoveAnim(deriveMoveAnim(state, r.state, phaseMs));
+      let anim = deriveMoveAnim(state, r.state, phaseMs, moveAnim);
+      // coasting ends the move without a burn — slide the held drift to its target
+      if (!anim && a.type === "endMove" && moveAnim?.kind === "drift" && moveAnim.playerId === state.activePlayerIndex) {
+        anim = coastAnim(moveAnim);
+      }
+      playAnim(anim);
       setState(r.state);
       clearStaging();
     } else console.warn("rejected", a, r.error);
@@ -146,11 +163,13 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     if (!isWaitingOnBot) return;
     const id = setTimeout(() => {
       const next = stepBot(state, botRng.current);
-      setMoveAnim(deriveMoveAnim(state, next, phaseMs));
+      let anim = deriveMoveAnim(state, next, phaseMs, moveAnim);
+      if (!anim && moveAnim?.kind === "drift") anim = coastAnim(moveAnim); // bot coasted out of the drift
+      playAnim(anim);
       setState(next);
     }, reducedMotion ? 60 : 340);
     return () => clearTimeout(id);
-  }, [state, isWaitingOnBot, reducedMotion, phaseMs]);
+  }, [state, isWaitingOnBot, reducedMotion, phaseMs, moveAnim]);
 
   const autoCandidates = afford.legal.filter(
     (a) => !AUTO_HIDE.has(a.type) && (a.type !== "endTurn" || prefs.autoEndTurn),
@@ -158,7 +177,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   const autoAction =
     prefs.autoSingle &&
     !setupOpen &&
-    !moveAnim &&
+    !animLive &&
     !state.gameOver &&
     !needPassGate &&
     !activeIsBot &&
@@ -214,7 +233,8 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     driftGhost,
     burnPreviewFor,
     moveAnim,
-    clearMoveAnim: () => setMoveAnim(null),
+    animLive,
+    endMoveAnim: endAnim,
     dispatch,
     dispatchBurn,
     openSetup,
