@@ -245,13 +245,14 @@ export function BaseInfo({ board, state, seats, scores, onTip }: {
               {FREIGHT_GROUP.map((s, i) => aspect(leftBranch[i], s))}
               {DRIVE_GROUP.map((s, i) => aspect(rightBranch[i], s))}
 
-              {/* freight family in the far ring, just outside the cargo cell */}
+              {/* far ring: PTS at the corner, an ore token on each side for symmetry —
+                 FREIGHT (carried) outside the cargo cell, SAVED (delivered) opposite */}
               {far.cells[fm - 1] && <OreHex c={far.cells[fm - 1]!} ores={p.cargo} tag="FREIGHT" tip="freight in hold" onTip={onTip} />}
-              {far.cells[fm - 2] && <OreHex c={far.cells[fm - 2]!} ores={p.delivered} tag="SAVED" tip="delivered to base" onTip={onTip} />}
               {far.cells[fm] && (
                 <Token c={far.cells[fm]!} col={GOLD} ink="#1a1400" tag="PTS" active={active} onTip={onTip}
                   value={`${scoreVal}`} tip={`score — ${scoreVal}`} />
               )}
+              {far.cells[fm + 1] && <OreHex c={far.cells[fm + 1]!} ores={p.delivered} tag="SAVED" tip="delivered to base" onTip={onTip} />}
             </g>
           );
         })}
