@@ -2,8 +2,17 @@ import { boardFor } from "../../engine/game.js";
 import { hexKey } from "../../engine/hex.js";
 import type { GameState, Hex, Colour, OreColour } from "../../engine/index.js";
 import { Cone, SHIP_VAR, ORE_VAR } from "./kit.js";
+import { BoardFurniture, panelAnchor, PANEL_W, PANEL_H } from "./BoardFurniture.js";
+import type { Seat } from "../../client/index.js";
 
-const S = 26; // px per unit hex size (pointy-top, matches board.json x/y)
+export const S = 26; // px per unit hex size (pointy-top, matches board.json x/y)
+
+export interface RadialAction {
+  id: string;
+  label: string;
+  kind?: "primary" | "danger" | undefined;
+  onClick: () => void;
+}
 
 function hexPoints(cx: number, cy: number, size: number): string {
   const pts: string[] = [];
@@ -16,10 +25,13 @@ function hexPoints(cx: number, cy: number, size: number): string {
 
 export interface BoardProps {
   state: GameState;
+  seats: readonly Seat[];
+  scores: readonly number[];
   highlight: { cells: Hex[]; kind: "load" | "place" | null };
   burnTargets: { cell: Hex; cost: number }[];
   driftGhost: { at: Hex; from: Hex } | null;
   burnPreview: { path: Hex[]; cost: number } | null;
+  radial: RadialAction[];
   reducedMotion: boolean;
   onCell: (h: Hex) => void;
   onCellHover: (h: Hex | null) => void;
@@ -30,10 +42,13 @@ const BURN_COST_COLOUR = ["var(--ok)", "#d7b13d", "#e08a3d", "#c1573c"];
 
 export function Board({
   state,
+  seats,
+  scores,
   highlight,
   burnTargets,
   driftGhost,
   burnPreview,
+  radial,
   reducedMotion,
   onCell,
   onCellHover,
@@ -42,11 +57,19 @@ export function Board({
   const cells = board.allCells();
   const xs = cells.map((c) => c.x * S);
   const ys = cells.map((c) => c.y * S);
-  const pad = S * 3;
-  const minx = Math.min(...xs) - pad;
-  const miny = Math.min(...ys) - pad;
-  const w = Math.max(...xs) - Math.min(...xs) + pad * 2;
-  const h = Math.max(...ys) - Math.min(...ys) + pad * 2;
+  // viewBox = field bbox ∪ every ship-panel bbox, + a small margin
+  const bx: number[] = [Math.min(...xs), Math.max(...xs)];
+  const by: number[] = [Math.min(...ys), Math.max(...ys)];
+  for (const pl of state.players) {
+    const a = panelAnchor(board, pl.colour);
+    bx.push(a.x - PANEL_W / 2, a.x + PANEL_W / 2);
+    by.push(a.y - PANEL_H / 2, a.y + PANEL_H / 2);
+  }
+  const m = 24;
+  const minx = Math.min(...bx) - m;
+  const miny = Math.min(...by) - m;
+  const w = Math.max(...bx) - Math.min(...bx) + m * 2;
+  const h = Math.max(...by) - Math.min(...by) + m * 2;
 
   const hi = new Set(highlight.cells.map(hexKey));
   const px = (hx: Hex) => {
@@ -55,8 +78,16 @@ export function Board({
   };
   const shipTransition = reducedMotion ? "none" : "transform 320ms cubic-bezier(.4,0,.2,1)";
 
+  const active = state.players[state.activePlayerIndex]!;
+  const activeAt = px(active.pose.current);
+
   return (
-    <svg viewBox={`${minx} ${miny} ${w} ${h}`} width={w} height={h}>
+    <svg
+      viewBox={`${minx} ${miny} ${w} ${h}`}
+      width="100%"
+      height="100%"
+      preserveAspectRatio="xMidYMid meet"
+    >
       {cells.map((c) => {
         const cx = c.x * S;
         const cy = c.y * S;
@@ -238,6 +269,33 @@ export function Board({
           />
         );
       })}
+
+      {/* table furniture (ship panels, deck counts) — drawn on top so text stays legible */}
+      <BoardFurniture board={board} state={state} seats={seats} scores={scores} />
+
+      {/* radial action menu around the active ship */}
+      {radial.length > 0 && (
+        <g className="radial">
+          {radial.map((a, i) => {
+            // fan the chips across the top-right quadrant so they clear the piece & trail
+            const n = radial.length;
+            const spread = Math.min(150, 44 * Math.max(1, n - 1));
+            const ang = (-90 - (n > 1 ? spread / 2 : 0) + (n > 1 ? (spread * i) / (n - 1) : 0)) * (Math.PI / 180);
+            const R = S * 2.7;
+            const cx = activeAt.x + R * Math.cos(ang);
+            const cy = activeAt.y + R * Math.sin(ang);
+            return (
+              <g key={a.id} className={`chip ${a.kind ?? ""}`} onClick={a.onClick}>
+                <line x1={activeAt.x} y1={activeAt.y} x2={cx} y2={cy} className="chip-stem" />
+                <circle cx={cx} cy={cy} r={S * 0.92} />
+                <text x={cx} y={cy + 4} textAnchor="middle">
+                  {a.label}
+                </text>
+              </g>
+            );
+          })}
+        </g>
+      )}
     </svg>
   );
 }
