@@ -32,6 +32,7 @@ export interface BoardProps {
   driftGhost: { at: Hex; from: Hex } | null;
   burnPreview: { path: Hex[]; cost: number } | null;
   radial: RadialAction[];
+  onCoast: (() => void) | null;
   reducedMotion: boolean;
   onCell: (h: Hex) => void;
   onCellHover: (h: Hex | null) => void;
@@ -49,6 +50,7 @@ export function Board({
   driftGhost,
   burnPreview,
   radial,
+  onCoast,
   reducedMotion,
   onCell,
   onCellHover,
@@ -231,6 +233,32 @@ export function Board({
             </g>
           );
         })}
+
+      {/* coast: end the move where the ship sits now — a green ring on its own cell */}
+      {onCoast && (
+        <g className="cell-hit coast-here" onClick={onCoast}>
+          <title>Coast — end the move here</title>
+          <circle
+            cx={activeAt.x}
+            cy={activeAt.y}
+            r={S * 0.82}
+            fill="var(--ok)"
+            fillOpacity={0.16}
+            stroke="var(--ok)"
+            strokeWidth={3}
+          />
+          <text
+            x={activeAt.x}
+            y={activeAt.y + S * 2.15}
+            textAnchor="middle"
+            fontSize={10}
+            fontWeight={700}
+            fill="var(--ok)"
+          >
+            coast
+          </text>
+        </g>
+      )}
 
       {/* burn targets — colour = fuel cost (green free, yellow 1, orange 2, red 3) */}
       {burnTargets.map(({ cell, cost }) => {

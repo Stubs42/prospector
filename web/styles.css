@@ -248,6 +248,11 @@ button.danger { border-color: #6a3a2f; }
 /* board bits */
 .cell-hit { cursor: pointer; }
 .cell-hit:hover { stroke: var(--gold); stroke-width: 2.5; }
+/* hollow markers (fill:none) only react on their thin stroke by default — make the
+   whole disc clickable so a tap anywhere inside the ring registers */
+circle.cell-hit { pointer-events: all; }
+.coast-here:hover circle { fill-opacity: 0.28; stroke: var(--ok); }
+.coast-here text { pointer-events: none; }
 .burn-target { transition: opacity 120ms; }
 .burn-target:hover circle { fill-opacity: 0.3; }
 

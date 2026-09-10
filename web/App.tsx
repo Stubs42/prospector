@@ -14,7 +14,6 @@ const ALL_COLOURS: Colour[] = ["black", "red", "blue", "white", "green", "yellow
 const CHIP_LABEL: Partial<Record<Action["type"], string>> = {
   drawBooster: "Draw",
   drift: "Drift",
-  endMove: "Coast",
   endTurn: "End turn",
   scrapShip: "Scrap",
 };
@@ -135,14 +134,23 @@ export default function App() {
   }
 
   // --- radial menu around the active ship --------------------------
+  // "coast" (endMove) is a green circle on the ship's own cell, not a radial chip
+  const coastAction =
+    interactive && !pc && attackTarget === null && !overLimit
+      ? afford.plainActions.find((a) => a.type === "endMove") ?? null
+      : null;
+  const onCoast = coastAction ? () => dispatch(coastAction) : null;
+
   const radial: RadialAction[] = useMemo(() => {
     if (!interactive || pc || attackTarget !== null || overLimit) return [];
-    const out: RadialAction[] = afford.plainActions.map((a) => ({
-      id: a.type,
-      label: CHIP_LABEL[a.type] ?? a.type,
-      kind: a.type === "endTurn" ? "primary" : a.type === "scrapShip" ? "danger" : undefined,
-      onClick: () => dispatch(a),
-    }));
+    const out: RadialAction[] = afford.plainActions
+      .filter((a) => a.type !== "endMove")
+      .map((a) => ({
+        id: a.type,
+        label: CHIP_LABEL[a.type] ?? a.type,
+        kind: a.type === "endTurn" ? "primary" : a.type === "scrapShip" ? "danger" : undefined,
+        onClick: () => dispatch(a),
+      }));
     for (const id of afford.attackTargetIds) {
       out.push({
         id: `atk-${id}`,
@@ -225,6 +233,7 @@ export default function App() {
           driftGhost={interactive ? driftGhost : null}
           burnPreview={interactive ? burnPreview : null}
           radial={radial}
+          onCoast={onCoast}
           reducedMotion={reducedMotion}
           onCell={onCell}
           onCellHover={setHoverCell}
