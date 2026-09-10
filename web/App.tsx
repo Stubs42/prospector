@@ -91,6 +91,9 @@ export default function App() {
   const [shownPlayer, setShownPlayer] = useState(game0.activePlayerIndex);
   const [hoverCell, setHoverCell] = useState<Hex | null>(null);
   const botRng = useRef<Rng>(makeRng(0x5eed));
+  // pre-game ship selection
+  const [setupOpen, setSetupOpen] = useState(true);
+  const [humanPicks, setHumanPicks] = useState<Colour[]>([]);
   // booster cards the human has staged: armed for the coming burn, or picked for a fight
   const [armed, setArmed] = useState<Set<string>>(new Set());
   const [combatSel, setCombatSel] = useState<Set<string>>(new Set());
@@ -129,6 +132,7 @@ export default function App() {
     setState(s);
     setShownPlayer(s.activePlayerIndex);
     setSeats(Array<Seat>(s.players.length).fill("human")); // freeze bot autoplay for screenshots
+    setSetupOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -162,12 +166,35 @@ export default function App() {
       clearStaging();
     } else console.warn("rejected", a, r.error);
   }
-  function reset(nextSeats: Seat[] = seats) {
-    const g = newGame(nextSeats);
-    setSeats(nextSeats);
+  function openSetup(h = humans, b = bots) {
+    setHumans(h);
+    setBots(b);
+    setSeats(mkSeats(h, b));
+    setHumanPicks([]);
+    setSetupOpen(true);
+  }
+  function startGame(colourOrder: Colour[]) {
+    const g = createGame({ colours: colourOrder, seed: (Math.random() * 1e9) | 0 });
+    setSeats(mkSeats(humans, bots));
     setState(g);
     setShownPlayer(g.activePlayerIndex);
     botRng.current = makeRng((Math.random() * 1e9) | 0);
+    setHumanPicks([]);
+    setSetupOpen(false);
+  }
+  function pickShip(colour: Colour) {
+    const picks = [...humanPicks, colour];
+    if (picks.length < humans) {
+      setHumanPicks(picks);
+      return;
+    }
+    // fill the rest with random remaining ships for the bots
+    const remaining = ALL_COLOURS.filter((c) => !picks.includes(c));
+    for (let i = remaining.length - 1; i > 0; i--) {
+      const j = (Math.random() * (i + 1)) | 0;
+      [remaining[i], remaining[j]] = [remaining[j]!, remaining[i]!];
+    }
+    startGame([...picks, ...remaining.slice(0, bots)]);
   }
 
   const humansCount = seats.filter((s) => s === "human").length;
@@ -360,10 +387,7 @@ export default function App() {
             value={humans}
             onChange={(e) => {
               const h = Number(e.target.value);
-              const b = Math.min(bots, 6 - h);
-              setHumans(h);
-              setBots(b);
-              reset(mkSeats(h, b));
+              openSetup(h, Math.min(bots, 6 - h));
             }}
           >
             {[1, 2, 3, 4, 5, 6].map((n) => (
@@ -375,14 +399,7 @@ export default function App() {
         </label>
         <label className="turn">
           bots{" "}
-          <select
-            value={bots}
-            onChange={(e) => {
-              const b = Number(e.target.value);
-              setBots(b);
-              reset(mkSeats(humans, b));
-            }}
-          >
+          <select value={bots} onChange={(e) => openSetup(humans, Number(e.target.value))}>
             {[0, 1, 2, 3, 4, 5].map((n) => (
               <option key={n} value={n} disabled={humans + n < 2 || humans + n > 6}>
                 {n}
@@ -391,7 +408,7 @@ export default function App() {
           </select>
         </label>
         <Settings prefs={prefs} onChange={setPrefs} />
-        <button onClick={() => reset()}>New game</button>
+        <button onClick={() => openSetup()}>New game</button>
       </div>
 
       <div className="stage">
@@ -409,6 +426,7 @@ export default function App() {
         </div>
 
         <div className="sidebar">
+          <div className="sidebar-top">
           {state.gameOver && (
             <div className="gameover">
               Game over — {sc.winnerIds.length > 1 ? "draw between" : "winner:"}{" "}
@@ -422,6 +440,14 @@ export default function App() {
           <section>
             <h2>Players</h2>
             <div className="roster">
+              <div className="rosterrow rosterhead">
+                <span />
+                <span className="rname">ship</span>
+                <span className="rmini" title="ship stats after equipment">S/L/E/C</span>
+                <span title="fuel remaining">fuel</span>
+                <span className="rcargo" title="values of ore currently carried (not yet delivered)">◆ hold</span>
+                <span className="rscore" title="value of ore delivered home (green 1, yellow 2, red 3)">pts</span>
+              </div>
               {state.players.map((pl) => {
                 const s = statsOf(state, pl);
                 return (
@@ -450,6 +476,10 @@ export default function App() {
                 );
               })}
             </div>
+            <p className="hint">
+              S/L/E/C = shields / lasers / engines / cargo holds. ◆ hold = ore aboard (at risk in a
+              fight); pts = ore delivered home.
+            </p>
           </section>
 
           <section>
@@ -637,11 +667,12 @@ export default function App() {
               </div>
             )}
           </section>
+          </div>
 
-          <section>
+          <section className="logsection">
             <h2>Log</h2>
             <div className="log">
-              {state.log.slice(-18).reverse().map((e, i) => (
+              {state.log.slice(-60).reverse().map((e, i) => (
                 <div key={i}>
                   <b>t{e.turn}</b> {fmtLog(state, e)}
                 </div>
@@ -651,7 +682,48 @@ export default function App() {
         </div>
       </div>
 
-      {needPassGate && (
+      {setupOpen && (
+        <div className="pass setup">
+          <div className="sub">
+            {humans === 1
+              ? "Choose your ship"
+              : `Player ${humanPicks.length + 1} of ${humans} — choose a ship`}
+          </div>
+          <div className="shipgrid">
+            {ALL_COLOURS.map((c) => {
+              const s = mode.ships[c];
+              const taken = humanPicks.includes(c);
+              return (
+                <button
+                  key={c}
+                  className="shipcard"
+                  disabled={taken}
+                  onClick={() => pickShip(c)}
+                >
+                  <span className="pill" style={{ fontWeight: 700 }}>
+                    <i className="swatch" style={{ background: `var(--ship-${c})` }} />
+                    {s.name} <span style={{ color: "var(--muted)", fontWeight: 400 }}>({c})</span>
+                  </span>
+                  <span className="shipstats">
+                    <span>{s.shields} shield</span>
+                    <span>{s.lasers} laser</span>
+                    <span>{s.engines} engine</span>
+                    <span>{s.cargo} cargo</span>
+                    <span>{s.fuelTanks} fuel</span>
+                    <span>{s.booster} booster</span>
+                  </span>
+                  {taken && <span className="sub">taken</span>}
+                </button>
+              );
+            })}
+          </div>
+          <div className="sub">
+            {bots > 0 && `${bots} bot${bots === 1 ? "" : "s"} will take random remaining ships.`}
+          </div>
+        </div>
+      )}
+
+      {needPassGate && !setupOpen && (
         <div className="pass">
           <div className="sub">pass the device to</div>
           <div className="who">

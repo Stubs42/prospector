@@ -133,3 +133,9 @@ Polish left for later: board could use more of the canvas; combat panel has no i
   *Combat:* attacking now has a target → pick-lasers → declare flow; the defender picks
   shields or flees via hyperspace; a "Roll the dice" step; counter-attack / decline. All
   booster plays are logged, and the log now shows burns (cells + fuel) and combat detail.
+- **Ship selection.** A pre-game screen: each human picks a ship (with its stat card);
+  bots take random remaining ships; taken ships are disabled. Reachable from the topbar's
+  humans / bots selects and "New game".
+- **Sidebar polish.** The roster has a column header + legend (S/L/E/C, ◆ hold, pts). The
+  log is pinned to the bottom and scrolls inside a capped area — the sidebar as a whole no
+  longer scrolls.
