@@ -16,7 +16,7 @@ import { distance } from "../../engine/hex.js";
 import type { Seat } from "../../client/index.js";
 import { S } from "./geo.js";
 import { SHIP_VAR, ORE_VAR } from "./kit.js";
-import { ASPECT_FILL, ASPECT_LABEL, ASPECT_TAG, ASPECT_ORDER } from "./aspects.js";
+import { ASPECT_FILL, ASPECT_LABEL, ASPECT_TAG } from "./aspects.js";
 
 const GOLD = "#e6b03c";
 const norm = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -199,52 +199,59 @@ export function BaseInfo({ board, state, seats, scores, onTip }: {
           const baseShip = mode.ships[p.colour];
           const nm = near.corner;
           const fm = far.corner;
-          const statCells = near.cells.filter((_, i) => i !== nm);
-          const farAt = (off: number) => far.cells[fm + off];
-
           const scoreVal = scores[p.id] ?? 0;
+
+          // two logical branches fanning off the corner identity cell, each ordered
+          // identity-outward: freight group (cargo · laser · shield) on one side,
+          // drive group (engine · fuel · cards) on the other.
+          const leftBranch = near.cells.slice(0, nm).reverse(); // nm-1, nm-2, nm-3
+          const rightBranch = near.cells.slice(nm + 1); // nm+1, nm+2, nm+3
+          const FREIGHT_GROUP: StatKey[] = ["cargo", "lasers", "shields"];
+          const DRIVE_GROUP: StatKey[] = ["engines", "fuelTanks", "booster"];
+
+          const aspect = (cell: BoardCell | undefined, stat: StatKey) => {
+            if (!cell) return null;
+            const col = ASPECT_FILL[stat];
+            const total = stats[stat];
+            const up = total - baseShip[stat];
+            if (stat === "fuelTanks")
+              return (
+                <RatioToken key={stat} c={cell} col={col} tag="FUEL" cur={p.fuel} max={p.fuelMax}
+                  active={active} onTip={onTip} gradeCur
+                  tip={`fuel — ${p.fuel} of ${p.fuelMax}${up ? ` (tank ${total}, +${up} upgrade)` : ""}`} />
+              );
+            if (stat === "cargo")
+              return (
+                <RatioToken key={stat} c={cell} col={col} tag="CARGO" cur={p.cargo.length} max={total}
+                  active={active} onTip={onTip}
+                  tip={`cargo — ${p.cargo.length} of ${total} held${up ? ` (+${up} upgrade)` : ""}`} />
+              );
+            if (stat === "booster")
+              return (
+                <RatioToken key={stat} c={cell} col={col} tag="CARDS" cur={p.hand.length} max={total}
+                  active={active} onTip={onTip} warnOver
+                  tip={`cards — ${p.hand.length} in hand of ${total} limit${up ? ` (+${up} upgrade)` : ""}`} />
+              );
+            return (
+              <Token key={stat} c={cell} col={col} tag={ASPECT_TAG[stat]} value={`${total}`} active={active} onTip={onTip}
+                tip={`${ASPECT_LABEL[stat]} — ${total}${up ? ` (${baseShip[stat]} + ${up} upgrade)` : ""}`} />
+            );
+          };
 
           return (
             <g key={`bi-${p.id}`}>
               <IdentityHex c={near.cells[nm]!} name={baseShip.name} seat={seats[p.id]!} colour={p.colour} active={active} onTip={onTip} />
 
-              {ASPECT_ORDER.map((stat, i) => {
-                const cell = statCells[i];
-                if (!cell) return null;
-                const col = ASPECT_FILL[stat];
-                const tag = ASPECT_TAG[stat];
-                const total = stats[stat];
-                const up = total - baseShip[stat];
-                if (stat === "fuelTanks")
-                  return (
-                    <RatioToken key={stat} c={cell} col={col} tag="FUEL" cur={p.fuel} max={p.fuelMax}
-                      active={active} onTip={onTip} gradeCur
-                      tip={`fuel — ${p.fuel} of ${p.fuelMax}${up ? ` (tank ${total}, +${up} upgrade)` : ""}`} />
-                  );
-                if (stat === "cargo")
-                  return (
-                    <RatioToken key={stat} c={cell} col={col} tag="CARGO" cur={p.cargo.length} max={total}
-                      active={active} onTip={onTip}
-                      tip={`hold — ${p.cargo.length} of ${total}${up ? ` (+${up} upgrade)` : ""}`} />
-                  );
-                if (stat === "booster")
-                  return (
-                    <RatioToken key={stat} c={cell} col={col} tag="CARDS" cur={p.hand.length} max={total}
-                      active={active} onTip={onTip} warnOver
-                      tip={`cards — ${p.hand.length} in hand of ${total} limit${up ? ` (+${up} upgrade)` : ""}`} />
-                  );
-                return (
-                  <Token key={stat} c={cell} col={col} tag={tag} value={`${total}`} active={active} onTip={onTip}
-                    tip={`${ASPECT_LABEL[stat]} — ${total}${up ? ` (${baseShip[stat]} + ${up} upgrade)` : ""}`} />
-                );
-              })}
+              {FREIGHT_GROUP.map((s, i) => aspect(leftBranch[i], s))}
+              {DRIVE_GROUP.map((s, i) => aspect(rightBranch[i], s))}
 
-              {farAt(-1) && <OreHex c={farAt(-1)!} ores={p.cargo} tag="HOLD" tip="carried in hold" onTip={onTip} />}
-              {farAt(0) && (
-                <Token c={farAt(0)!} col={GOLD} ink="#1a1400" tag="PTS" active={active} onTip={onTip}
+              {/* freight family in the far ring, just outside the cargo cell */}
+              {far.cells[fm - 1] && <OreHex c={far.cells[fm - 1]!} ores={p.cargo} tag="FREIGHT" tip="freight in hold" onTip={onTip} />}
+              {far.cells[fm - 2] && <OreHex c={far.cells[fm - 2]!} ores={p.delivered} tag="SAVED" tip="delivered to base" onTip={onTip} />}
+              {far.cells[fm] && (
+                <Token c={far.cells[fm]!} col={GOLD} ink="#1a1400" tag="PTS" active={active} onTip={onTip}
                   value={`${scoreVal}`} tip={`score — ${scoreVal}`} />
               )}
-              {farAt(1) && <OreHex c={farAt(1)!} ores={p.delivered} tag="SAVED" tip="delivered to base" onTip={onTip} />}
             </g>
           );
         })}
