@@ -219,11 +219,17 @@ button.danger { border-color: #6a3a2f; }
 .card .ctype { font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
 .card .cval { font-size: 1.3rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .card .ceff { font-size: 0.56rem; color: var(--muted); line-height: 1.25; margin-top: auto; }
-.card.booster-shield { border-color: #3f74c9; }
-.card.booster-laser { border-color: #c8483b; }
-.card.booster-engine { border-color: var(--gold); }
-.card.booster-reserveFuel { border-color: var(--ok); }
+/* card accent = the shared aspect palette (see aspects.ts) */
+.card.booster-shield { border-color: #e9e9e9; }
+.card.booster-shield .ctype, .card.booster-shield .cval { color: #e9e9e9; }
+.card.booster-laser { border-color: #8a929b; }
+.card.booster-laser .ctype, .card.booster-laser .cval { color: #aab2ba; }
+.card.booster-engine { border-color: #c8483b; }
+.card.booster-engine .ctype, .card.booster-engine .cval { color: #e0776b; }
+.card.booster-reserveFuel { border-color: #3f74c9; }
+.card.booster-reserveFuel .ctype, .card.booster-reserveFuel .cval { color: #7aa0e0; }
 .card.booster-hyperspace { border-color: #9a6fd0; }
+.card.booster-hyperspace .ctype, .card.booster-hyperspace .cval { color: #b394de; }
 
 .actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .hint { color: var(--muted); font-size: 0.72rem; margin: 0.4rem 0 0; }

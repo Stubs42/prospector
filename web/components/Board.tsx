@@ -2,11 +2,12 @@ import { boardFor } from "../../engine/game.js";
 import { hexKey } from "../../engine/hex.js";
 import type { GameState, Hex, Colour, OreColour } from "../../engine/index.js";
 import { Cone, SHIP_VAR, ORE_VAR } from "./kit.js";
-import { BoardFurniture, panelAnchor, PANEL_W, PANEL_H } from "./BoardFurniture.js";
+import { BaseInfo } from "./BaseInfo.js";
 import { HexPopup } from "./HexPopup.js";
 import type { Seat } from "../../client/index.js";
 
-export const S = 26; // px per unit hex size (pointy-top, matches board.json x/y)
+export { S } from "./geo.js";
+import { S } from "./geo.js";
 
 export interface RadialAction {
   id: string;
@@ -66,21 +67,12 @@ export function Board({
   const cells = board.allCells();
   const xs = cells.map((c) => c.x * S);
   const ys = cells.map((c) => c.y * S);
-  // viewBox = field bbox ∪ every ship-panel bbox, + a small margin
-  const bx: number[] = [Math.min(...xs), Math.max(...xs)];
-  const by: number[] = [Math.min(...ys), Math.max(...ys)];
-  if (world) {
-    for (const pl of state.players) {
-      const a = panelAnchor(board, pl.colour);
-      bx.push(a.x - PANEL_W / 2, a.x + PANEL_W / 2);
-      by.push(a.y - PANEL_H / 2, a.y + PANEL_H / 2);
-    }
-  }
-  const m = 24;
-  const minx = Math.min(...bx) - m;
-  const miny = Math.min(...by) - m;
-  const w = Math.max(...bx) - Math.min(...bx) + m * 2;
-  const h = Math.max(...by) - Math.min(...by) + m * 2;
+  // info lives in the board's own outer cells now, so the viewBox is just the field + a margin
+  const m = 26;
+  const minx = Math.min(...xs) - m;
+  const miny = Math.min(...ys) - m;
+  const w = Math.max(...xs) - Math.min(...xs) + m * 2;
+  const h = Math.max(...ys) - Math.min(...ys) + m * 2;
 
   const hi = new Set(highlight.cells.map(hexKey));
   const px = (hx: Hex) => {
@@ -309,7 +301,7 @@ export function Board({
       })}
 
       {/* table furniture (ship panels, deck counts) — drawn on top so text stays legible */}
-      {world && <BoardFurniture board={board} state={state} seats={seats} scores={scores} />}
+      {world && <BaseInfo board={board} state={state} seats={seats} scores={scores} />}
 
       {/* guidance popup — what to do next, anchored in board space */}
       {popup && <HexPopup center={popup.center} lines={popup.lines} />}

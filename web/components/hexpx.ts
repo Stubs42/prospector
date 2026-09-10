@@ -6,7 +6,7 @@
  */
 import { round } from "../../engine/hex.js";
 import type { Hex } from "../../engine/index.js";
-import { S } from "./Board.js";
+import { S } from "./geo.js";
 
 const SQRT3 = Math.sqrt(3);
 
