@@ -25,14 +25,14 @@
 }
 
 * { box-sizing: border-box; }
-html, body, #root { height: 100%; margin: 0; }
+html, body, #root { height: 100%; margin: 0; overflow: hidden; }
 body {
   background: radial-gradient(120% 100% at 50% 0%, var(--felt) 0%, var(--felt-edge) 100%);
   color: var(--ink);
   font-size: 14px;
 }
 
-.app { display: flex; flex-direction: column; height: 100%; }
+.app { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
 
 .topbar {
   display: flex; align-items: center; gap: 1rem;
@@ -62,13 +62,106 @@ button:disabled { opacity: 0.4; cursor: default; }
 button.primary { background: #26402f; border-color: #3f6f4f; }
 button.danger { border-color: #6a3a2f; }
 
-.stage { display: flex; flex: 1; min-height: 0; }
-.boardwrap {
-  flex: 1; min-width: 0;
-  display: flex; align-items: center; justify-content: center;
-  padding: 1rem;
+/* board-only layout: the board fills the stage; overlays float above it */
+.stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+/* a little breathing room so the board never butts against the window frame */
+.stage > .boardwrap { position: absolute; inset: 14px; }
+.boardwrap > svg { display: block; width: 100%; height: 100%; }
+
+.zoomctl {
+  position: absolute; left: 4px; bottom: 4px; z-index: 15;
+  display: flex; flex-direction: column; gap: 4px;
 }
-.boardwrap svg { max-height: 100%; max-width: 100%; }
+.zoomctl button {
+  width: 30px; height: 30px; padding: 0;
+  font-size: 1.05rem; line-height: 1;
+  background: rgba(14, 24, 19, 0.9); border: 1px solid var(--line);
+  color: var(--ink); border-radius: 7px;
+}
+.zoomctl button:hover { border-color: var(--gold); color: var(--gold); }
+
+.board-tip {
+  position: absolute; z-index: 30; pointer-events: none;
+  transform: translate(12px, -130%);
+  background: rgba(10, 18, 14, 0.97); border: 1px solid var(--line-strong, var(--line));
+  color: var(--ink); font-size: 0.72rem; white-space: nowrap;
+  padding: 0.28rem 0.5rem; border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+
+.board-toast {
+  position: absolute; left: 50%; top: 12px; transform: translateX(-50%);
+  z-index: 20;
+  background: rgba(10, 20, 15, 0.9); border: 1px solid var(--line);
+  padding: 0.4rem 0.9rem; border-radius: 999px; font-size: 0.82rem;
+}
+.board-toast.win { border-color: var(--gold); color: var(--gold); }
+
+.bottompanel {
+  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+  z-index: 25; max-width: min(680px, 92vw);
+  background: rgba(14, 24, 19, 0.96);
+  border: 1px solid var(--line-strong, var(--line)); border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  padding: 0.7rem 0.85rem;
+  display: flex; flex-direction: column; gap: 0.5rem; align-items: center;
+}
+.bottompanel .bp-title { font-weight: 700; }
+.bottompanel .hand { justify-content: center; }
+.bottompanel .actions { justify-content: center; }
+
+/* hex-shaped guidance popup, drawn in board space */
+.hexpopup polygon {
+  fill: rgba(12, 20, 16, 0.97);
+  stroke: var(--gold);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 10px 26px rgba(0, 0, 0, 0.55));
+}
+.hexpopup text { fill: var(--ink); font-size: 13px; font-weight: 600; letter-spacing: 0.01em; }
+
+/* a base cell you can pick as your start base */
+.base-pick { animation: base-pulse 1.6s ease-in-out infinite; }
+@keyframes base-pulse {
+  0%, 100% { fill-opacity: 0.7; }
+  50% { fill-opacity: 1; }
+}
+
+/* radial action chips around the active ship (inside the board svg) */
+.radial .chip { cursor: pointer; }
+.radial .chip circle { fill: #17251f; stroke: var(--line-strong, #3a444e); stroke-width: 1.6; }
+.radial .chip:hover circle { stroke: var(--gold); }
+.radial .chip.primary circle { fill: #26402f; stroke: #3f6f4f; }
+.radial .chip.danger circle { stroke: #6a3a2f; }
+.radial .chip text { fill: var(--ink); font-size: 12px; font-weight: 600; pointer-events: none; }
+.radial .chip-stem { stroke: var(--line); stroke-width: 1.4; }
+
+/* log / history overlay */
+.overlay-scrim {
+  position: fixed; inset: 0; z-index: 45;
+  background: rgba(4, 10, 7, 0.6);
+  display: flex; align-items: center; justify-content: center;
+}
+.log-overlay {
+  width: min(520px, 92vw); max-height: 74vh;
+  display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--line-strong, var(--line));
+  border-radius: 12px; overflow: hidden;
+}
+.log-overlay-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.6rem 0.9rem; border-bottom: 1px solid var(--line);
+  font-size: 0.72rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted);
+}
+.log-overlay-head button { padding: 0.2rem 0.5rem; }
+.log-overlay-body {
+  padding: 0.7rem 0.9rem; overflow-y: auto;
+  font-size: 0.78rem; color: var(--muted); line-height: 1.8;
+}
+.log-overlay-body b { color: var(--ink); }
+
+.topbar button.ghost { background: none; border-color: transparent; color: var(--muted); }
+.topbar button.ghost:hover { color: var(--gold); }
 
 .sidebar {
   width: 360px; flex-shrink: 0;
@@ -149,11 +242,17 @@ button.danger { border-color: #6a3a2f; }
 .card .ctype { font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
 .card .cval { font-size: 1.3rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .card .ceff { font-size: 0.56rem; color: var(--muted); line-height: 1.25; margin-top: auto; }
-.card.booster-shield { border-color: #3f74c9; }
-.card.booster-laser { border-color: #c8483b; }
-.card.booster-engine { border-color: var(--gold); }
-.card.booster-reserveFuel { border-color: var(--ok); }
+/* card accent = the shared aspect palette (see aspects.ts) */
+.card.booster-shield { border-color: #e9e9e9; }
+.card.booster-shield .ctype, .card.booster-shield .cval { color: #e9e9e9; }
+.card.booster-laser { border-color: #8a929b; }
+.card.booster-laser .ctype, .card.booster-laser .cval { color: #aab2ba; }
+.card.booster-engine { border-color: #c8483b; }
+.card.booster-engine .ctype, .card.booster-engine .cval { color: #e0776b; }
+.card.booster-reserveFuel { border-color: #3f74c9; }
+.card.booster-reserveFuel .ctype, .card.booster-reserveFuel .cval { color: #7aa0e0; }
 .card.booster-hyperspace { border-color: #9a6fd0; }
+.card.booster-hyperspace .ctype, .card.booster-hyperspace .cval { color: #b394de; }
 
 .actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .hint { color: var(--muted); font-size: 0.72rem; margin: 0.4rem 0 0; }
@@ -195,6 +294,11 @@ button.danger { border-color: #6a3a2f; }
 /* board bits */
 .cell-hit { cursor: pointer; }
 .cell-hit:hover { stroke: var(--gold); stroke-width: 2.5; }
+/* hollow markers (fill:none) only react on their thin stroke by default — make the
+   whole disc clickable so a tap anywhere inside the ring registers */
+circle.cell-hit { pointer-events: all; }
+.coast-here:hover circle { fill-opacity: 0.28; stroke: var(--ok); }
+.coast-here text { pointer-events: none; }
 .burn-target { transition: opacity 120ms; }
 .burn-target:hover circle { fill-opacity: 0.3; }
 
@@ -249,6 +353,7 @@ button.danger { border-color: #6a3a2f; }
 .settings-row { display: flex; align-items: center; justify-content: space-between; font-size: 0.82rem; }
 
 @media (prefers-reduced-motion: reduce) {
-  .ore-chip { animation: none; }
+  .ore-chip, .base-pick { animation: none; }
+  .base-pick { fill-opacity: 1; }
   * { transition: none !important; }
 }
