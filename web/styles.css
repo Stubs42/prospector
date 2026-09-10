@@ -64,7 +64,20 @@ button.danger { border-color: #6a3a2f; }
 
 /* board-only layout: the board fills the stage; overlays float above it */
 .stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
-.stage > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.stage > .boardwrap { position: absolute; inset: 0; }
+.boardwrap > svg { display: block; width: 100%; height: 100%; }
+
+.zoomctl {
+  position: absolute; left: 10px; bottom: 10px; z-index: 15;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.zoomctl button {
+  width: 30px; height: 30px; padding: 0;
+  font-size: 1.05rem; line-height: 1;
+  background: rgba(14, 24, 19, 0.9); border: 1px solid var(--line);
+  color: var(--ink); border-radius: 7px;
+}
+.zoomctl button:hover { border-color: var(--gold); color: var(--gold); }
 
 .board-toast {
   position: absolute; left: 50%; top: 12px; transform: translateX(-50%);

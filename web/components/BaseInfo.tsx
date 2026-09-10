@@ -54,7 +54,7 @@ function outerArcs(board: BoardModel, colour: Colour) {
   return { near: arc(board.innerRadius + 1), far: arc(board.radius) };
 }
 
-const TOK = S * 0.6; // token hexagon radius — sits inside its board cell with a gap
+const TOK = S * 0.66; // token hexagon radius — sits inside its board cell with a gap
 const DARK = "#0a120e";
 
 /** a coloured-outline token: dark hex, aspect-colour ring + number */

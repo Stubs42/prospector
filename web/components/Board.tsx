@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef, useState, type PointerEvent as RPointerEvent } from "react";
 import { boardFor } from "../../engine/game.js";
 import { hexKey } from "../../engine/hex.js";
 import type { GameState, Hex, Colour, OreColour } from "../../engine/index.js";
@@ -67,12 +68,87 @@ export function Board({
   const cells = board.allCells();
   const xs = cells.map((c) => c.x * S);
   const ys = cells.map((c) => c.y * S);
-  // info lives in the board's own outer cells now, so the viewBox is just the field + a margin
+  // "fit" viewBox: the whole field + a margin. Pan/zoom rides on top of this.
   const m = 26;
   const minx = Math.min(...xs) - m;
   const miny = Math.min(...ys) - m;
   const w = Math.max(...xs) - Math.min(...xs) + m * 2;
   const h = Math.max(...ys) - Math.min(...ys) + m * 2;
+  const fitCx = minx + w / 2;
+  const fitCy = miny + h / 2;
+
+  // --- board pan / zoom -------------------------------------------------
+  const MIN_Z = 0.6;
+  const MAX_Z = 6;
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const [view, setView] = useState<{ cx: number; cy: number; z: number } | null>(null);
+  const v = view ?? { cx: fitCx, cy: fitCy, z: 1 };
+  const vb = { x: v.cx - w / v.z / 2, y: v.cy - h / v.z / 2, w: w / v.z, h: h / v.z };
+  const dragRef = useRef<{ x: number; y: number; cx: number; cy: number; moved: boolean } | null>(null);
+  const pannedRef = useRef(false);
+
+  const toBoard = useCallback((clientX: number, clientY: number) => {
+    const el = svgRef.current;
+    if (!el) return { bx: v.cx, by: v.cy };
+    const r = el.getBoundingClientRect();
+    const s = Math.min(r.width / vb.w, r.height / vb.h);
+    const bx = vb.x + (clientX - r.left - (r.width - vb.w * s) / 2) / s;
+    const by = vb.y + (clientY - r.top - (r.height - vb.h * s) / 2) / s;
+    return { bx, by };
+  }, [v.cx, v.cy, vb.x, vb.y, vb.w, vb.h]);
+
+  const fit = () => setView(null);
+
+  const zoomBy = useCallback((factor: number, atClientX?: number, atClientY?: number) => {
+    setView((prev) => {
+      const cur = prev ?? { cx: fitCx, cy: fitCy, z: 1 };
+      const z = Math.min(MAX_Z, Math.max(MIN_Z, cur.z * factor));
+      if (z === cur.z) return prev;
+      let { cx, cy } = cur;
+      if (atClientX !== undefined && atClientY !== undefined) {
+        const { bx, by } = toBoard(atClientX, atClientY);
+        cx = bx - (bx - cur.cx) * (cur.z / z);
+        cy = by - (by - cur.cy) * (cur.z / z);
+      }
+      return { cx, cy, z };
+    });
+  }, [fitCx, fitCy, toBoard]);
+
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      zoomBy(Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [zoomBy]);
+
+  const onPointerDown = (e: RPointerEvent<SVGSVGElement>) => {
+    if (e.button !== 0) return;
+    pannedRef.current = false;
+    dragRef.current = { x: e.clientX, y: e.clientY, cx: v.cx, cy: v.cy, moved: false };
+  };
+  const onPointerMove = (e: RPointerEvent<SVGSVGElement>) => {
+    const d = dragRef.current;
+    if (!d) return;
+    const el = svgRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const s = Math.min(r.width / vb.w, r.height / vb.h);
+    const dx = (e.clientX - d.x) / s;
+    const dy = (e.clientY - d.y) / s;
+    if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 4) return;
+    d.moved = true;
+    pannedRef.current = true;
+    el.setPointerCapture(e.pointerId);
+    setView({ cx: d.cx - dx, cy: d.cy - dy, z: v.z });
+  };
+  const endPan = (e: RPointerEvent<SVGSVGElement>) => {
+    dragRef.current = null;
+    if (svgRef.current?.hasPointerCapture(e.pointerId)) svgRef.current.releasePointerCapture(e.pointerId);
+  };
 
   const hi = new Set(highlight.cells.map(hexKey));
   const px = (hx: Hex) => {
@@ -85,11 +161,25 @@ export function Board({
   const activeAt = px(active.pose.current);
 
   return (
+    <div className="boardwrap">
     <svg
-      viewBox={`${minx} ${miny} ${w} ${h}`}
+      ref={svgRef}
+      viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
       width="100%"
       height="100%"
       preserveAspectRatio="xMidYMid meet"
+      style={{ touchAction: "none", cursor: dragRef.current?.moved ? "grabbing" : "default" }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={endPan}
+      onPointerCancel={endPan}
+      onDoubleClick={fit}
+      onClickCapture={(e) => {
+        if (pannedRef.current) {
+          e.stopPropagation();
+          pannedRef.current = false;
+        }
+      }}
     >
       {cells.map((c) => {
         const cx = c.x * S;
@@ -330,5 +420,11 @@ export function Board({
         </g>
       )}
     </svg>
+      <div className="zoomctl">
+        <button type="button" aria-label="zoom out" onClick={() => zoomBy(1 / 1.3)}>–</button>
+        <button type="button" aria-label="fit board" onClick={fit}>⤢</button>
+        <button type="button" aria-label="zoom in" onClick={() => zoomBy(1.3)}>+</button>
+      </div>
+    </div>
   );
 }
