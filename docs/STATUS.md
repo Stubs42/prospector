@@ -139,3 +139,7 @@ Polish left for later: board could use more of the canvas; combat panel has no i
 - **Sidebar polish.** The roster has a column header + legend (S/L/E/C, ◆ hold, pts). The
   log is pinned to the bottom and scrolls inside a capped area — the sidebar as a whole no
   longer scrolls.
+- **`client/` layer extracted.** GUI-agnostic presentation logic (`seats`, `affordances`,
+  `preview`, `bot`, `log-format`) moved out of `App.tsx` into `client/`. React glue lives in
+  `web/useSession.ts`; `App.tsx` is now rendering + input wiring. Pure refactor — 73 tests
+  (66 engine + 7 client). See `docs/ARCHITECTURE.md`.
