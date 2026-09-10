@@ -5,13 +5,23 @@ export interface Prefs {
   autoEndTurn: boolean;
   /** on = animate, off = no motion, auto = follow the OS setting */
   animations: "on" | "off" | "auto";
+  /** how long a move-animation phase takes */
+  moveSpeed: "slow" | "normal" | "fast";
 }
 
 export const DEFAULT_PREFS: Prefs = {
   autoSingle: true,
   autoEndTurn: false,
   animations: "auto",
+  moveSpeed: "normal",
 };
+
+const MOVE_PHASE_MS: Record<Prefs["moveSpeed"], number> = { slow: 780, normal: 440, fast: 220 };
+
+/** ms per move-animation phase; 0 when motion is reduced (snap straight to the result) */
+export function movePhaseMs(p: Prefs): number {
+  return motionReduced(p) ? 0 : MOVE_PHASE_MS[p.moveSpeed];
+}
 
 const KEY = "prospector.prefs";
 

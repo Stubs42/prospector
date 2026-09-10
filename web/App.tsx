@@ -60,6 +60,7 @@ export default function App() {
   const baseStats = mode.ships[p.colour];
   const sc = score(state);
   const inSetup = s.setup.open;
+  const anim = s.animLive; // a move is actively playing — hold back prompts/targets
   const interactive = !inSetup && !activeIsBot && !needPassGate;
   const overLimit = afford.overLimit;
   // turn 1: the ship must be placed on a base cell before anything else
@@ -280,15 +281,17 @@ export default function App() {
           state={state}
           seats={seats}
           scores={sc.byPlayer}
-          highlight={interactive || inSetup ? highlight : { cells: [], kind: null }}
-          burnTargets={interactive ? afford.burnTargets : []}
-          driftGhost={interactive ? driftGhost : null}
-          burnPreview={interactive ? burnPreview : null}
-          radial={radial}
-          onCoast={onCoast}
-          popup={popup}
+          highlight={anim ? { cells: [], kind: null } : interactive || inSetup ? highlight : { cells: [], kind: null }}
+          burnTargets={interactive && !anim ? afford.burnTargets : []}
+          driftGhost={interactive && !anim ? driftGhost : null}
+          burnPreview={interactive && !anim ? burnPreview : null}
+          radial={anim ? [] : radial}
+          onCoast={anim ? null : onCoast}
+          popup={anim ? null : popup}
           world={!inSetup}
           reducedMotion={reducedMotion}
+          moveAnim={s.moveAnim}
+          onMoveAnimEnd={s.endMoveAnim}
           onCell={onCell}
           onCellHover={setHoverCell}
         />
