@@ -60,6 +60,14 @@ const DARK = "#0a120e";
 
 export type TipFn = (text: string | null, e: RMouseEvent) => void;
 
+/** green (plenty) → amber → red (empty), for the "available" half of a ratio */
+function grade(t: number): string {
+  t = Math.max(0, Math.min(1, t));
+  const A = [193, 87, 60], M = [215, 177, 61], G = [63, 159, 99];
+  const [lo, hi, k] = t < 0.5 ? [A, M, t * 2] : [M, G, (t - 0.5) * 2];
+  return `rgb(${lo.map((c, i) => Math.round(c + (hi[i]! - c) * k)).join(",")})`;
+}
+
 /** hover target that reports its tooltip text up to the board */
 function Hoverable({ tip, onTip, children }: { tip: string; onTip: TipFn; children: ReactNode }) {
   return (
@@ -69,7 +77,28 @@ function Hoverable({ tip, onTip, children }: { tip: string; onTip: TipFn; childr
   );
 }
 
-/** dark hex, coloured ring, 3-letter tag + value */
+/** shell: dark backing + coloured hex ring + tag label. children draw the value. */
+function Shell({ x, y, col, ink, active }: {
+  x: number; y: number; col: string; ink?: string | undefined; active: boolean;
+}) {
+  return (
+    <>
+      <polygon points={hexPts(x, y, TOK + 2.5)} fill={DARK} />
+      <polygon points={hexPts(x, y, TOK)} fill={ink ? col : DARK} stroke={col} strokeWidth={active ? 2.6 : 1.4} />
+    </>
+  );
+}
+
+function Tag({ x, y, text, col }: { x: number; y: number; text: string; col: string }) {
+  return (
+    <text x={x} y={y - TOK * 0.42} textAnchor="middle" fill={col} opacity={0.85}
+      fontSize={S * 0.23} fontWeight={700} style={{ letterSpacing: "0.04em" }}>
+      {text}
+    </text>
+  );
+}
+
+/** a plain single-number stat token */
 function Token({ c, col, tag, value, ink, active, tip, onTip }: {
   c: BoardCell; col: string; tag: string; value: string; ink?: string; active: boolean; tip: string; onTip: TipFn;
 }) {
@@ -77,26 +106,35 @@ function Token({ c, col, tag, value, ink, active, tip, onTip }: {
   const y = c.y * S;
   return (
     <Hoverable tip={tip} onTip={onTip}>
-      <polygon points={hexPts(x, y, TOK)} fill={ink ? col : DARK} stroke={col} strokeWidth={active ? 2.6 : 1.4} />
-      <text x={x} y={y - TOK * 0.44} textAnchor="middle" fill={ink ?? col} opacity={0.85}
-        fontSize={S * 0.2} fontWeight={700} style={{ letterSpacing: "0.08em" }}>
-        {tag}
-      </text>
-      <text x={x} y={y + TOK * 0.16} textAnchor="middle" dominantBaseline="central"
-        fill={ink ?? col} fontWeight={800} fontSize={value.length > 2 ? S * 0.4 : S * 0.56}>
+      <Shell x={x} y={y} col={col} ink={ink} active={active} />
+      <Tag x={x} y={y} text={tag} col={ink ?? col} />
+      <text x={x} y={y + TOK * 0.2} textAnchor="middle" dominantBaseline="central"
+        fill={ink ?? col} fontWeight={800} fontSize={value.length > 2 ? S * 0.44 : S * 0.6}>
         {value}
       </text>
     </Hoverable>
   );
 }
 
-function AspectHex({ c, stat, base, delta, active, onTip }: {
-  c: BoardCell; stat: StatKey; base: number; delta: number; active: boolean; onTip: TipFn;
+/** a "have / max" token; the "have" digit is colour-graded when `gradeCur` */
+function RatioToken({ c, col, tag, cur, max, active, tip, onTip, gradeCur, warnOver }: {
+  c: BoardCell; col: string; tag: string; cur: number; max: number; active: boolean;
+  tip: string; onTip: TipFn; gradeCur?: boolean; warnOver?: boolean;
 }) {
+  const x = c.x * S;
+  const y = c.y * S;
+  const curCol = warnOver && cur > max ? "#c1573c" : gradeCur ? grade(max ? cur / max : 0) : col;
+  const txt = `${cur}/${max}`;
   return (
-    <Token c={c} col={ASPECT_FILL[stat]} tag={ASPECT_TAG[stat]} active={active} onTip={onTip}
-      value={delta > 0 ? `${base}+${delta}` : `${base + delta}`}
-      tip={`${ASPECT_LABEL[stat]} — ${base} installed${delta > 0 ? ` + ${delta} from upgrades = ${base + delta}` : ""}`} />
+    <Hoverable tip={tip} onTip={onTip}>
+      <Shell x={x} y={y} col={col} active={active} />
+      <Tag x={x} y={y} text={tag} col={col} />
+      <text x={x} y={y + TOK * 0.2} textAnchor="middle" dominantBaseline="central"
+        fontWeight={800} fontSize={txt.length > 3 ? S * 0.38 : S * 0.5}>
+        <tspan fill={curCol}>{cur}</tspan>
+        <tspan fill={col} opacity={0.6}>/{max}</tspan>
+      </text>
+    </Hoverable>
   );
 }
 
@@ -108,15 +146,15 @@ function OreHex({ c, ores, tag, tip, onTip }: {
   const n = Math.min(ores.length, 6);
   return (
     <Hoverable tip={`${tip}: ${ores.length ? ores.join(", ") : "none"}`} onTip={onTip}>
+      <polygon points={hexPts(x, y, TOK + 2.5)} fill={DARK} />
       <polygon points={hexPts(x, y, TOK)} fill={DARK} stroke="#3a4a41" strokeWidth={1.3} />
-      <text x={x} y={y - TOK * 0.44} textAnchor="middle" fill="#8b9a91" fontSize={S * 0.2}
-        fontWeight={700} style={{ letterSpacing: "0.08em" }}>{tag}</text>
+      <Tag x={x} y={y} text={tag} col="#8b9a91" />
       {n === 0 ? (
         <text x={x} y={y + TOK * 0.2} textAnchor="middle" fill="#4b574f" fontSize={S * 0.34}>–</text>
       ) : (
         ores.slice(0, 6).map((o, i) => (
           <circle key={i} cx={x + (i - (n - 1) / 2) * S * 0.32} cy={y + TOK * 0.18}
-            r={S * 0.13} fill={ORE_VAR[o]} stroke="#000" strokeOpacity={0.3} />
+            r={S * 0.14} fill={ORE_VAR[o]} stroke="#000" strokeOpacity={0.3} />
         ))
       )}
     </Hoverable>
@@ -173,26 +211,40 @@ export function BaseInfo({ board, state, seats, scores, onTip }: {
               {ASPECT_ORDER.map((stat, i) => {
                 const cell = statCells[i];
                 if (!cell) return null;
+                const col = ASPECT_FILL[stat];
+                const tag = ASPECT_TAG[stat];
+                const total = stats[stat];
+                const up = total - baseShip[stat];
+                if (stat === "fuelTanks")
+                  return (
+                    <RatioToken key={stat} c={cell} col={col} tag="FUEL" cur={p.fuel} max={p.fuelMax}
+                      active={active} onTip={onTip} gradeCur
+                      tip={`fuel — ${p.fuel} of ${p.fuelMax}${up ? ` (tank ${total}, +${up} upgrade)` : ""}`} />
+                  );
+                if (stat === "cargo")
+                  return (
+                    <RatioToken key={stat} c={cell} col={col} tag="CARGO" cur={p.cargo.length} max={total}
+                      active={active} onTip={onTip}
+                      tip={`hold — ${p.cargo.length} of ${total}${up ? ` (+${up} upgrade)` : ""}`} />
+                  );
+                if (stat === "booster")
+                  return (
+                    <RatioToken key={stat} c={cell} col={col} tag="CARDS" cur={p.hand.length} max={total}
+                      active={active} onTip={onTip} warnOver
+                      tip={`cards — ${p.hand.length} in hand of ${total} limit${up ? ` (+${up} upgrade)` : ""}`} />
+                  );
                 return (
-                  <AspectHex key={stat} c={cell} stat={stat} base={baseShip[stat]}
-                    delta={stats[stat] - baseShip[stat]} active={active} onTip={onTip} />
+                  <Token key={stat} c={cell} col={col} tag={tag} value={`${total}`} active={active} onTip={onTip}
+                    tip={`${ASPECT_LABEL[stat]} — ${total}${up ? ` (${baseShip[stat]} + ${up} upgrade)` : ""}`} />
                 );
               })}
 
-              {farAt(-3) && <OreHex c={farAt(-3)!} ores={p.delivered} tag="SAVE" tip="saved at base" onTip={onTip} />}
-              {farAt(-2) && <OreHex c={farAt(-2)!} ores={p.cargo} tag="HOLD" tip="carried in hold" onTip={onTip} />}
-              {farAt(-1) && (
-                <Token c={farAt(-1)!} col={ASPECT_FILL.booster} tag="HAND" active={active} onTip={onTip}
-                  value={`${p.hand.length}`} tip={`cards in hand — ${p.hand.length} of ${stats.booster} limit`} />
-              )}
+              {farAt(-1) && <OreHex c={farAt(-1)!} ores={p.cargo} tag="HOLD" tip="carried in hold" onTip={onTip} />}
               {farAt(0) && (
                 <Token c={farAt(0)!} col={GOLD} ink="#1a1400" tag="PTS" active={active} onTip={onTip}
                   value={`${scoreVal}`} tip={`score — ${scoreVal}`} />
               )}
-              {farAt(1) && (
-                <Token c={farAt(1)!} col={ASPECT_FILL.fuelTanks} tag="FUEL" active={active} onTip={onTip}
-                  value={`${p.fuel}`} tip={`fuel in tank — ${p.fuel} of ${p.fuelMax}`} />
-              )}
+              {farAt(1) && <OreHex c={farAt(1)!} ores={p.delivered} tag="SAVED" tip="delivered to base" onTip={onTip} />}
             </g>
           );
         })}
