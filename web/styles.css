@@ -64,11 +64,12 @@ button.danger { border-color: #6a3a2f; }
 
 /* board-only layout: the board fills the stage; overlays float above it */
 .stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
-.stage > .boardwrap { position: absolute; inset: 0; }
+/* a little breathing room so the board never butts against the window frame */
+.stage > .boardwrap { position: absolute; inset: 14px; }
 .boardwrap > svg { display: block; width: 100%; height: 100%; }
 
 .zoomctl {
-  position: absolute; left: 10px; bottom: 10px; z-index: 15;
+  position: absolute; left: 4px; bottom: 4px; z-index: 15;
   display: flex; flex-direction: column; gap: 4px;
 }
 .zoomctl button {

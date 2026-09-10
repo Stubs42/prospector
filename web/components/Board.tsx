@@ -68,8 +68,8 @@ export function Board({
   const cells = board.allCells();
   const xs = cells.map((c) => c.x * S);
   const ys = cells.map((c) => c.y * S);
-  // "fit" viewBox: the whole field + a margin. Pan/zoom rides on top of this.
-  const m = 26;
+  // "fit" viewBox: the whole field + a margin so nothing hugs the frame. Pan/zoom rides on top.
+  const m = 58;
   const minx = Math.min(...xs) - m;
   const miny = Math.min(...ys) - m;
   const w = Math.max(...xs) - Math.min(...xs) + m * 2;
