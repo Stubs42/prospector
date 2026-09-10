@@ -66,7 +66,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   const needPassGate =
     humansCount >= 2 && !state.gameOver && !activeIsBot && shownPlayer !== state.activePlayerIndex;
   const isWaitingOnBot =
-    !state.gameOver && !needPassGate && seats[waitingOn(state)] === "bot";
+    !setupOpen && !state.gameOver && !needPassGate && seats[waitingOn(state)] === "bot";
 
   // --- state transitions -------------------------------------------------
   const clearStaging = () => {
@@ -149,6 +149,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   );
   const autoAction =
     prefs.autoSingle &&
+    !setupOpen &&
     !state.gameOver &&
     !needPassGate &&
     !activeIsBot &&
@@ -165,7 +166,14 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
 
   // --- ?demo=N : fast-forward with bots, for screenshots -------------
   useEffect(() => {
-    const n = Number(new URLSearchParams(location.search).get("demo") ?? 0);
+    const qs = new URLSearchParams(location.search);
+    const n = Number(qs.get("demo") ?? 0);
+    if (qs.get("skipsetup") === "1" && !n) {
+      setSeats(Array<Seat>(state.players.length).fill("human"));
+      setShownPlayer(state.activePlayerIndex);
+      setSetupOpen(false);
+      return;
+    }
     if (!n) return;
     const rng = makeRng(1);
     let s = state;
@@ -200,6 +208,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     dispatchBurn,
     openSetup,
     pickShip,
+    pickBase: pickShip,
     revealTurn,
     toggleArmed: toggle(setArmed),
     toggleCombatSel: toggle(setCombatSel),

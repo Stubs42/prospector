@@ -1,11 +1,14 @@
 import { useMemo, useState } from "react";
 import { score } from "../engine/index.js";
+import { boardFor } from "../engine/game.js";
 import { hexKey } from "../engine/hex.js";
+import type { BoardModel } from "../engine/board.js";
 import type { Action, Colour, Hex } from "../engine/index.js";
 import { Board, type RadialAction } from "./components/Board.js";
 import { BottomPanel, type PanelButton } from "./components/BottomPanel.js";
 import { LogOverlay } from "./components/LogOverlay.js";
 import { Settings } from "./components/Settings.js";
+import { axialToPixel, pixelToAxial, towardOrigin } from "./components/hexpx.js";
 import { loadPrefs, motionReduced, savePrefs, type Prefs } from "./prefs.js";
 import { useSession } from "./useSession.js";
 
@@ -17,6 +20,16 @@ const CHIP_LABEL: Partial<Record<Action["type"], string>> = {
   endTurn: "End turn",
   scrapShip: "Scrap",
 };
+
+/** a cell a few steps inward from a base, where that base's guidance popup sits */
+function launchAnchor(board: BoardModel, colour: Colour): Hex {
+  const cs = board.baseCells(colour);
+  const q = cs.reduce((a, c) => a + c.q, 0) / cs.length;
+  const r = cs.reduce((a, c) => a + c.r, 0) / cs.length;
+  const { x, y } = axialToPixel({ q, r });
+  const pulled = towardOrigin(x, y, 150);
+  return pixelToAxial(pulled.x, pulled.y);
+}
 
 export default function App() {
   const [prefs, setPrefsState] = useState<Prefs>(() => {
@@ -44,8 +57,11 @@ export default function App() {
   const mode = state.config.modes.prospector;
   const baseStats = mode.ships[p.colour];
   const sc = score(state);
-  const interactive = !activeIsBot && !needPassGate;
+  const inSetup = s.setup.open;
+  const interactive = !inSetup && !activeIsBot && !needPassGate;
   const overLimit = afford.overLimit;
+  // turn 1: the ship must be placed on a base cell before anything else
+  const launchPhase = interactive && !pc && afford.placeCells.length > 0;
 
   // --- hand / combat card helpers -----------------------------------
   const handOwner =
@@ -142,7 +158,7 @@ export default function App() {
   const onCoast = coastAction ? () => dispatch(coastAction) : null;
 
   const radial: RadialAction[] = useMemo(() => {
-    if (!interactive || pc || attackTarget !== null || overLimit) return [];
+    if (!interactive || pc || attackTarget !== null || overLimit || launchPhase) return [];
     const out: RadialAction[] = afford.plainActions
       .filter((a) => a.type !== "endMove")
       .map((a) => ({
@@ -161,16 +177,44 @@ export default function App() {
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, afford, interactive, pc, attackTarget, overLimit]);
+  }, [state, afford, interactive, pc, attackTarget, overLimit, launchPhase]);
 
   // --- board affordances ------------------------------------------
-  const highlight: { cells: Hex[]; kind: "load" | "place" | null } = afford.placeCells.length
-    ? { cells: afford.placeCells, kind: "place" }
-    : afford.loadCells.length
-      ? { cells: afford.loadCells, kind: "load" }
-      : { cells: [], kind: null };
+  const board = boardFor(state);
+  const freeBaseColours = ALL_COLOURS.filter((c) => !s.setup.picks.includes(c));
+  const colourAtCell = (h: Hex): Colour | null => {
+    const k = hexKey(h);
+    return ALL_COLOURS.find((c) => board.baseCells(c).some((b) => hexKey(b) === k)) ?? null;
+  };
+
+  const highlight: { cells: Hex[]; kind: "load" | "place" | "base" | null } = inSetup
+    ? { cells: freeBaseColours.flatMap((c) => [...board.baseCells(c)]), kind: "base" }
+    : afford.placeCells.length
+      ? { cells: afford.placeCells, kind: "place" }
+      : afford.loadCells.length
+        ? { cells: afford.loadCells, kind: "load" }
+        : { cells: [], kind: null };
+
+  // guidance popup: where the next action is, and what it is
+  const popup: { center: Hex; lines: string[] } | null = inSetup
+    ? {
+        center: { q: 0, r: 0 },
+        lines:
+          s.humans > 1
+            ? ["Please select your base", `player ${s.setup.picks.length + 1} of ${s.humans}`]
+            : ["Please select", "your base"],
+      }
+    : launchPhase
+      ? { center: launchAnchor(board, p.colour), lines: ["Select your", "launch cell"] }
+      : null;
+
   const burnPreview = s.burnPreviewFor(hoverCell);
   function onCell(h: Hex) {
+    if (inSetup) {
+      const col = colourAtCell(h);
+      if (col && freeBaseColours.includes(col)) s.pickBase(col);
+      return;
+    }
     const k = hexKey(h);
     if (afford.placeCells.some((c) => hexKey(c) === k)) return dispatch({ type: "placeShip", cell: h });
     if (afford.loadCells.some((c) => hexKey(c) === k)) return dispatch({ type: "loadResource", from: h });
@@ -183,11 +227,17 @@ export default function App() {
       <div className="topbar">
         <h1>Prospector</h1>
         <span className="turn">
-          turn {state.turnNumber} ·{" "}
-          <span className="pill">
-            <i className="swatch" style={{ background: `var(--ship-${p.colour})` }} />
-            {activeIsBot ? `${p.colour} (bot)` : p.colour}
-          </span>
+          {inSetup ? (
+            "new game"
+          ) : (
+            <>
+              turn {state.turnNumber} ·{" "}
+              <span className="pill">
+                <i className="swatch" style={{ background: `var(--ship-${p.colour})` }} />
+                {activeIsBot ? `${p.colour} (bot)` : p.colour}
+              </span>
+            </>
+          )}
         </span>
         <span className="spacer" />
         <button className="ghost" onClick={() => setLogOpen(true)} title="History">
@@ -228,19 +278,23 @@ export default function App() {
           state={state}
           seats={seats}
           scores={sc.byPlayer}
-          highlight={interactive ? highlight : { cells: [], kind: null }}
+          highlight={interactive || inSetup ? highlight : { cells: [], kind: null }}
           burnTargets={interactive ? afford.burnTargets : []}
           driftGhost={interactive ? driftGhost : null}
           burnPreview={interactive ? burnPreview : null}
           radial={radial}
           onCoast={onCoast}
+          popup={popup}
+          world={!inSetup}
           reducedMotion={reducedMotion}
           onCell={onCell}
           onCellHover={setHoverCell}
         />
 
-        {activeIsBot && <div className="board-toast">🤖 {baseStats.name} is playing…</div>}
-        {isWaitingOnBot && !activeIsBot && <div className="board-toast">🤖 waiting on the bot…</div>}
+        {!inSetup && activeIsBot && <div className="board-toast">🤖 {baseStats.name} is playing…</div>}
+        {!inSetup && isWaitingOnBot && !activeIsBot && (
+          <div className="board-toast">🤖 waiting on the bot…</div>
+        )}
         {state.gameOver && (
           <div className="board-toast win">
             Game over — winner: <b>{sc.winnerIds.map((i) => state.players[i]!.colour).join(", ")}</b>
@@ -258,42 +312,6 @@ export default function App() {
       </div>
 
       {logOpen && <LogOverlay state={state} onClose={() => setLogOpen(false)} />}
-
-      {s.setup.open && (
-        <div className="pass setup">
-          <div className="sub">
-            {s.humans === 1
-              ? "Choose your ship"
-              : `Player ${s.setup.picks.length + 1} of ${s.humans} — choose a ship`}
-          </div>
-          <div className="shipgrid">
-            {ALL_COLOURS.map((c) => {
-              const ship = mode.ships[c];
-              const taken = s.setup.picks.includes(c);
-              return (
-                <button key={c} className="shipcard" disabled={taken} onClick={() => s.pickShip(c)}>
-                  <span className="pill" style={{ fontWeight: 700 }}>
-                    <i className="swatch" style={{ background: `var(--ship-${c})` }} />
-                    {ship.name} <span style={{ color: "var(--muted)", fontWeight: 400 }}>({c})</span>
-                  </span>
-                  <span className="shipstats">
-                    <span>{ship.shields} shield</span>
-                    <span>{ship.lasers} laser</span>
-                    <span>{ship.engines} engine</span>
-                    <span>{ship.cargo} cargo</span>
-                    <span>{ship.fuelTanks} fuel</span>
-                    <span>{ship.booster} booster</span>
-                  </span>
-                  {taken && <span className="sub">taken</span>}
-                </button>
-              );
-            })}
-          </div>
-          <div className="sub">
-            {s.bots > 0 && `${s.bots} bot${s.bots === 1 ? "" : "s"} will take random remaining ships.`}
-          </div>
-        </div>
-      )}
 
       {needPassGate && !s.setup.open && (
         <div className="pass">

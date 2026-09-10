@@ -3,6 +3,7 @@ import { hexKey } from "../../engine/hex.js";
 import type { GameState, Hex, Colour, OreColour } from "../../engine/index.js";
 import { Cone, SHIP_VAR, ORE_VAR } from "./kit.js";
 import { BoardFurniture, panelAnchor, PANEL_W, PANEL_H } from "./BoardFurniture.js";
+import { HexPopup } from "./HexPopup.js";
 import type { Seat } from "../../client/index.js";
 
 export const S = 26; // px per unit hex size (pointy-top, matches board.json x/y)
@@ -27,12 +28,16 @@ export interface BoardProps {
   state: GameState;
   seats: readonly Seat[];
   scores: readonly number[];
-  highlight: { cells: Hex[]; kind: "load" | "place" | null };
+  highlight: { cells: Hex[]; kind: "load" | "place" | "base" | null };
   burnTargets: { cell: Hex; cost: number }[];
   driftGhost: { at: Hex; from: Hex } | null;
   burnPreview: { path: Hex[]; cost: number } | null;
   radial: RadialAction[];
   onCoast: (() => void) | null;
+  /** guidance popup drawn in board space; null when no action is pending */
+  popup: { center: Hex; lines: string[] } | null;
+  /** false during base selection: draw only the empty field + highlights + popup */
+  world: boolean;
   reducedMotion: boolean;
   onCell: (h: Hex) => void;
   onCellHover: (h: Hex | null) => void;
@@ -51,6 +56,8 @@ export function Board({
   burnPreview,
   radial,
   onCoast,
+  popup,
+  world,
   reducedMotion,
   onCell,
   onCellHover,
@@ -62,10 +69,12 @@ export function Board({
   // viewBox = field bbox ∪ every ship-panel bbox, + a small margin
   const bx: number[] = [Math.min(...xs), Math.max(...xs)];
   const by: number[] = [Math.min(...ys), Math.max(...ys)];
-  for (const pl of state.players) {
-    const a = panelAnchor(board, pl.colour);
-    bx.push(a.x - PANEL_W / 2, a.x + PANEL_W / 2);
-    by.push(a.y - PANEL_H / 2, a.y + PANEL_H / 2);
+  if (world) {
+    for (const pl of state.players) {
+      const a = panelAnchor(board, pl.colour);
+      bx.push(a.x - PANEL_W / 2, a.x + PANEL_W / 2);
+      by.push(a.y - PANEL_H / 2, a.y + PANEL_H / 2);
+    }
   }
   const m = 24;
   const minx = Math.min(...bx) - m;
@@ -107,16 +116,17 @@ export function Board({
             : c.base
               ? SHIP_VAR[c.base as Colour]
               : "#2b4034";
+        const baseHi = isHi && highlight.kind === "base";
         return (
           <polygon
             key={key}
             points={hexPoints(cx, cy, S * 0.94)}
             fill={fill}
-            fillOpacity={c.base ? 0.85 : 1}
+            fillOpacity={baseHi ? 1 : c.base ? 0.85 : 1}
             stroke={stroke}
-            strokeWidth={c.origin ? 2.5 : isHi ? 2.5 : c.base ? 1.6 : 1}
+            strokeWidth={c.origin ? 2.5 : isHi ? (baseHi ? 3 : 2.5) : c.base ? 1.6 : 1}
             strokeOpacity={c.base ? 0.9 : 1}
-            className={isHi ? "cell-hit" : undefined}
+            className={isHi ? (baseHi ? "cell-hit base-pick" : "cell-hit") : undefined}
             onClick={isHi ? () => onCell({ q: c.q, r: c.r }) : undefined}
             onMouseEnter={isHi ? () => onCellHover({ q: c.q, r: c.r }) : undefined}
             onMouseLeave={isHi ? () => onCellHover(null) : undefined}
@@ -125,7 +135,7 @@ export function Board({
       })}
 
       {/* resources */}
-      {Object.entries(state.board.resources).map(([k, colour]) => {
+      {world && Object.entries(state.board.resources).map(([k, colour]) => {
         const [q, r] = k.split(",").map(Number) as [number, number];
         const { x, y } = px({ q, r });
         return (
@@ -197,7 +207,7 @@ export function Board({
       )}
 
       {/* ships — each in a translated group so position changes tween */}
-      {state.players
+      {world && state.players
         .filter((p) => !p.eliminated)
         .map((p) => {
           const cur = px(p.pose.current);
@@ -277,8 +287,8 @@ export function Board({
         );
       })}
 
-      {/* load / launch markers */}
-      {highlight.cells.map((hx) => {
+      {/* load / launch markers (base picks are shown by the glowing hex itself) */}
+      {highlight.kind !== "base" && highlight.cells.map((hx) => {
         const { x, y } = px(hx);
         return (
           <circle
@@ -299,7 +309,10 @@ export function Board({
       })}
 
       {/* table furniture (ship panels, deck counts) — drawn on top so text stays legible */}
-      <BoardFurniture board={board} state={state} seats={seats} scores={scores} />
+      {world && <BoardFurniture board={board} state={state} seats={seats} scores={scores} />}
+
+      {/* guidance popup — what to do next, anchored in board space */}
+      {popup && <HexPopup center={popup.center} lines={popup.lines} />}
 
       {/* radial action menu around the active ship */}
       {radial.length > 0 && (

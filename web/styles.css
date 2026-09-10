@@ -87,6 +87,23 @@ button.danger { border-color: #6a3a2f; }
 .bottompanel .hand { justify-content: center; }
 .bottompanel .actions { justify-content: center; }
 
+/* hex-shaped guidance popup, drawn in board space */
+.hexpopup polygon {
+  fill: rgba(12, 20, 16, 0.97);
+  stroke: var(--gold);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 10px 26px rgba(0, 0, 0, 0.55));
+}
+.hexpopup text { fill: var(--ink); font-size: 13px; font-weight: 600; letter-spacing: 0.01em; }
+
+/* a base cell you can pick as your start base */
+.base-pick { animation: base-pulse 1.6s ease-in-out infinite; }
+@keyframes base-pulse {
+  0%, 100% { fill-opacity: 0.7; }
+  50% { fill-opacity: 1; }
+}
+
 /* radial action chips around the active ship (inside the board svg) */
 .radial .chip { cursor: pointer; }
 .radial .chip circle { fill: #17251f; stroke: var(--line-strong, #3a444e); stroke-width: 1.6; }
@@ -307,6 +324,7 @@ circle.cell-hit { pointer-events: all; }
 .settings-row { display: flex; align-items: center; justify-content: space-between; font-size: 0.82rem; }
 
 @media (prefers-reduced-motion: reduce) {
-  .ore-chip { animation: none; }
+  .ore-chip, .base-pick { animation: none; }
+  .base-pick { fill-opacity: 1; }
   * { transition: none !important; }
 }
