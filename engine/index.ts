@@ -30,6 +30,7 @@ const DIR_KEYS: Hex[] = [
   { q: 0, r: 1 },
 ];
 
+
 export interface LegalOpts {
   /** engine-booster value the player intends to arm this burn (widens the reachable disc) */
   extraEngines?: number;
@@ -105,8 +106,9 @@ export function legalActions(state: GameState, opts?: LegalOpts): Action[] {
       const stepBudget = Math.min(cap, hardCap) + freeCells;
       const fuelBudget = Math.min(p.fuel + Math.max(0, opts?.extraFuel ?? 0), p.fuelMax);
 
-      // A burn may turn: every cell reachable within `stepBudget` steps over free inner
-      // cells is a candidate. BFS gives the shortest (= cheapest) path to each.
+      // A burn may turn. BFS over inner cells for the shortest (= cheapest) path to each;
+      // it flies OVER other ships, so they don't block the path — only the destination
+      // must be a clear cell. Resources and the field edge still wall it off.
       const startKey = hexKey(p.pose.current);
       const depth = new Map<string, number>([[startKey, 0]]);
       const parent = new Map<string, Hex>();
@@ -117,7 +119,7 @@ export function legalActions(state: GameState, opts?: LegalOpts): Action[] {
         if (d >= stepBudget) continue;
         for (const nb of board.neighbours(cell)) {
           const k = hexKey(nb);
-          if (depth.has(k) || !board.isInner(nb) || !isFree(nb)) continue;
+          if (depth.has(k) || !board.isInner(nb) || resources.has(k)) continue;
           depth.set(k, d + 1);
           parent.set(k, cell);
           queue.push(nb);
@@ -126,6 +128,7 @@ export function legalActions(state: GameState, opts?: LegalOpts): Action[] {
       for (const [k, d] of depth) {
         if (d === 0) continue;
         if (d - Math.min(d, freeCells) > fuelBudget) continue; // can't fuel it
+        if (!isFree(parseHexKey(k))) continue; // can't come to rest on another ship
         const path: Hex[] = [];
         for (let node: Hex | undefined = parseHexKey(k); node && hexKey(node) !== startKey; node = parent.get(hexKey(node))) {
           path.unshift(node);
@@ -260,8 +263,9 @@ export const greedyBot: Bot = (state, rng) => {
       const d = goal ? distance(dest, goal) : 0;
       const speed = distance(dest, p.pose.previous); // leftover velocity after this move
       const runaway = board.isOuter(dest) ? 40 : 0; // don't coast into the outer ring
-      // progress first; only brake hard once we're basically there
-      return d * 6 + (d <= 2 ? speed * 5 : 0) + runaway;
+      // progress first, but always keep some brake pressure so it can actually stop —
+      // then brake hard once we're basically there
+      return d * 6 + speed * 2 + (d <= 3 ? speed * 4 : 0) + runaway;
     };
     type Opt = { action: Action; score: number };
     const opts: Opt[] = burns.map((a) => ({ action: a, score: scoreDest(a.path[a.path.length - 1]!) }));

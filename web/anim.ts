@@ -3,14 +3,12 @@
  * line between them). The engine jumps straight to the new pose; this plays the
  * jump out over time.
  *
- *   drift  — a line grows from the ring out to the drift target. The ring and dot
- *            stay put; the anim is then *held* (frozen at full reach) while the
- *            player picks a burn target or coasts.
- *   slide  — resolves the held drift: ring and dot both move one step, keeping the
- *            line between them. Burn slides the ring to the chosen target; coast
- *            slides it to the drift target.
- *
- * Every phase lasts `phaseMs`, so a whole move is reach + slide = 2 phases.
+ *   drift  — no motion: the ship is *held* at its pre-drift spot (ring + dot +
+ *            tether) while the player picks a burn target or coasts. The green "0"
+ *            ring already marks where the drift would carry it.
+ *   slide  — resolves the held drift over `phaseMs`: ring and dot both move one
+ *            step, keeping the tether between them. Burn slides the ring to the
+ *            chosen target; coast slides it to the drift target.
  */
 import type { GameState, Hex } from "../engine/index.js";
 import { hexEq } from "../engine/hex.js";
@@ -88,23 +86,22 @@ const lerp = (a: XY, b: XY, t: number): XY => ({ x: a.x + (b.x - a.x) * t, y: a.
 export interface MoveFrame {
   dot: XY;
   ring: XY;
-  /** [outer end, ring end] — the marker trims each end back to its own glyph */
-  line: [XY, XY] | null;
+  /** dot ↔ ring — [dot end, ring end]; the marker trims each end to its glyph */
+  tether: [XY, XY] | null;
 }
 
-/** Ring / dot / line for `anim` at time `now`, given a hex→pixel projector. */
+/** Ring / dot / tether for `anim` at time `now`, given a hex→pixel projector. */
 export function moveFrame(anim: MoveAnim, now: number, px: (h: Hex) => XY): MoveFrame {
   const P0 = px(anim.p0);
   const C0 = px(anim.c0);
-  const T = px(anim.target);
-  const u = easeInOut(clamp01((now - anim.startedAt) / anim.phaseMs));
 
   if (anim.kind === "drift") {
-    // ring & dot fixed; the line reaches out from the ring to the drift target
-    return { dot: P0, ring: C0, line: [lerp(C0, T, u), C0] };
+    // held: nothing moves, the tether just stays between the fixed dot and ring
+    return { dot: P0, ring: C0, tether: [P0, C0] };
   }
-  // slide: both ends move one step, line stays between them
+  // slide: both ends move one step, tether stays between them
+  const u = easeInOut(clamp01((now - anim.startedAt) / anim.phaseMs));
   const dot = lerp(P0, C0, u);
-  const ring = lerp(C0, T, u);
-  return { dot, ring, line: [dot, ring] };
+  const ring = lerp(C0, px(anim.target), u);
+  return { dot, ring, tether: [dot, ring] };
 }

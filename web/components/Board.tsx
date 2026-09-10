@@ -174,15 +174,15 @@ export function Board({
   };
 
   const active = state.players[state.activePlayerIndex]!;
-  const activeColour = SHIP_VAR[active.colour];
   const activeAt = px(active.pose.current);
 
-  // drive the move animation with rAF; end it (and let the timers resume) when done
+  // drive the slide animation with rAF; end it (and let the timers resume) when done.
+  // a held "drift" has no motion — it just sits there, so it needs no loop.
   const [, forceFrame] = useReducer((n: number) => n + 1, 0);
   const endRef = useRef(onMoveAnimEnd);
   endRef.current = onMoveAnimEnd;
   useEffect(() => {
-    if (!moveAnim) return;
+    if (!moveAnim || moveAnim.kind === "drift") return;
     let raf = 0;
     const loop = () => {
       if (animDone(moveAnim, performance.now())) {
@@ -268,18 +268,6 @@ export function Board({
         );
       })}
 
-      {/* drift preview: where the ship will coast if it drifts now */}
-      {driftGhost && !moveAnim && (() => {
-        const a = px(driftGhost.from);
-        const b = px(driftGhost.at);
-        return (
-          <g pointerEvents="none" opacity={0.55}>
-            <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={activeColour} strokeWidth={1.5} strokeDasharray="2 4" />
-            <circle cx={b.x} cy={b.y} r={S * 0.42} fill="none" stroke={activeColour} strokeWidth={1.6} strokeDasharray="3 3" />
-          </g>
-        );
-      })()}
-
       {/* burn hover: the path and its fuel cost */}
       {burnPreview && burnPreview.path.length > 0 && (
         <g pointerEvents="none">
@@ -316,39 +304,29 @@ export function Board({
           const isActive = p.id === state.activePlayerIndex;
           if (moveAnim && moveAnim.playerId === p.id) {
             const f = moveFrame(moveAnim, performance.now(), px);
-            return <ShipMarker key={`ship-${p.id}`} colour={p.colour} ring={f.ring} dot={f.dot} line={f.line} active={isActive} />;
+            return (
+              <ShipMarker key={`ship-${p.id}`} colour={p.colour} ring={f.ring} dot={f.dot}
+                tether={f.tether} active={isActive} />
+            );
           }
           const ring = px(p.pose.current);
           const dot = px(p.pose.previous);
           const moving = !p.pose.atRest && !(dot.x === ring.x && dot.y === ring.y);
           return (
             <ShipMarker key={`ship-${p.id}`} colour={p.colour} ring={ring} dot={dot}
-              line={moving ? [dot, ring] : null} active={isActive} />
+              tether={moving ? [dot, ring] : null} active={isActive} />
           );
         })}
 
-      {/* coast: end the move where the ship sits now — a green ring on its own cell */}
+      {/* coast: the drift target — a green "0-burn" ring, same size as the burn targets */}
       {onCoast && (
         <g className="cell-hit coast-here" onClick={onCoast}>
-          <title>Coast — end the move here</title>
-          <circle
-            cx={activeAt.x}
-            cy={activeAt.y}
-            r={S * 0.82}
-            fill="var(--ok)"
-            fillOpacity={0.16}
-            stroke="var(--ok)"
-            strokeWidth={3}
-          />
-          <text
-            x={activeAt.x}
-            y={activeAt.y + S * 2.15}
-            textAnchor="middle"
-            fontSize={10}
-            fontWeight={700}
-            fill="var(--ok)"
-          >
-            coast
+          <title>Coast — drift here, no burn</title>
+          <circle cx={activeAt.x} cy={activeAt.y} r={S * 0.6}
+            fill="var(--ok)" fillOpacity={0.14} stroke="var(--ok)" strokeWidth={2.6} />
+          <text x={activeAt.x} y={activeAt.y + 4} textAnchor="middle"
+            fontSize={11} fontWeight={700} fill="var(--ok)">
+            0
           </text>
         </g>
       )}

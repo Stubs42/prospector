@@ -80,15 +80,23 @@ export function burn(
   const cap = engineCap + freeAvail;
   if (cells > cap) return { ok: false, error: `burn of ${cells} exceeds cap ${cap}` };
 
-  // The burn may turn — the path is any chain of adjacent cells, each a free inner-field
-  // cell — not necessarily a straight line.
+  // The burn flies over the cells in between — other ships / resources there don't block
+  // it; they only mustn't leave the board. The destination must be a clear inner cell.
   let prev = pose.current;
-  for (const step of path) {
+  for (let i = 0; i < path.length; i++) {
+    const step = path[i]!;
+    const last = i === path.length - 1;
     if (!areNeighbours(prev, step)) {
       return { ok: false, error: "burn path is not a chain of adjacent cells" };
     }
-    if (!board.isInner(step) || !isFreeAt(step)) {
-      return { ok: false, error: `burn passes through blocked cell ${step.q},${step.r}` };
+    if (board.offField(step)) {
+      return { ok: false, error: `burn leaves the field at ${step.q},${step.r}` };
+    }
+    if (last && !board.isInner(step)) {
+      return { ok: false, error: `burn must end on an inner cell, not ${step.q},${step.r}` };
+    }
+    if (last && !isFreeAt(step)) {
+      return { ok: false, error: `burn ends on a blocked cell ${step.q},${step.r}` };
     }
     prev = step;
   }

@@ -40,23 +40,23 @@ function backOff(p: XY, q: XY, by: number): XY {
   return { x: p.x + (dx / len) * by, y: p.y + (dy / len) * by };
 }
 
-export function ShipMarker({ colour, ring, dot, line, active, shape = "ring" }: {
+export function ShipMarker({ colour, ring, dot, tether, active, shape = "ring" }: {
   colour: Colour;
   ring: XY;
   dot: XY;
-  /** [outer end, ring end] — trimmed here so it meets the ring's edge, not its centre */
-  line: [XY, XY] | null;
+  /** dot ↔ ring — [dot end, ring end]; trimmed so it meets each glyph's edge */
+  tether: [XY, XY] | null;
   active: boolean;
   shape?: ShipShape;
 }) {
   const c = SHIP_VAR[colour];
-  const seg = line
-    ? [backOff(line[0], line[1], DOT_R), backOff(line[1], line[0], RING_R)]
+  const t = tether
+    ? [backOff(tether[0], tether[1], DOT_R), backOff(tether[1], tether[0], RING_R)]
     : null;
   return (
     <g className="ship-marker" pointerEvents="none">
-      {seg && (
-        <line x1={seg[0]!.x} y1={seg[0]!.y} x2={seg[1]!.x} y2={seg[1]!.y}
+      {t && (
+        <line x1={t[0]!.x} y1={t[0]!.y} x2={t[1]!.x} y2={t[1]!.y}
           stroke={c} strokeWidth={2} strokeLinecap="round" opacity={0.85} />
       )}
       {active && <circle cx={ring.x} cy={ring.y} r={S * 0.72} fill={c} fillOpacity={0.09} />}

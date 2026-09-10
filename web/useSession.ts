@@ -53,10 +53,11 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
 
   function playAnim(a: MoveAnim | null) {
     setMoveAnim(a);
-    setAnimLive(a != null);
+    // a "drift" doesn't animate — it just holds the ship in place while burn targets
+    // show — so it never blocks the timers; only a running slide does.
+    setAnimLive(a != null && a.kind !== "drift");
   }
   function endAnim() {
-    // a finished drift stays on screen (frozen at full reach) until the slide resolves it
     setMoveAnim((a) => (a && a.kind === "drift" ? a : null));
     setAnimLive(false);
   }
