@@ -54,6 +54,8 @@ export default function App() {
 
   const pc = state.pendingCombat;
   const p = state.players[state.activePlayerIndex]!;
+  const board = boardFor(state);
+  const onOwnBase = board.baseOwnerAt(p.pose.current) === p.colour;
   const mode = state.config.modes.prospector;
   const baseStats = mode.ships[p.colour];
   const sc = score(state);
@@ -160,7 +162,8 @@ export default function App() {
   const radial: RadialAction[] = useMemo(() => {
     if (!interactive || pc || attackTarget !== null || overLimit || launchPhase) return [];
     const out: RadialAction[] = afford.plainActions
-      .filter((a) => a.type !== "endMove")
+      // "coast" is the green ship-cell circle; scrapping on your own base is pointless
+      .filter((a) => a.type !== "endMove" && !(a.type === "scrapShip" && onOwnBase))
       .map((a) => ({
         id: a.type,
         label: CHIP_LABEL[a.type] ?? a.type,
@@ -177,10 +180,9 @@ export default function App() {
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, afford, interactive, pc, attackTarget, overLimit, launchPhase]);
+  }, [state, afford, interactive, pc, attackTarget, overLimit, launchPhase, onOwnBase]);
 
   // --- board affordances ------------------------------------------
-  const board = boardFor(state);
   const freeBaseColours = ALL_COLOURS.filter((c) => !s.setup.picks.includes(c));
   const colourAtCell = (h: Hex): Colour | null => {
     const k = hexKey(h);
