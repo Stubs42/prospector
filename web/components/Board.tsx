@@ -126,7 +126,8 @@ export function Board({
   }, [zoomBy]);
 
   const onPointerDown = (e: RPointerEvent<SVGSVGElement>) => {
-    if (e.button !== 0) return;
+    if (e.button !== 1) return; // middle-drag pans; left stays free for board clicks
+    e.preventDefault();
     pannedRef.current = false;
     dragRef.current = { x: e.clientX, y: e.clientY, cx: v.cx, cy: v.cy, moved: false };
   };
@@ -147,6 +148,7 @@ export function Board({
   };
   const endPan = (e: RPointerEvent<SVGSVGElement>) => {
     dragRef.current = null;
+    pannedRef.current = false;
     if (svgRef.current?.hasPointerCapture(e.pointerId)) svgRef.current.releasePointerCapture(e.pointerId);
   };
 
@@ -176,6 +178,8 @@ export function Board({
       height="100%"
       preserveAspectRatio="xMidYMid meet"
       style={{ touchAction: "none", cursor: dragRef.current?.moved ? "grabbing" : "default" }}
+      onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}
+      onAuxClick={(e) => { if (e.button === 1) e.preventDefault(); }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={endPan}
