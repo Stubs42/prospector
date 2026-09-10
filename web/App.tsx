@@ -313,6 +313,12 @@ export default function App() {
           combatTitle={combatTitle}
           combatSub={combatSub}
           buttons={buttons}
+          equipment={
+            interactive && afford.equipmentChoice
+              ? afford.equipmentChoice.map((c) => ({ id: c.id, stat: c.stat, amount: c.amount, effect: c.effect }))
+              : []
+          }
+          onEquip={(id) => dispatch({ type: "chooseEquipment", cardId: id })}
         />
       </div>
 

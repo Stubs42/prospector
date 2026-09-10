@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { createGame, applyAction } from "./game.js";
+import { legalActions } from "./index.js";
 import type { Action, GameState, OreColour } from "./types.js";
 
 /**
@@ -85,6 +86,12 @@ describe("worked example — yellow's out-and-back", () => {
     s = run(s, { type: "drift" }); // at rest, no-op
     s = run(s, { type: "burn", path: [{ q: -8, r: 8 }] }); // onto a yellow base cell
     s = run(s, { type: "endMove" });
+
+    // homecoming offers three upgrades — pick one
+    const offer = legalActions(s).filter((a) => a.type === "chooseEquipment");
+    expect(offer.length).toBe(3);
+    expect(s.pendingEquipment?.playerId).toBe(0);
+    s = run(s, offer[0]!);
 
     expect(Y().pose.atRest).toBe(true); // braked at base
     expect(Y().fuel).toBe(Y().fuelMax); // refuelled

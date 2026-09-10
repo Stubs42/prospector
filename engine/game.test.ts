@@ -63,6 +63,44 @@ describe("a hand-driven turn", () => {
   });
 });
 
+describe("homecoming upgrade pick", () => {
+  it("a delivery pauses for a 3-card equipment choice, then applies it", () => {
+    let s = createGame({ seed: 8, colours: ["yellow", "black"], startPlayer: 0 });
+    const Y = () => s.players[0]!;
+    Y().pose = { current: { q: -7, r: 7 }, previous: { q: -7, r: 7 }, atRest: true };
+    Y().cargo = ["red"];
+    s = run(s, { type: "drawBooster" });
+    while (Y().hand.length > 3) s = run(s, { type: "discardBooster", cardId: Y().hand[0]!.id });
+    s = run(s, { type: "drift" });
+    s = run(s, { type: "burn", path: [{ q: -8, r: 8 }] }); // onto a yellow base cell
+    s = run(s, { type: "endMove" });
+
+    // paused on the choice — nothing else is legal
+    expect(s.pendingEquipment).not.toBeNull();
+    expect(s.pendingEquipment!.playerId).toBe(0);
+    const acts = legalActions(s);
+    expect(acts).toHaveLength(3);
+    expect(acts.every((a) => a.type === "chooseEquipment")).toBe(true);
+    expect(applyAction(s, { type: "endTurn" }).ok).toBe(false);
+
+    const equipBefore = Y().equipment.length;
+    const chosen = s.pendingEquipment!.cards[1]!;
+    const others = s.pendingEquipment!.cards.filter((c) => c.id !== chosen.id).map((c) => c.id);
+    s = run(s, { type: "chooseEquipment", cardId: chosen.id });
+
+    expect(s.pendingEquipment).toBeNull();
+    expect(s.phase).toBe("moved");
+    expect(Y().equipment.length).toBe(equipBefore + 1);
+    expect(Y().equipment.map((c) => c.id)).toContain(chosen.id);
+    // the other two went to the bottom of the equipment draw pile
+    const bottom = s.decks.equipment.draw.slice(-2).map((c) => c.id);
+    expect(bottom.sort()).toEqual([...others].sort());
+    // the choice resolved a real move — the turn can now end
+    s = run(s, { type: "endTurn" });
+    expect(s.activePlayerIndex).toBe(1);
+  });
+});
+
 describe("launch base-cell choice", () => {
   it("lets the player pick any of their base cells on the first turn, once", () => {
     let s = createGame({ seed: 8, colours: ["green", "black"], startPlayer: 0 });

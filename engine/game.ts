@@ -41,6 +41,7 @@ import type {
   BoosterCard,
   Colour,
   Config,
+  EquipmentCard,
   GameState,
   OreColour,
   PlayerState,
@@ -134,6 +135,7 @@ export function createGame(opts: CreateGameOptions = {}): GameState {
     },
     phase: "start",
     pendingCombat: null,
+    pendingEquipment: null,
     log: [],
     gameOver: false,
     winnerIds: null,
@@ -356,33 +358,40 @@ function arriveHomeBaseIfAny(state: GameState, board: BoardModel, p: PlayerState
     p.cargo = [];
     log(state, "delivered", { player: p.id, tiles: delivered });
 
-    // choose one equipment: draw N, keep first, bottom the rest
-    withRng(state, (rng) => {
-      const { cards, deck } = drawN(
-        state.decks.equipment,
-        mode.homeBase.equipmentDraw,
-        rng,
-        state.config.core.cards.reshuffleDiscardWhenEmpty,
-      );
-      state.decks.equipment = deck;
-      if (cards.length > 0) {
-        const keep = cards[0]!;
-        p.equipment.push(keep);
-        if (keep.stat === "fuelTanks") {
-          const grant = keep.grantFuel ?? keep.amount;
-          p.fuelMax += keep.amount;
-          p.fuel = Math.min(p.fuel + grant, p.fuelMax);
-        }
-        state.decks.equipment = bottomCards(state.decks.equipment, cards.slice(1));
-        log(state, "equipped", { player: p.id, card: keep.id });
-      }
-    });
-
     // seed one new tile per tile delivered, while supply lasts
     seedN(state, board, delivered.length);
+    checkEnd(state);
+
+    // homecoming reward: draw N equipment cards and let the player pick one
+    // (resolved by the `chooseEquipment` action). If the game just ended, skip it.
+    if (!state.gameOver) {
+      withRng(state, (rng) => {
+        const { cards, deck } = drawN(
+          state.decks.equipment,
+          mode.homeBase.equipmentDraw,
+          rng,
+          state.config.core.cards.reshuffleDiscardWhenEmpty,
+        );
+        state.decks.equipment = deck;
+        if (cards.length > 0) {
+          state.pendingEquipment = { playerId: p.id, cards };
+        }
+      });
+    }
+    return;
   }
 
   checkEnd(state);
+}
+
+/** apply a chosen equipment card to a player's ship — permanent stat bump + fuel-tank refit */
+function equipCard(p: PlayerState, card: EquipmentCard): void {
+  p.equipment.push(card);
+  if (card.stat === "fuelTanks") {
+    const grant = card.grantFuel ?? card.amount;
+    p.fuelMax += card.amount;
+    p.fuel = Math.min(p.fuel + grant, p.fuelMax);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -425,7 +434,29 @@ export function applyAction(prev: GameState, action: Action): StepResult {
     return picked;
   };
 
+  if (state.pendingEquipment && action.type !== "chooseEquipment") {
+    return fail("choose an upgrade first");
+  }
+
   switch (action.type) {
+    // ---- homecoming upgrade pick -----------------------------------------
+    case "chooseEquipment": {
+      const pe = state.pendingEquipment;
+      if (!pe) return fail("no upgrade choice pending");
+      const keep = pe.cards.find((c) => c.id === action.cardId);
+      if (!keep) return fail("not one of the offered upgrades");
+      const pl = state.players[pe.playerId]!;
+      equipCard(pl, keep);
+      state.decks.equipment = bottomCards(
+        state.decks.equipment,
+        pe.cards.filter((c) => c.id !== action.cardId),
+      );
+      log(state, "equipped", { player: pe.playerId, card: keep.id, stat: keep.stat, amount: keep.amount });
+      state.pendingEquipment = null;
+      state.phase = "moved";
+      return done();
+    }
+
     // ---- start phase -------------------------------------------------------
     case "placeShip": {
       if (state.phase !== "start" || p.turn.boosterDrawn) return fail("too late to choose a launch cell");
@@ -567,6 +598,7 @@ export function applyAction(prev: GameState, action: Action): StepResult {
       }
       arriveHomeBaseIfAny(state, board, p);
       if (state.gameOver) return done();
+      if (state.pendingEquipment) return done(); // wait for the upgrade pick
       state.phase = "moved";
       return done();
     }
@@ -755,6 +787,7 @@ function advanceOrMoved(state: GameState, board: BoardModel): StepResult {
   if (p.eliminated) return advanceTurn(state, board);
   arriveHomeBaseIfAny(state, board, p);
   if (state.gameOver) return { state, ok: true };
+  if (state.pendingEquipment) return { state, ok: true }; // wait for the upgrade pick
   state.phase = "moved";
   return { state, ok: true };
 }

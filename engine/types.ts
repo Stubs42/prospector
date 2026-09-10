@@ -197,6 +197,8 @@ export interface GameState {
   };
   phase: TurnPhase;
   pendingCombat: PendingCombat | null;
+  /** a homecoming delivery is offering these equipment cards; one must be chosen */
+  pendingEquipment: { playerId: number; cards: EquipmentCard[] } | null;
   log: LogEntry[];
   gameOver: boolean;
   winnerIds: number[] | null;
@@ -227,6 +229,7 @@ export type Action =
   | { type: "combatDefend"; shieldBoosters?: string[]; hyperspaceBoosterId?: string }
   | { type: "combatResolve" }
   | { type: "declineCounter" }
+  | { type: "chooseEquipment"; cardId: string }
   | { type: "endTurn" };
 
 export interface StepResult {

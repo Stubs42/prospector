@@ -64,6 +64,10 @@ export function legalActions(state: GameState, opts?: LegalOpts): Action[] {
     return out2;
   }
 
+  if (state.pendingEquipment) {
+    return state.pendingEquipment.cards.map((c) => ({ type: "chooseEquipment", cardId: c.id }));
+  }
+
   const out: Action[] = [];
   const resources = new Set(Object.keys(state.board.resources));
   const otherCurrents = state.players
@@ -196,6 +200,21 @@ export const greedyBot: Bot = (state, rng) => {
   const p = state.players[state.activePlayerIndex]!;
   const board = boardFor(state);
   const byType = (t: Action["type"]) => acts.filter((a) => a.type === t);
+
+  // homecoming upgrade pick: take the biggest bump, avoiding a stat already at its cap
+  const eq = byType("chooseEquipment") as Extract<Action, { type: "chooseEquipment" }>[];
+  if (eq.length && state.pendingEquipment) {
+    const caps = state.config.modes.prospector.upgradeCaps;
+    const cur = statsOf(state, p);
+    const cardOf = (id: string) => state.pendingEquipment!.cards.find((c) => c.id === id)!;
+    const worth = (id: string) => {
+      const c = cardOf(id);
+      const cap = caps[c.stat];
+      const room = cap === undefined ? c.amount : Math.max(0, cap - cur[c.stat]);
+      return Math.min(c.amount, room);
+    };
+    return eq.reduce((b, a) => (worth(a.cardId) > worth(b.cardId) ? a : b));
+  }
 
   const carrying = p.cargo.length > 0;
   const onOwnBase = board.baseOwnerAt(p.pose.current) === p.colour;

@@ -213,6 +213,10 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
         if (r.ok) s = r.state;
       }
     }
+    if (qs.get("equip") === "1" && s.decks.equipment.draw.length >= 3) {
+      // preview the homecoming upgrade picker without playing a full delivery
+      s = { ...s, pendingEquipment: { playerId: s.activePlayerIndex, cards: s.decks.equipment.draw.slice(0, 3) } };
+    }
     setState(s);
     setShownPlayer(s.activePlayerIndex);
     setSeats(Array<Seat>(s.players.length).fill("human"));
