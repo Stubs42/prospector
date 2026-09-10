@@ -79,6 +79,15 @@ button.danger { border-color: #6a3a2f; }
 }
 .zoomctl button:hover { border-color: var(--gold); color: var(--gold); }
 
+.board-tip {
+  position: absolute; z-index: 30; pointer-events: none;
+  transform: translate(12px, -130%);
+  background: rgba(10, 18, 14, 0.97); border: 1px solid var(--line-strong, var(--line));
+  color: var(--ink); font-size: 0.72rem; white-space: nowrap;
+  padding: 0.28rem 0.5rem; border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+
 .board-toast {
   position: absolute; left: 50%; top: 12px; transform: translateX(-50%);
   z-index: 20;

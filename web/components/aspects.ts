@@ -33,5 +33,15 @@ export const ASPECT_LABEL: Record<StatKey, string> = {
   booster: "cards",
 };
 
+/** 3-letter tag printed on the board token */
+export const ASPECT_TAG: Record<StatKey, string> = {
+  engines: "ENG",
+  cargo: "FRT",
+  lasers: "LAS",
+  shields: "SHD",
+  fuelTanks: "FUE",
+  booster: "CRD",
+};
+
 /** left-to-right order of the six stat cells around a base */
 export const ASPECT_ORDER: StatKey[] = ["shields", "lasers", "engines", "fuelTanks", "cargo", "booster"];

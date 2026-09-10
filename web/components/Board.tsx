@@ -3,7 +3,7 @@ import { boardFor } from "../../engine/game.js";
 import { hexKey } from "../../engine/hex.js";
 import type { GameState, Hex, Colour, OreColour } from "../../engine/index.js";
 import { Cone, SHIP_VAR, ORE_VAR } from "./kit.js";
-import { BaseInfo } from "./BaseInfo.js";
+import { BaseInfo, type TipFn } from "./BaseInfo.js";
 import { HexPopup } from "./HexPopup.js";
 import type { Seat } from "../../client/index.js";
 
@@ -148,6 +148,13 @@ export function Board({
   const endPan = (e: RPointerEvent<SVGSVGElement>) => {
     dragRef.current = null;
     if (svgRef.current?.hasPointerCapture(e.pointerId)) svgRef.current.releasePointerCapture(e.pointerId);
+  };
+
+  const [tip, setTip] = useState<{ text: string; x: number; y: number } | null>(null);
+  const onTip: TipFn = (text, e) => {
+    if (!text || dragRef.current?.moved) { setTip(null); return; }
+    const r = svgRef.current?.getBoundingClientRect();
+    setTip({ text, x: e.clientX - (r?.left ?? 0), y: e.clientY - (r?.top ?? 0) });
   };
 
   const hi = new Set(highlight.cells.map(hexKey));
@@ -391,7 +398,7 @@ export function Board({
       })}
 
       {/* table furniture (ship panels, deck counts) — drawn on top so text stays legible */}
-      {world && <BaseInfo board={board} state={state} seats={seats} scores={scores} />}
+      {world && <BaseInfo board={board} state={state} seats={seats} scores={scores} onTip={onTip} />}
 
       {/* guidance popup — what to do next, anchored in board space */}
       {popup && <HexPopup center={popup.center} lines={popup.lines} />}
@@ -420,6 +427,11 @@ export function Board({
         </g>
       )}
     </svg>
+      {tip && (
+        <div className="board-tip" style={{ left: tip.x, top: tip.y }}>
+          {tip.text}
+        </div>
+      )}
       <div className="zoomctl">
         <button type="button" aria-label="zoom out" onClick={() => zoomBy(1 / 1.3)}>–</button>
         <button type="button" aria-label="fit board" onClick={fit}>⤢</button>

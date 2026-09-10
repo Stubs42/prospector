@@ -8,6 +8,7 @@
  * Each aspect keeps its shared colour (see aspects.ts): a coloured hexagon with
  * the installed count, shown as "2" or "2+1" when an upgrade is stacked on top.
  */
+import { type ReactNode, type MouseEvent as RMouseEvent } from "react";
 import { statsOf } from "../../engine/index.js";
 import type { GameState, Colour, OreColour, StatKey } from "../../engine/index.js";
 import type { BoardModel, BoardCell } from "../../engine/board.js";
@@ -15,7 +16,7 @@ import { distance } from "../../engine/hex.js";
 import type { Seat } from "../../client/index.js";
 import { S } from "./geo.js";
 import { SHIP_VAR, ORE_VAR } from "./kit.js";
-import { ASPECT_FILL, ASPECT_LABEL, ASPECT_ORDER } from "./aspects.js";
+import { ASPECT_FILL, ASPECT_LABEL, ASPECT_TAG, ASPECT_ORDER } from "./aspects.js";
 
 const GOLD = "#e6b03c";
 const norm = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -54,91 +55,102 @@ function outerArcs(board: BoardModel, colour: Colour) {
   return { near: arc(board.innerRadius + 1), far: arc(board.radius) };
 }
 
-const TOK = S * 0.66; // token hexagon radius — sits inside its board cell with a gap
+const TOK = S * 0.72; // token hexagon radius — sits inside its board cell with a gap
 const DARK = "#0a120e";
 
-/** a coloured-outline token: dark hex, aspect-colour ring + number */
-function Token({ c, col, main, sub, active, title }: {
-  c: BoardCell; col: string; main: string; sub?: string; active: boolean; title: string;
-}) {
-  const x = c.x * S;
-  const y = c.y * S;
+export type TipFn = (text: string | null, e: RMouseEvent) => void;
+
+/** hover target that reports its tooltip text up to the board */
+function Hoverable({ tip, onTip, children }: { tip: string; onTip: TipFn; children: ReactNode }) {
   return (
-    <g>
-      <title>{title}</title>
-      <polygon points={hexPts(x, y, TOK)} fill={DARK} stroke={col} strokeWidth={active ? 2.4 : 1.5} />
-      <text x={x} y={sub ? y - S * 0.08 : y} textAnchor="middle" dominantBaseline="central"
-        fill={col} fontWeight={800} fontSize={main.length > 2 ? S * 0.4 : S * 0.58}>
-        {main}
-      </text>
-      {sub && (
-        <text x={x} y={y + S * 0.34} textAnchor="middle" fill={col} opacity={0.75} fontSize={S * 0.24}>
-          {sub}
-        </text>
-      )}
+    <g onMouseMove={(e) => onTip(tip, e)} onMouseLeave={(e) => onTip(null, e)} style={{ cursor: "help" }}>
+      {children}
     </g>
   );
 }
 
-function AspectHex({ c, stat, base, delta, active }: {
-  c: BoardCell; stat: StatKey; base: number; delta: number; active: boolean;
+/** dark hex, coloured ring, 3-letter tag + value */
+function Token({ c, col, tag, value, ink, active, tip, onTip }: {
+  c: BoardCell; col: string; tag: string; value: string; ink?: string; active: boolean; tip: string; onTip: TipFn;
 }) {
+  const x = c.x * S;
+  const y = c.y * S;
   return (
-    <Token c={c} col={ASPECT_FILL[stat]} active={active}
-      main={delta > 0 ? `${base}+${delta}` : `${base + delta}`}
-      title={`${ASPECT_LABEL[stat]}: ${base}${delta > 0 ? ` +${delta} upgrade` : ""}`} />
+    <Hoverable tip={tip} onTip={onTip}>
+      <polygon points={hexPts(x, y, TOK)} fill={ink ? col : DARK} stroke={col} strokeWidth={active ? 2.6 : 1.4} />
+      <text x={x} y={y - TOK * 0.44} textAnchor="middle" fill={ink ?? col} opacity={0.85}
+        fontSize={S * 0.2} fontWeight={700} style={{ letterSpacing: "0.08em" }}>
+        {tag}
+      </text>
+      <text x={x} y={y + TOK * 0.16} textAnchor="middle" dominantBaseline="central"
+        fill={ink ?? col} fontWeight={800} fontSize={value.length > 2 ? S * 0.4 : S * 0.56}>
+        {value}
+      </text>
+    </Hoverable>
   );
 }
 
-function OreHex({ c, ores, label }: { c: BoardCell; ores: OreColour[]; label: string }) {
+function AspectHex({ c, stat, base, delta, active, onTip }: {
+  c: BoardCell; stat: StatKey; base: number; delta: number; active: boolean; onTip: TipFn;
+}) {
+  return (
+    <Token c={c} col={ASPECT_FILL[stat]} tag={ASPECT_TAG[stat]} active={active} onTip={onTip}
+      value={delta > 0 ? `${base}+${delta}` : `${base + delta}`}
+      tip={`${ASPECT_LABEL[stat]} — ${base} installed${delta > 0 ? ` + ${delta} from upgrades = ${base + delta}` : ""}`} />
+  );
+}
+
+function OreHex({ c, ores, tag, tip, onTip }: {
+  c: BoardCell; ores: OreColour[]; tag: string; tip: string; onTip: TipFn;
+}) {
   const x = c.x * S;
   const y = c.y * S;
   const n = Math.min(ores.length, 6);
   return (
-    <g>
-      <title>{`${label}: ${ores.length ? ores.join(", ") : "none"}`}</title>
-      <polygon points={hexPts(x, y, TOK)} fill={DARK} stroke="#3a4a41" strokeWidth={1.4} />
-      <text x={x} y={y - S * 0.32} textAnchor="middle" fill="#7c8b83" fontSize={S * 0.2}>{label}</text>
+    <Hoverable tip={`${tip}: ${ores.length ? ores.join(", ") : "none"}`} onTip={onTip}>
+      <polygon points={hexPts(x, y, TOK)} fill={DARK} stroke="#3a4a41" strokeWidth={1.3} />
+      <text x={x} y={y - TOK * 0.44} textAnchor="middle" fill="#8b9a91" fontSize={S * 0.2}
+        fontWeight={700} style={{ letterSpacing: "0.08em" }}>{tag}</text>
       {n === 0 ? (
-        <text x={x} y={y + S * 0.16} textAnchor="middle" fill="#4b574f" fontSize={S * 0.34}>–</text>
+        <text x={x} y={y + TOK * 0.2} textAnchor="middle" fill="#4b574f" fontSize={S * 0.34}>–</text>
       ) : (
         ores.slice(0, 6).map((o, i) => (
-          <circle key={i} cx={x + (i - (n - 1) / 2) * S * 0.34} cy={y + S * 0.14}
+          <circle key={i} cx={x + (i - (n - 1) / 2) * S * 0.32} cy={y + TOK * 0.18}
             r={S * 0.13} fill={ORE_VAR[o]} stroke="#000" strokeOpacity={0.3} />
         ))
       )}
-    </g>
+    </Hoverable>
   );
 }
 
-function IdentityHex({ c, name, seat, colour, active }: {
-  c: BoardCell; name: string; seat: Seat; colour: Colour; active: boolean;
+function IdentityHex({ c, name, seat, colour, active, onTip }: {
+  c: BoardCell; name: string; seat: Seat; colour: Colour; active: boolean; onTip: TipFn;
 }) {
   const x = c.x * S;
   const y = c.y * S;
   return (
-    <g>
-      <polygon points={hexPts(x, y, S * 0.86)} fill={DARK}
-        stroke={SHIP_VAR[colour]} strokeWidth={active ? 3 : 1.6} />
-      <circle cx={x} cy={y - S * 0.44} r={S * 0.12} fill={SHIP_VAR[colour]} />
-      <text x={x} y={y + S * 0.04} textAnchor="middle" fill="#eef2ef" fontWeight={800} fontSize={S * 0.3}>
+    <Hoverable tip={`${name} — ${seat === "bot" ? "bot" : "you"}${active ? " · to move" : ""}`} onTip={onTip}>
+      <polygon points={hexPts(x, y, S * 0.92)} fill={DARK}
+        stroke={SHIP_VAR[colour]} strokeWidth={active ? 3.2 : 1.6} />
+      <circle cx={x} cy={y - S * 0.46} r={S * 0.12} fill={SHIP_VAR[colour]} />
+      <text x={x} y={y + S * 0.06} textAnchor="middle" fill="#eef2ef" fontWeight={800} fontSize={S * 0.32}>
         {name}
       </text>
-      <text x={x} y={y + S * 0.42} textAnchor="middle" fill="#9fb0a6" fontSize={S * 0.22}
+      <text x={x} y={y + S * 0.46} textAnchor="middle" fill="#9fb0a6" fontSize={S * 0.22}
         style={{ letterSpacing: "0.14em" }}>
         {seat === "bot" ? "BOT" : "YOU"}
       </text>
-    </g>
+    </Hoverable>
   );
 }
 
-export function BaseInfo({ board, state, seats, scores }: {
-  board: BoardModel; state: GameState; seats: readonly Seat[]; scores: readonly number[];
+export function BaseInfo({ board, state, seats, scores, onTip }: {
+  board: BoardModel; state: GameState; seats: readonly Seat[]; scores: readonly number[]; onTip: TipFn;
 }) {
   const mode = state.config.modes.prospector;
 
   return (
-    <g className="baseinfo" pointerEvents="none">
+    <g className="baseinfo">
       {state.players
         .filter((p) => !p.eliminated)
         .map((p) => {
@@ -156,43 +168,37 @@ export function BaseInfo({ board, state, seats, scores }: {
 
           return (
             <g key={`bi-${p.id}`}>
-              <IdentityHex c={near.cells[nm]!} name={baseShip.name} seat={seats[p.id]!} colour={p.colour} active={active} />
+              <IdentityHex c={near.cells[nm]!} name={baseShip.name} seat={seats[p.id]!} colour={p.colour} active={active} onTip={onTip} />
 
               {ASPECT_ORDER.map((stat, i) => {
                 const cell = statCells[i];
                 if (!cell) return null;
                 return (
                   <AspectHex key={stat} c={cell} stat={stat} base={baseShip[stat]}
-                    delta={stats[stat] - baseShip[stat]} active={active} />
+                    delta={stats[stat] - baseShip[stat]} active={active} onTip={onTip} />
                 );
               })}
 
-              {farAt(-3) && <OreHex c={farAt(-3)!} ores={p.delivered} label="saved" />}
-              {farAt(-2) && <OreHex c={farAt(-2)!} ores={p.cargo} label="carried" />}
+              {farAt(-3) && <OreHex c={farAt(-3)!} ores={p.delivered} tag="SAVE" tip="saved at base" onTip={onTip} />}
+              {farAt(-2) && <OreHex c={farAt(-2)!} ores={p.cargo} tag="HOLD" tip="carried in hold" onTip={onTip} />}
               {farAt(-1) && (
-                <Token c={farAt(-1)!} col={ASPECT_FILL.booster} active={active}
-                  main={`${p.hand.length}`} sub={`/${stats.booster}`} title={`cards in hand ${p.hand.length} of ${stats.booster}`} />
+                <Token c={farAt(-1)!} col={ASPECT_FILL.booster} tag="HAND" active={active} onTip={onTip}
+                  value={`${p.hand.length}`} tip={`cards in hand — ${p.hand.length} of ${stats.booster} limit`} />
               )}
               {farAt(0) && (
-                <g>
-                  <title>{`score ${scoreVal}`}</title>
-                  <polygon points={hexPts(farAt(0)!.x * S, farAt(0)!.y * S, TOK)}
-                    fill={GOLD} stroke={active ? "#fff" : "#8a6a1e"} strokeWidth={active ? 2 : 1.2} />
-                  <text x={farAt(0)!.x * S} y={farAt(0)!.y * S} textAnchor="middle" dominantBaseline="central"
-                    fill="#1a1400" fontWeight={800} fontSize={S * 0.58}>
-                    {scoreVal}
-                  </text>
-                </g>
+                <Token c={farAt(0)!} col={GOLD} ink="#1a1400" tag="PTS" active={active} onTip={onTip}
+                  value={`${scoreVal}`} tip={`score — ${scoreVal}`} />
               )}
               {farAt(1) && (
-                <Token c={farAt(1)!} col={ASPECT_FILL.fuelTanks} active={active}
-                  main={`${p.fuel}`} sub={`/${p.fuelMax}`} title={`fuel ${p.fuel} of ${p.fuelMax}`} />
+                <Token c={farAt(1)!} col={ASPECT_FILL.fuelTanks} tag="FUEL" active={active} onTip={onTip}
+                  value={`${p.fuel}`} tip={`fuel in tank — ${p.fuel} of ${p.fuelMax}`} />
               )}
             </g>
           );
         })}
 
       {/* shared supply / deck counts — small text block in the bottom-centre gap */}
+      <g pointerEvents="none">
       {(() => {
         const y0 = 1.5 * board.innerRadius * S * 0.62;
         const rows = [
@@ -210,6 +216,7 @@ export function BaseInfo({ board, state, seats, scores }: {
           </g>
         );
       })()}
+      </g>
     </g>
   );
 }
