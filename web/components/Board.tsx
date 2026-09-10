@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent as RPointerEvent } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState, type PointerEvent as RPointerEvent } from "react";
 import { boardFor } from "../../engine/game.js";
 import { hexKey } from "../../engine/hex.js";
 import type { GameState, Hex, Colour, OreColour } from "../../engine/index.js";
-import { Cone, SHIP_VAR, ORE_VAR } from "./kit.js";
+import { SHIP_VAR, ORE_VAR } from "./kit.js";
 import { BaseInfo, type TipFn } from "./BaseInfo.js";
 import { HexPopup } from "./HexPopup.js";
+import { ShipMarker } from "./ShipMarker.js";
+import { moveFrame, animDone, type MoveAnim } from "../anim.js";
 import type { Seat } from "../../client/index.js";
 
 export { S } from "./geo.js";
@@ -41,6 +43,9 @@ export interface BoardProps {
   /** false during base selection: draw only the empty field + highlights + popup */
   world: boolean;
   reducedMotion: boolean;
+  /** an in-flight move to play out; null when the board is settled */
+  moveAnim: MoveAnim | null;
+  onMoveAnimEnd: () => void;
   onCell: (h: Hex) => void;
   onCellHover: (h: Hex | null) => void;
 }
@@ -61,6 +66,8 @@ export function Board({
   popup,
   world,
   reducedMotion,
+  moveAnim,
+  onMoveAnimEnd,
   onCell,
   onCellHover,
 }: BoardProps) {
@@ -161,13 +168,33 @@ export function Board({
 
   const hi = new Set(highlight.cells.map(hexKey));
   const px = (hx: Hex) => {
-    const c = board.cell(hx)!;
-    return { x: c.x * S, y: c.y * S };
+    const c = board.cell(hx);
+    if (c) return { x: c.x * S, y: c.y * S };
+    return { x: S * Math.sqrt(3) * (hx.q + hx.r / 2), y: S * 1.5 * hx.r };
   };
-  const shipTransition = reducedMotion ? "none" : "transform 320ms cubic-bezier(.4,0,.2,1)";
 
   const active = state.players[state.activePlayerIndex]!;
+  const activeColour = SHIP_VAR[active.colour];
   const activeAt = px(active.pose.current);
+
+  // drive the move animation with rAF; end it (and let the timers resume) when done
+  const [, forceFrame] = useReducer((n: number) => n + 1, 0);
+  const endRef = useRef(onMoveAnimEnd);
+  endRef.current = onMoveAnimEnd;
+  useEffect(() => {
+    if (!moveAnim) return;
+    let raf = 0;
+    const loop = () => {
+      if (animDone(moveAnim, performance.now())) {
+        endRef.current();
+        return;
+      }
+      forceFrame();
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [moveAnim]);
 
   return (
     <div className="boardwrap">
@@ -242,33 +269,16 @@ export function Board({
       })}
 
       {/* drift preview: where the ship will coast if it drifts now */}
-      {driftGhost && (
-        <g pointerEvents="none">
-          {(() => {
-            const a = px(driftGhost.from);
-            const b = px(driftGhost.at);
-            return (
-              <>
-                <line
-                  x1={a.x}
-                  y1={a.y}
-                  x2={b.x}
-                  y2={b.y}
-                  stroke="var(--gold)"
-                  strokeWidth={1.5}
-                  strokeDasharray="2 4"
-                  opacity={0.7}
-                />
-                <polygon points={hexPoints(b.x, b.y, S * 0.9)} fill="var(--gold)" fillOpacity={0.09} stroke="var(--gold)" strokeDasharray="3 3" strokeWidth={1.5} />
-                <g transform={`translate(${b.x} ${b.y})`}>
-                  <Cone fill="var(--gold)" ghost />
-                  <Cone fill="var(--gold)" ghost lift={5} />
-                </g>
-              </>
-            );
-          })()}
-        </g>
-      )}
+      {driftGhost && !moveAnim && (() => {
+        const a = px(driftGhost.from);
+        const b = px(driftGhost.at);
+        return (
+          <g pointerEvents="none" opacity={0.55}>
+            <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={activeColour} strokeWidth={1.5} strokeDasharray="2 4" />
+            <circle cx={b.x} cy={b.y} r={S * 0.42} fill="none" stroke={activeColour} strokeWidth={1.6} strokeDasharray="3 3" />
+          </g>
+        );
+      })()}
 
       {/* burn hover: the path and its fuel cost */}
       {burnPreview && burnPreview.path.length > 0 && (
@@ -299,41 +309,21 @@ export function Board({
         </g>
       )}
 
-      {/* ships — each in a translated group so position changes tween */}
+      {/* ships — abstract marker: ring at current, dot at previous, line while in flight */}
       {world && state.players
         .filter((p) => !p.eliminated)
         .map((p) => {
-          const cur = px(p.pose.current);
-          const prev = px(p.pose.previous);
-          const fill = SHIP_VAR[p.colour];
-          const moving = !p.pose.atRest && !(prev.x === cur.x && prev.y === cur.y);
+          const isActive = p.id === state.activePlayerIndex;
+          if (moveAnim && moveAnim.playerId === p.id) {
+            const f = moveFrame(moveAnim, performance.now(), px);
+            return <ShipMarker key={`ship-${p.id}`} colour={p.colour} ring={f.ring} dot={f.dot} line={f.line} active={isActive} />;
+          }
+          const ring = px(p.pose.current);
+          const dot = px(p.pose.previous);
+          const moving = !p.pose.atRest && !(dot.x === ring.x && dot.y === ring.y);
           return (
-            <g key={`ship-${p.id}`}>
-              {moving && (
-                <line
-                  x1={prev.x}
-                  y1={prev.y}
-                  x2={cur.x}
-                  y2={cur.y}
-                  stroke={fill}
-                  strokeWidth={1.5}
-                  strokeDasharray="3 3"
-                  opacity={0.55}
-                />
-              )}
-              {!p.pose.atRest && (
-                <g style={{ transition: shipTransition }} transform={`translate(${prev.x} ${prev.y})`}>
-                  <Cone fill={fill} />
-                </g>
-              )}
-              <g style={{ transition: shipTransition }} transform={`translate(${cur.x} ${cur.y})`}>
-                <ellipse cx={0} cy={4} rx={9} ry={4} fill="rgba(255,255,255,0.10)" />
-                <Cone fill={fill} />
-                {(p.pose.atRest ? [1, 2] : [1]).map((l) => (
-                  <Cone key={l} fill={fill} lift={l * 5} />
-                ))}
-              </g>
-            </g>
+            <ShipMarker key={`ship-${p.id}`} colour={p.colour} ring={ring} dot={dot}
+              line={moving ? [dot, ring] : null} active={isActive} />
           );
         })}
 

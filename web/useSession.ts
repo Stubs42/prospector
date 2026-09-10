@@ -20,7 +20,8 @@ import {
   type Seat,
 } from "../client/index.js";
 import { legalActions } from "../engine/index.js";
-import type { Prefs } from "./prefs.js";
+import { deriveMoveAnim, type MoveAnim } from "./anim.js";
+import { movePhaseMs, type Prefs } from "./prefs.js";
 
 const ALL_COLOURS: Colour[] = ["black", "red", "blue", "white", "green", "yellow"];
 
@@ -44,7 +45,9 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   const [armed, setArmed] = useState<Set<string>>(new Set());
   const [combatSel, setCombatSel] = useState<Set<string>>(new Set());
   const [attackTarget, setAttackTarget] = useState<number | null>(null);
+  const [moveAnim, setMoveAnim] = useState<MoveAnim | null>(null);
   const botRng = useRef<Rng>(makeRng(0x5eed));
+  const phaseMs = movePhaseMs(prefs);
 
   const p = state.players[state.activePlayerIndex]!;
 
@@ -66,7 +69,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   const needPassGate =
     humansCount >= 2 && !state.gameOver && !activeIsBot && shownPlayer !== state.activePlayerIndex;
   const isWaitingOnBot =
-    !setupOpen && !state.gameOver && !needPassGate && seats[waitingOn(state)] === "bot";
+    !setupOpen && !moveAnim && !state.gameOver && !needPassGate && seats[waitingOn(state)] === "bot";
 
   // --- state transitions -------------------------------------------------
   const clearStaging = () => {
@@ -77,6 +80,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   function dispatch(a: Action) {
     const r = applyAction(state, a);
     if (r.ok) {
+      setMoveAnim(deriveMoveAnim(state, r.state, phaseMs));
       setState(r.state);
       clearStaging();
     } else console.warn("rejected", a, r.error);
@@ -140,9 +144,13 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   // --- timers ---------------------------------------------------------
   useEffect(() => {
     if (!isWaitingOnBot) return;
-    const id = setTimeout(() => setState((s) => stepBot(s, botRng.current)), reducedMotion ? 60 : 340);
+    const id = setTimeout(() => {
+      const next = stepBot(state, botRng.current);
+      setMoveAnim(deriveMoveAnim(state, next, phaseMs));
+      setState(next);
+    }, reducedMotion ? 60 : 340);
     return () => clearTimeout(id);
-  }, [state, isWaitingOnBot, reducedMotion]);
+  }, [state, isWaitingOnBot, reducedMotion, phaseMs]);
 
   const autoCandidates = afford.legal.filter(
     (a) => !AUTO_HIDE.has(a.type) && (a.type !== "endTurn" || prefs.autoEndTurn),
@@ -150,6 +158,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   const autoAction =
     prefs.autoSingle &&
     !setupOpen &&
+    !moveAnim &&
     !state.gameOver &&
     !needPassGate &&
     !activeIsBot &&
@@ -204,6 +213,8 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     needPassGate,
     driftGhost,
     burnPreviewFor,
+    moveAnim,
+    clearMoveAnim: () => setMoveAnim(null),
     dispatch,
     dispatchBurn,
     openSetup,

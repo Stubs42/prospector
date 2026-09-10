@@ -59,6 +59,18 @@ export function Settings({ prefs, onChange }: { prefs: Prefs; onChange: (p: Pref
               <option value="off">off</option>
             </select>
           </div>
+          <div className={`settings-row ${prefs.animations === "off" ? "disabled" : ""}`}>
+            <span>Move speed</span>
+            <select
+              value={prefs.moveSpeed}
+              disabled={prefs.animations === "off"}
+              onChange={(e) => set("moveSpeed", e.target.value as Prefs["moveSpeed"])}
+            >
+              <option value="slow">slow</option>
+              <option value="normal">normal</option>
+              <option value="fast">fast</option>
+            </select>
+          </div>
         </div>
       )}
     </div>
