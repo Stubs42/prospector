@@ -4,7 +4,7 @@
  * this file; `client/` and `engine/` are untouched.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { applyAction, createGame } from "../engine/index.js";
+import { applyAction, boardFor, createGame } from "../engine/index.js";
 import { makeRng, type Rng } from "../engine/rng.js";
 import { hexKey } from "../engine/hex.js";
 import type { Action, Colour, GameState, Hex } from "../engine/index.js";
@@ -236,6 +236,30 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     if (qs.get("equip") === "1" && s.decks.equipment.draw.length >= 3) {
       // preview the homecoming upgrade picker without playing a full delivery
       s = { ...s, pendingEquipment: { playerId: s.activePlayerIndex, cards: s.decks.equipment.draw.slice(0, 3) } };
+    }
+    if (qs.get("postmove") === "1") {
+      // preview the post-move board targets: a loadable resource, an attackable enemy,
+      // and your own ship, all ready at once
+      const board = boardFor(s);
+      const active = s.players[s.activePlayerIndex]!;
+      const nb = board.neighbours(active.pose.current).filter((h) => board.isInner(h) && !board.baseOwnerAt(h));
+      const resourceCell = nb.find((h) => !s.board.resources[hexKey(h)]) ?? nb[0];
+      const enemy = s.players.find((pl) => pl.id !== active.id && !pl.eliminated);
+      s = {
+        ...s,
+        phase: "moved",
+        board: resourceCell
+          ? { resources: { ...s.board.resources, [hexKey(resourceCell)]: "green" } }
+          : s.board,
+        players: s.players.map((pl) => {
+          if (pl.id === active.id) return { ...pl, turn: { ...pl.turn, postMoveActionTaken: null } };
+          if (enemy && pl.id === enemy.id) {
+            const spot = nb.find((h) => !resourceCell || hexKey(h) !== hexKey(resourceCell)) ?? nb[0]!;
+            return { ...pl, pose: { current: spot, previous: spot, atRest: true }, cargo: pl.cargo.length ? pl.cargo : ["yellow"] };
+          }
+          return pl;
+        }),
+      };
     }
     if (qs.get("discard") === "1") {
       // preview the over-the-limit discard prompt by force-feeding extra cards; snap the

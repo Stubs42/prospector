@@ -12,13 +12,6 @@ import type { Seat } from "../../client/index.js";
 export { S } from "./geo.js";
 import { S } from "./geo.js";
 
-export interface RadialAction {
-  id: string;
-  label: string;
-  kind?: "primary" | "danger" | undefined;
-  onClick: () => void;
-}
-
 function hexPoints(cx: number, cy: number, size: number): string {
   const pts: string[] = [];
   for (let i = 0; i < 6; i++) {
@@ -32,14 +25,21 @@ export interface BoardProps {
   state: GameState;
   seats: readonly Seat[];
   scores: readonly number[];
-  highlight: { cells: Hex[]; kind: "load" | "place" | "base" | null };
+  highlight: { cells: Hex[]; kind: "place" | "base" | null };
+  /** resource cells the active player can load from right now — the ore chip itself pulses */
+  loadCells: readonly Hex[];
   burnTargets: { cell: Hex; cost: number }[];
   driftGhost: { at: Hex; from: Hex } | null;
   burnPreview: { path: Hex[]; cost: number } | null;
-  radial: RadialAction[];
   onCoast: (() => void) | null;
   /** the active player's own base cells — clicking one (off a burn target) asks to scrap */
   scrapCells: readonly Hex[];
+  /** enemy players the active player can attack right now — their ship ring pulses */
+  attackTargets: readonly number[];
+  onAttackTarget: (id: number) => void;
+  /** the active player's own ship can be clicked to end the turn (post-move, nothing else pending) */
+  endTurnReady: boolean;
+  onEndTurn: (() => void) | null;
   /** a confirm dialog (e.g. "scrap your ship?") drawn centred, dimming the rest of the board */
   confirm: { center: Hex; lines: string[]; onYes: () => void; onCancel: () => void } | null;
   /** guidance popup drawn in board space; null when no action is pending */
@@ -62,12 +62,16 @@ export function Board({
   seats,
   scores,
   highlight,
+  loadCells,
   burnTargets,
   driftGhost,
   burnPreview,
-  radial,
   onCoast,
   scrapCells,
+  attackTargets,
+  onAttackTarget,
+  endTurnReady,
+  onEndTurn,
   confirm,
   popup,
   world,
@@ -174,6 +178,7 @@ export function Board({
 
   const hi = new Set(highlight.cells.map(hexKey));
   const scrapSet = new Set(scrapCells.map(hexKey));
+  const loadSet = new Set(loadCells.map(hexKey));
   const px = (hx: Hex) => {
     const c = board.cell(hx);
     if (c) return { x: c.x * S, y: c.y * S };
@@ -275,12 +280,16 @@ export function Board({
         );
       })}
 
-      {/* resources */}
+      {/* resources — a loadable one pulses and is the click target itself (no separate ring) */}
       {world && Object.entries(state.board.resources).map(([k, colour]) => {
         const [q, r] = k.split(",").map(Number) as [number, number];
         const { x, y } = px({ q, r });
+        const loadable = loadSet.has(k);
         return (
-          <g key={`res-${k}`} className="ore-chip">
+          <g key={`res-${k}`} className={`ore-chip${loadable ? " cell-hit pulse-avail" : ""}`}
+             onClick={loadable ? () => onCell({ q, r }) : undefined}
+             onMouseMove={loadable ? (e) => onTip("Load cargo", e) : undefined}
+             onMouseLeave={loadable ? (e) => onTip(null, e) : undefined}>
             <circle cx={x} cy={y} r={S * 0.42} fill={ORE_VAR[colour as OreColour]} stroke="rgba(0,0,0,0.4)" />
             <text x={x} y={y + 4} textAnchor="middle" fontSize={11} fontWeight={700} fill="rgba(0,0,0,0.55)">
               {state.config.modes.prospector.resources.values[colour as OreColour]}
@@ -318,16 +327,25 @@ export function Board({
         </g>
       )}
 
-      {/* ships — abstract marker: ring at current, dot at previous, line while in flight */}
+      {/* ships — abstract marker: ring at current, dot at previous, line while in flight.
+         attackable enemies and (post-move) your own ship pulse and are click targets. */}
       {world && state.players
-        .filter((p) => !p.eliminated)
+        .filter((p) => !p.eliminated && p.placed)
         .map((p) => {
           const isActive = p.id === state.activePlayerIndex;
+          const isAttackable = attackTargets.includes(p.id);
+          const isEndTurnShip = isActive && endTurnReady;
+          const interact = isAttackable
+            ? { tip: "Attack", onClick: () => onAttackTarget(p.id) }
+            : isEndTurnShip
+              ? { tip: "End turn (own ship)", onClick: onEndTurn! }
+              : null;
+          const pulse = isAttackable || isEndTurnShip;
           if (moveAnim && moveAnim.playerId === p.id) {
             const f = moveFrame(moveAnim, performance.now(), px);
             return (
               <ShipMarker key={`ship-${p.id}`} colour={p.colour} ring={f.ring} dot={f.dot}
-                tether={f.tether} active={isActive} />
+                tether={f.tether} active={isActive} pulse={pulse} interact={interact} onTip={onTip} />
             );
           }
           const ring = px(p.pose.current);
@@ -335,7 +353,7 @@ export function Board({
           const moving = !p.pose.atRest && !(dot.x === ring.x && dot.y === ring.y);
           return (
             <ShipMarker key={`ship-${p.id}`} colour={p.colour} ring={ring} dot={dot}
-              tether={moving ? [dot, ring] : null} active={isActive} />
+              tether={moving ? [dot, ring] : null} active={isActive} pulse={pulse} interact={interact} onTip={onTip} />
           );
         })}
 
@@ -369,24 +387,18 @@ export function Board({
         );
       })}
 
-      {/* load / launch markers (base picks are shown by the glowing hex itself) */}
-      {highlight.kind !== "base" && highlight.cells.map((hx) => {
+      {/* launch-cell markers: a pulsing ship-coloured ring on each of the 4 base cells —
+         the ship itself isn't drawn anywhere until one is picked */}
+      {highlight.kind === "place" && highlight.cells.map((hx) => {
         const { x, y } = px(hx);
+        const col = SHIP_VAR[active.colour];
         return (
-          <circle
-            key={`hi-${hexKey(hx)}`}
-            cx={x}
-            cy={y}
-            r={S * 0.5}
-            fill="none"
-            stroke={highlight.kind === "load" ? "var(--ok)" : "var(--gold)"}
-            strokeWidth={2}
-            strokeDasharray={highlight.kind === "load" ? "4 3" : "3 3"}
-            className="cell-hit"
-            onClick={() => onCell(hx)}
-            onMouseEnter={() => onCellHover(hx)}
-            onMouseLeave={() => onCellHover(null)}
-          />
+          <g key={`hi-${hexKey(hx)}`} className="cell-hit pulse-avail"
+             onClick={() => onCell(hx)}
+             onMouseMove={(e) => onTip("Launch here", e)}
+             onMouseLeave={(e) => onTip(null, e)}>
+            <circle cx={x} cy={y} r={S * 0.42} fill={col} fillOpacity={0.12} stroke={col} strokeWidth={2.4} />
+          </g>
         );
       })}
 
@@ -395,30 +407,6 @@ export function Board({
 
       {/* guidance popup — what to do next, anchored in board space */}
       {popup && <HexPopup center={popup.center} lines={popup.lines} />}
-
-      {/* radial action menu around the active ship */}
-      {radial.length > 0 && (
-        <g className="radial">
-          {radial.map((a, i) => {
-            // fan the chips across the top-right quadrant so they clear the piece & trail
-            const n = radial.length;
-            const spread = Math.min(150, 44 * Math.max(1, n - 1));
-            const ang = (-90 - (n > 1 ? spread / 2 : 0) + (n > 1 ? (spread * i) / (n - 1) : 0)) * (Math.PI / 180);
-            const R = S * 2.7;
-            const cx = activeAt.x + R * Math.cos(ang);
-            const cy = activeAt.y + R * Math.sin(ang);
-            return (
-              <g key={a.id} className={`chip ${a.kind ?? ""}`} onClick={a.onClick}>
-                <line x1={activeAt.x} y1={activeAt.y} x2={cx} y2={cy} className="chip-stem" />
-                <circle cx={cx} cy={cy} r={S * 0.92} />
-                <text x={cx} y={cy + 4} textAnchor="middle">
-                  {a.label}
-                </text>
-              </g>
-            );
-          })}
-        </g>
-      )}
 
       {/* confirm dialog (e.g. scrap?) — dims + blocks the rest of the board until answered */}
       {confirm && (

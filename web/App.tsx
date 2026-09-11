@@ -1,10 +1,10 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { score } from "../engine/index.js";
 import { boardFor } from "../engine/game.js";
 import { hexKey } from "../engine/hex.js";
 import type { BoardModel } from "../engine/board.js";
-import type { Action, Colour, Hex } from "../engine/index.js";
-import { Board, type RadialAction } from "./components/Board.js";
+import type { Colour, Hex } from "../engine/index.js";
+import { Board } from "./components/Board.js";
 import { BottomPanel, type PanelButton } from "./components/BottomPanel.js";
 import { LogOverlay } from "./components/LogOverlay.js";
 import { Settings } from "./components/Settings.js";
@@ -13,12 +13,6 @@ import { loadPrefs, motionReduced, savePrefs, type Prefs } from "./prefs.js";
 import { useSession } from "./useSession.js";
 
 const ALL_COLOURS: Colour[] = ["black", "red", "blue", "white", "green", "yellow"];
-
-const CHIP_LABEL: Partial<Record<Action["type"], string>> = {
-  drawBooster: "Draw",
-  drift: "Drift",
-  endTurn: "End turn",
-};
 
 /** a cell a few steps inward from a base, where that base's guidance popup sits */
 function launchAnchor(board: BoardModel, colour: Colour): Hex {
@@ -155,40 +149,28 @@ export default function App() {
     buttons.push({ label: "Cancel", onClick: () => s.setAttackTarget(null) });
   }
 
-  // --- radial menu around the active ship --------------------------
-  // an action about to fire on its own (drawBooster, drift, a forced endTurn, ...) should
-  // never show up as a click target first — that's just a flash before it vanishes again
+  // --- board-native action targets ---------------------------------
+  // Every clickable option is shown on the thing it acts on, pulsing gently, rather than as
+  // a separate button: a resource pulses when loadable, an enemy ship pulses when attackable,
+  // and your own ship pulses to end the turn. An action about to auto-fire on its own
+  // (drawBooster, drift, a forced endTurn, ...) never gets a pulse first — that would just be
+  // a flash before it vanishes again.
   const autoPendingType = s.autoAction?.type ?? null;
-  // "coast" (endMove) is a green circle on the ship's own cell, not a radial chip
+  const noStagingPending = !pc && attackTarget === null;
+
+  // "coast" (endMove) is the green circle on the ship's own cell, mid-move
   const coastAction =
-    interactive && !pc && attackTarget === null && !overLimit && autoPendingType !== "endMove"
+    interactive && noStagingPending && !overLimit && autoPendingType !== "endMove"
       ? afford.plainActions.find((a) => a.type === "endMove") ?? null
       : null;
   const onCoast = coastAction ? () => dispatch(coastAction) : null;
 
-  const radial: RadialAction[] = useMemo(() => {
-    if (!interactive || pc || attackTarget !== null || overLimit || launchPhase) return [];
-    const out: RadialAction[] = afford.plainActions
-      // "coast" is the green ship-cell circle; scrapping is a click-your-base-and-confirm gesture;
-      // whatever's about to auto-fire shouldn't flash up as a chip first
-      .filter((a) => a.type !== "endMove" && a.type !== "scrapShip" && a.type !== autoPendingType)
-      .map((a) => ({
-        id: a.type,
-        label: CHIP_LABEL[a.type] ?? a.type,
-        kind: a.type === "endTurn" ? "primary" : undefined,
-        onClick: () => dispatch(a),
-      }));
-    for (const id of afford.attackTargetIds) {
-      out.push({
-        id: `atk-${id}`,
-        label: `Atk ${state.players[id]!.colour[0]!.toUpperCase()}`,
-        kind: "danger",
-        onClick: () => s.setAttackTarget(id),
-      });
-    }
-    return out;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, afford, interactive, pc, attackTarget, overLimit, launchPhase, autoPendingType]);
+  // post-move: load a resource (pulses the ore chip), attack (pulses the enemy ring),
+  // end turn (pulses your own ring) — all can be available at once
+  const boardActive = interactive && noStagingPending && !suppress;
+  const endTurnAction = boardActive ? afford.plainActions.find((a) => a.type === "endTurn") ?? null : null;
+  const endTurnReady = !!endTurnAction && autoPendingType !== "endTurn";
+  const onEndTurn = endTurnAction ? () => dispatch(endTurnAction) : null;
 
   // --- board affordances ------------------------------------------
   const freeBaseColours = ALL_COLOURS.filter((c) => !s.setup.picks.includes(c));
@@ -197,13 +179,15 @@ export default function App() {
     return ALL_COLOURS.find((c) => board.baseCells(c).some((b) => hexKey(b) === k)) ?? null;
   };
 
-  const highlight: { cells: Hex[]; kind: "load" | "place" | "base" | null } = inSetup
+  const highlight: { cells: Hex[]; kind: "place" | "base" | null } = inSetup
     ? { cells: freeBaseColours.flatMap((c) => [...board.baseCells(c)]), kind: "base" }
     : afford.placeCells.length
       ? { cells: afford.placeCells, kind: "place" }
-      : afford.loadCells.length
-        ? { cells: afford.loadCells, kind: "load" }
-        : { cells: [], kind: null };
+      : { cells: [], kind: null };
+  // loadable resources pulse the ore chip itself instead of a separate ring
+  const loadCellsForBoard = boardActive ? afford.loadCells : [];
+  const attackTargets = boardActive ? afford.attackTargetIds : [];
+  const onAttackTarget = (id: number) => s.setAttackTarget(id);
 
   // guidance popup: where the next action is, and what it is
   const popup: { center: Hex; lines: string[] } | null = inSetup
@@ -308,12 +292,16 @@ export default function App() {
           seats={seats}
           scores={sc.byPlayer}
           highlight={suppress ? { cells: [], kind: null } : interactive || inSetup ? highlight : { cells: [], kind: null }}
+          loadCells={loadCellsForBoard}
           burnTargets={interactive && !suppress ? afford.burnTargets : []}
           driftGhost={interactive && !suppress ? driftGhost : null}
           burnPreview={interactive && !suppress ? burnPreview : null}
-          radial={suppress ? [] : radial}
           onCoast={suppress ? null : onCoast}
           scrapCells={anim ? [] : scrapCells}
+          attackTargets={attackTargets}
+          onAttackTarget={onAttackTarget}
+          endTurnReady={endTurnReady}
+          onEndTurn={onEndTurn}
           confirm={scrapConfirm}
           popup={suppress ? null : popup}
           world={!inSetup}

@@ -81,9 +81,8 @@ export function legalActions(state: GameState, opts?: LegalOpts): Action[] {
 
   if (state.phase === "start") {
     if (!p.turn.boosterDrawn && !p.placed) {
-      for (const c of board.baseCells(p.colour)) {
-        if (!hexEq(c, p.pose.current)) out.push({ type: "placeShip", cell: c });
-      }
+      // all four base cells are genuine choices — the ship isn't shown anywhere until one is picked
+      for (const c of board.baseCells(p.colour)) out.push({ type: "placeShip", cell: c });
     }
     // voluntary scrap is available any time during the move, once the ship is launched
     if (p.placed && state.config.core.turn.allowScrapBeforeDraw) out.push({ type: "scrapShip" });
