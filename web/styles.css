@@ -301,6 +301,13 @@ button.danger { border-color: #6a3a2f; }
   0%, 100% { border-color: #c1573c; }
   50% { border-color: #e8a458; }
 }
+/* playable right now: a quiet glow around the frame in the card's own aspect colour
+   (currentColor) — no size/box-shadow burst, just the frame */
+.card.pulse-ready { animation: card-ready-pulse 1.3s ease-in-out infinite; }
+@keyframes card-ready-pulse {
+  0%, 100% { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); }
+  50% { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35), 0 0 0 2px currentColor; }
+}
 /* card accent = the shared aspect palette (see aspects.ts); .cicon uses currentColor */
 .card.booster-shield { border-color: #e9e9e9; color: #e9e9e9; }
 .card.booster-shield .ctype { color: #e9e9e9; }
@@ -417,7 +424,8 @@ circle.cell-hit { pointer-events: all; }
   .ore-chip, .base-pick, .pulse-avail { animation: none; }
   .base-pick { fill-opacity: 1; }
   .pulse-avail { opacity: 1; }
-  .card.pulse-new, .card.pulse-urgent { animation: none; }
+  .card.pulse-new, .card.pulse-urgent, .card.pulse-ready { animation: none; }
   .card.pulse-urgent { border-color: #c1573c; }
+  .card.pulse-ready { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35), 0 0 0 2px currentColor; }
   * { transition: none !important; }
 }

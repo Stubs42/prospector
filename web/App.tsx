@@ -78,10 +78,18 @@ export default function App() {
   const cardState = (id: string) => {
     const c = handOwner.hand.find((x) => x.id === id)!;
     let onClick: (() => void) | undefined;
+    const fuelUseful = c.type !== "reserveFuel" || handOwner.fuel < handOwner.fuelMax;
     if (overLimit) onClick = () => dispatch({ type: "discardBooster", cardId: id });
-    else if (inBurnPhase && (c.type === "engine" || c.type === "reserveFuel")) onClick = () => s.toggleArmed(id);
+    else if (inBurnPhase && (c.type === "engine" || c.type === "reserveFuel") && fuelUseful)
+      onClick = () => s.toggleArmed(id);
     else if (combatCardType && c.type === combatCardType) onClick = () => s.toggleCombatSel(id);
-    const pulse: "urgent" | "new" | null = overLimit ? "urgent" : s.newCardIds.has(id) ? "new" : null;
+    const pulse: "urgent" | "new" | "ready" | null = overLimit
+      ? "urgent"
+      : s.newCardIds.has(id)
+        ? "new"
+        : onClick
+          ? "ready"
+          : null;
     return { clickable: !!onClick, selected: armed.has(id) || combatSel.has(id), onClick, pulse };
   };
   const pickedIds = (type: "laser" | "shield") =>

@@ -23,7 +23,7 @@ export interface BottomPanelProps {
     clickable: boolean;
     selected: boolean;
     onClick?: (() => void) | undefined;
-    pulse?: "urgent" | "new" | null;
+    pulse?: "urgent" | "new" | "ready" | null;
   };
   combatTitle: string | null;
   combatSub: string | null;

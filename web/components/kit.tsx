@@ -151,8 +151,9 @@ export function BoosterCardFace({
   onClick?: (() => void) | undefined;
   clickable?: boolean | undefined;
   selected?: boolean | undefined;
-  /** "new" = briefly highlight a just-drawn card; "urgent" = keep pulsing (over the hand limit) */
-  pulse?: "urgent" | "new" | null | undefined;
+  /** "new" = briefly highlight a just-drawn card; "urgent" = keep pulsing (over the hand limit);
+     "ready" = playable right now (armable this burn / usable in combat) */
+  pulse?: "urgent" | "new" | "ready" | null | undefined;
 }) {
   return (
     <div
