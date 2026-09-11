@@ -2,7 +2,7 @@
  * Physical-component kit. Every widget looks like a real thing from a game box, and any
  * motion it makes is a rigid-body move / flip / tumble — nothing a cardboard piece couldn't do.
  */
-import type { BoosterCard as BoosterCardT, Colour, OreColour } from "../../engine/index.js";
+import type { BoosterCard as BoosterCardT, BoosterType, Colour, OreColour } from "../../engine/index.js";
 
 export const SHIP_VAR: Record<Colour, string> = {
   black: "var(--ship-black)",
@@ -83,6 +83,62 @@ export function Die({ value, tone }: { value: number; tone?: "attack" | "defence
   );
 }
 
+/**
+ * Small abstract prop glyph per booster type — echoes the physical card art
+ * (fuel cells, shield disc, laser rounds, engine thrust, a starburst for the
+ * one-shot hyperspace card) without going photoreal. `currentColor` picks up
+ * the aspect colour set by `.card.booster-*` in styles.css.
+ */
+function CardIcon({ type }: { type: BoosterType }) {
+  switch (type) {
+    case "reserveFuel":
+      return (
+        <svg viewBox="0 0 40 40" className="cicon" aria-hidden="true">
+          {[-8, 0, 8].map((x) => (
+            <g key={x} transform={`translate(${20 + x} 20) rotate(-28)`}>
+              <rect x={-3.5} y={-13} width={7} height={26} rx={2.5} fill="currentColor" opacity={0.85} />
+              <rect x={-3.5} y={-13} width={7} height={5} rx={2} fill="#dfe6ee" opacity={0.9} />
+              <rect x={-3.5} y={8} width={7} height={5} rx={2} fill="#dfe6ee" opacity={0.9} />
+            </g>
+          ))}
+        </svg>
+      );
+    case "shield":
+      return (
+        <svg viewBox="0 0 40 40" className="cicon" aria-hidden="true">
+          <circle cx={20} cy={20} r={13} fill="none" stroke="currentColor" strokeWidth={3} opacity={0.85} />
+          <circle cx={20} cy={20} r={7} fill="currentColor" opacity={0.4} />
+        </svg>
+      );
+    case "laser":
+      return (
+        <svg viewBox="0 0 40 40" className="cicon" aria-hidden="true">
+          {[-9, 0, 9].map((x, i) => (
+            <rect key={x} x={20 + x - 1.6} y={10} width={3.2} height={20} rx={1.6} fill="currentColor" opacity={0.55 + i * 0.15} />
+          ))}
+        </svg>
+      );
+    case "engine":
+      return (
+        <svg viewBox="0 0 40 40" className="cicon" aria-hidden="true">
+          {[[-7, -6], [7, -6], [-7, 7], [7, 7]].map(([x, y]) => (
+            <ellipse key={`${x},${y}`} cx={20 + x!} cy={20 + y!} rx={7} ry={5.5} fill="none" stroke="currentColor" strokeWidth={2.4} opacity={0.85} />
+          ))}
+        </svg>
+      );
+    case "hyperspace":
+      return (
+        <svg viewBox="0 0 40 40" className="cicon" aria-hidden="true">
+          <path
+            d="M20 6 L23.5 17 L34 20 L23.5 23 L20 34 L16.5 23 L6 20 L16.5 17 Z"
+            fill="currentColor"
+            opacity={0.85}
+          />
+        </svg>
+      );
+  }
+}
+
 /** A booster card face. */
 export function BoosterCardFace({
   card,
@@ -104,8 +160,9 @@ export function BoosterCardFace({
       style={{ cursor: clickable ? "pointer" : "default" }}
       onClick={onClick}
     >
+      <CardIcon type={card.type} />
+      <div className="cbadge">{card.value ?? "◇"}</div>
       <div className="ctype">{card.type}</div>
-      <div className="cval">{card.value ?? "◇"}</div>
       <div className="ceff">{card.effect}</div>
     </div>
   );
