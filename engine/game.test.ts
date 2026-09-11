@@ -63,6 +63,30 @@ describe("a hand-driven turn", () => {
   });
 });
 
+describe("voluntary scrap", () => {
+  it("is not offered before the ship is launched, but is at any point during the move after", () => {
+    let s = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0 });
+    const Y = () => s.players[0]!;
+
+    // turn 1, before placeShip: no scrap yet
+    expect(legalActions(s).some((a) => a.type === "scrapShip")).toBe(false);
+    s = run(s, { type: "placeShip", cell: Y().pose.current });
+    expect(legalActions(s).some((a) => a.type === "scrapShip")).toBe(true);
+
+    s = run(s, { type: "drawBooster" });
+    expect(legalActions(s).some((a) => a.type === "scrapShip")).toBe(true); // still, mid-move
+
+    s = run(s, { type: "drift" }); // at rest -> no-op
+    expect(legalActions(s).some((a) => a.type === "scrapShip")).toBe(true); // still, before burning
+
+    const before = Y().pose.current;
+    s = run(s, { type: "scrapShip" });
+    expect(Y().pose.current).toEqual(before); // returned to (the same) base cell
+    expect(Y().pose.atRest).toBe(true);
+    expect(s.activePlayerIndex).toBe(1); // scrapping ends the turn
+  });
+});
+
 describe("homecoming upgrade pick", () => {
   it("a delivery pauses for a 3-card equipment choice, then applies it", () => {
     let s = createGame({ seed: 8, colours: ["yellow", "black"], startPlayer: 0 });

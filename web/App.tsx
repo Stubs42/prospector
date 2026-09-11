@@ -18,7 +18,6 @@ const CHIP_LABEL: Partial<Record<Action["type"], string>> = {
   drawBooster: "Draw",
   drift: "Drift",
   endTurn: "End turn",
-  scrapShip: "Scrap",
 };
 
 /** a cell a few steps inward from a base, where that base's guidance popup sits */
@@ -46,6 +45,9 @@ export default function App() {
   const reducedMotion = motionReduced(prefs);
   const [hoverCell, setHoverCell] = useState<Hex | null>(null);
   const [logOpen, setLogOpen] = useState(false);
+  const [scrapConfirmOpen, setScrapConfirmOpen] = useState(
+    () => typeof location !== "undefined" && new URLSearchParams(location.search).get("scrap") === "1",
+  );
 
   const s = useSession(prefs, reducedMotion);
   const { state, seats, afford, activeIsBot, isWaitingOnBot, needPassGate, driftGhost } = s;
@@ -55,12 +57,12 @@ export default function App() {
   const pc = state.pendingCombat;
   const p = state.players[state.activePlayerIndex]!;
   const board = boardFor(state);
-  const onOwnBase = board.baseOwnerAt(p.pose.current) === p.colour;
   const mode = state.config.modes.prospector;
   const baseStats = mode.ships[p.colour];
   const sc = score(state);
   const inSetup = s.setup.open;
   const anim = s.animLive; // a move is actively playing — hold back prompts/targets
+  const suppress = anim || scrapConfirmOpen; // also true while the scrap confirm dialog is up
   const interactive = !inSetup && !activeIsBot && !needPassGate;
   const overLimit = afford.overLimit;
   // turn 1: the ship must be placed on a base cell before anything else
@@ -85,7 +87,8 @@ export default function App() {
     if (overLimit) onClick = () => dispatch({ type: "discardBooster", cardId: id });
     else if (inBurnPhase && (c.type === "engine" || c.type === "reserveFuel")) onClick = () => s.toggleArmed(id);
     else if (combatCardType && c.type === combatCardType) onClick = () => s.toggleCombatSel(id);
-    return { clickable: !!onClick, selected: armed.has(id) || combatSel.has(id), onClick };
+    const pulse: "urgent" | "new" | null = overLimit ? "urgent" : s.newCardIds.has(id) ? "new" : null;
+    return { clickable: !!onClick, selected: armed.has(id) || combatSel.has(id), onClick, pulse };
   };
   const pickedIds = (type: "laser" | "shield") =>
     handOwner.hand.filter((c) => c.type === type && combatSel.has(c.id)).map((c) => c.id);
@@ -98,9 +101,9 @@ export default function App() {
   const showCards =
     !handHidden &&
     handOwner.hand.length > 0 &&
-    (overLimit || inBurnPhase || combatCardType !== null);
+    (overLimit || inBurnPhase || combatCardType !== null || s.newCardIds.size > 0);
   const cardHint = overLimit
-    ? "Over the hand limit — tap a card to discard."
+    ? null // the centred hex popup carries this message instead
     : inBurnPhase && p.hand.some((c) => c.type === "engine" || c.type === "reserveFuel")
       ? "Tap an engine / reserve-fuel card to arm it for this burn."
       : combatCardType === "shield"
@@ -163,12 +166,12 @@ export default function App() {
   const radial: RadialAction[] = useMemo(() => {
     if (!interactive || pc || attackTarget !== null || overLimit || launchPhase) return [];
     const out: RadialAction[] = afford.plainActions
-      // "coast" is the green ship-cell circle; scrapping on your own base is pointless
-      .filter((a) => a.type !== "endMove" && !(a.type === "scrapShip" && onOwnBase))
+      // "coast" is the green ship-cell circle; scrapping is a click-your-base-and-confirm gesture
+      .filter((a) => a.type !== "endMove" && a.type !== "scrapShip")
       .map((a) => ({
         id: a.type,
         label: CHIP_LABEL[a.type] ?? a.type,
-        kind: a.type === "endTurn" ? "primary" : a.type === "scrapShip" ? "danger" : undefined,
+        kind: a.type === "endTurn" ? "primary" : undefined,
         onClick: () => dispatch(a),
       }));
     for (const id of afford.attackTargetIds) {
@@ -181,7 +184,7 @@ export default function App() {
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, afford, interactive, pc, attackTarget, overLimit, launchPhase, onOwnBase]);
+  }, [state, afford, interactive, pc, attackTarget, overLimit, launchPhase]);
 
   // --- board affordances ------------------------------------------
   const freeBaseColours = ALL_COLOURS.filter((c) => !s.setup.picks.includes(c));
@@ -209,6 +212,23 @@ export default function App() {
       }
     : launchPhase
       ? { center: launchAnchor(board, p.colour), lines: ["Select your", "launch cell"] }
+      : interactive && overLimit
+        ? { center: { q: 0, r: 0 }, lines: ["Too many cards!", "Discard one to continue"] }
+        : null;
+
+  // clicking your own base (off a burn target) asks to scrap — available any time during the move
+  const scrapCells = interactive && !pc && attackTarget === null && !launchPhase ? board.baseCells(p.colour) : [];
+  const scrapConfirm =
+    scrapConfirmOpen && scrapCells.length
+      ? {
+          center: { q: 0, r: 0 } as Hex,
+          lines: ["So you really want to", "scrap your ship?"],
+          onYes: () => {
+            dispatch({ type: "scrapShip" });
+            setScrapConfirmOpen(false);
+          },
+          onCancel: () => setScrapConfirmOpen(false),
+        }
       : null;
 
   const burnPreview = s.burnPreviewFor(hoverCell);
@@ -222,7 +242,9 @@ export default function App() {
     if (afford.placeCells.some((c) => hexKey(c) === k)) return dispatch({ type: "placeShip", cell: h });
     if (afford.loadCells.some((c) => hexKey(c) === k)) return dispatch({ type: "loadResource", from: h });
     const bt = afford.burnTargets.find((b) => hexKey(b.cell) === k);
-    if (bt) s.dispatchBurn({ type: "burn", path: bt.path });
+    if (bt) return s.dispatchBurn({ type: "burn", path: bt.path });
+    // your own base, and not a burn target right now (arriving home is not scrapping)
+    if (scrapCells.some((c) => hexKey(c) === k)) setScrapConfirmOpen(true);
   }
 
   return (
@@ -281,13 +303,15 @@ export default function App() {
           state={state}
           seats={seats}
           scores={sc.byPlayer}
-          highlight={anim ? { cells: [], kind: null } : interactive || inSetup ? highlight : { cells: [], kind: null }}
-          burnTargets={interactive && !anim ? afford.burnTargets : []}
-          driftGhost={interactive && !anim ? driftGhost : null}
-          burnPreview={interactive && !anim ? burnPreview : null}
-          radial={anim ? [] : radial}
-          onCoast={anim ? null : onCoast}
-          popup={anim ? null : popup}
+          highlight={suppress ? { cells: [], kind: null } : interactive || inSetup ? highlight : { cells: [], kind: null }}
+          burnTargets={interactive && !suppress ? afford.burnTargets : []}
+          driftGhost={interactive && !suppress ? driftGhost : null}
+          burnPreview={interactive && !suppress ? burnPreview : null}
+          radial={suppress ? [] : radial}
+          onCoast={suppress ? null : onCoast}
+          scrapCells={anim ? [] : scrapCells}
+          confirm={scrapConfirm}
+          popup={suppress ? null : popup}
           world={!inSetup}
           reducedMotion={reducedMotion}
           moveAnim={s.moveAnim}
@@ -319,6 +343,7 @@ export default function App() {
               : []
           }
           onEquip={(id) => dispatch({ type: "chooseEquipment", cardId: id })}
+          urgent={overLimit}
         />
       </div>
 

@@ -21,13 +21,26 @@ describe("seats", () => {
 });
 
 describe("affordances", () => {
-  it("summarises the launch turn: place cells + plain draw/scrap, no burns yet", () => {
+  it("summarises the launch turn: place cells + plain draw, no scrap before launch", () => {
     const g = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0 });
     const a = affordances(g);
     expect(a.placeCells.length).toBeGreaterThan(0);
-    expect(a.plainActions.map((x) => x.type).sort()).toEqual(["drawBooster", "scrapShip"]);
+    // an unlaunched ship can't be scrapped — that option only appears once placed
+    expect(a.plainActions.map((x) => x.type).sort()).toEqual(["drawBooster"]);
     expect(a.burnTargets).toHaveLength(0);
     expect(a.combat).toBeNull();
+  });
+
+  it("flags overLimit even though scrapShip is also legal (voluntary scrap is always available)", () => {
+    let g = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0 });
+    g = run(g, { type: "placeShip", cell: g.players[0]!.pose.current });
+    g = run(g, { type: "drawBooster" });
+    // force the hand well over the limit
+    g.players[0]!.hand = [...g.players[0]!.hand, ...g.decks.booster.draw.slice(0, 5)];
+    const a = affordances(g);
+    expect(a.overLimit).toBe(true);
+    expect(a.legal.some((x) => x.type === "scrapShip")).toBe(true);
+    expect(a.legal.some((x) => x.type === "discardBooster")).toBe(true);
   });
 
   it("produces burn targets with cost + path after drift", () => {

@@ -30,7 +30,13 @@ const AUTO_HIDE = new Set<Action["type"]>([
   "discardBooster",
   "combatDefend",
   "combatResolve",
+  // scrapping is now a click-your-base-and-confirm gesture, not a turn-start choice —
+  // never auto-fire it, and never let its presence block the auto-draw/auto-drift chain
+  "scrapShip",
 ]);
+
+/** how long a freshly-drawn card keeps its "new" pulse */
+const NEW_CARD_PULSE_MS = 3000;
 
 export function useSession(prefs: Prefs, reducedMotion: boolean) {
   const [humans, setHumans] = useState(1);
@@ -48,6 +54,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   // moveAnim: an in-flight (or a held, frozen-at-reach drift) move. animLive: an rAF is actually running.
   const [moveAnim, setMoveAnim] = useState<MoveAnim | null>(null);
   const [animLive, setAnimLive] = useState(false);
+  const [newCardIds, setNewCardIds] = useState<Set<string>>(new Set());
   const botRng = useRef<Rng>(makeRng(0x5eed));
   const phaseMs = movePhaseMs(prefs);
 
@@ -101,6 +108,13 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
       playAnim(anim);
       setState(r.state);
       clearStaging();
+      if (a.type === "drawBooster") {
+        const before = new Set(p.hand.map((c) => c.id));
+        const after = r.state.players[state.activePlayerIndex]!.hand;
+        setNewCardIds(new Set(after.filter((c) => !before.has(c.id)).map((c) => c.id)));
+      } else {
+        setNewCardIds(new Set());
+      }
     } else console.warn("rejected", a, r.error);
   }
   function dispatchBurn(burn: Extract<Action, { type: "burn" }>) {
@@ -151,6 +165,13 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
       return n;
     });
 
+  // the "just drew this" pulse wears off on its own after a few seconds
+  useEffect(() => {
+    if (newCardIds.size === 0) return;
+    const id = setTimeout(() => setNewCardIds(new Set()), NEW_CARD_PULSE_MS);
+    return () => clearTimeout(id);
+  }, [newCardIds]);
+
   // --- previews --------------------------------------------------------
   const driftGhost = afford.legal.some((a) => a.type === "drift") ? driftPreview(state) : null;
   const burnPreviewFor = (h: Hex | null): { path: Hex[]; cost: number } | null => {
@@ -182,8 +203,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     !state.gameOver &&
     !needPassGate &&
     !activeIsBot &&
-    autoCandidates.length === 1 &&
-    autoCandidates[0]!.type !== "scrapShip"
+    autoCandidates.length === 1
       ? autoCandidates[0]!
       : null;
   useEffect(() => {
@@ -217,6 +237,17 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
       // preview the homecoming upgrade picker without playing a full delivery
       s = { ...s, pendingEquipment: { playerId: s.activePlayerIndex, cards: s.decks.equipment.draw.slice(0, 3) } };
     }
+    if (qs.get("discard") === "1") {
+      // preview the over-the-limit discard prompt by force-feeding extra cards; snap the
+      // turn phase back to "start" so the hand-limit gate (only checked there) re-fires
+      s = {
+        ...s,
+        phase: "start",
+        players: s.players.map((pl, i) =>
+          i === s.activePlayerIndex ? { ...pl, hand: [...pl.hand, ...s.decks.booster.draw.slice(0, 3)] } : pl,
+        ),
+      };
+    }
     setState(s);
     setShownPlayer(s.activePlayerIndex);
     setSeats(Array<Seat>(s.players.length).fill("human"));
@@ -239,6 +270,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     burnPreviewFor,
     moveAnim,
     animLive,
+    newCardIds,
     endMoveAnim: endAnim,
     dispatch,
     dispatchBurn,

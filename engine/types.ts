@@ -31,6 +31,7 @@ export interface CoreConfig {
     hyperspace: { engineThreshold: number; fuelCost: number };
   };
   fuel: { model: "pool"; refuelAtBase: "toMax" | "none"; reserveMayExceedMax: boolean };
+  /** allowScrapBeforeDraw: the name is legacy — it now gates voluntary scrap for the whole move */
   turn: { boostersDrawnPerTurn: number; allowScrapBeforeDraw: boolean };
   cards: { reshuffleDiscardWhenEmpty: boolean };
 }

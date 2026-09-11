@@ -19,13 +19,20 @@ export interface BottomPanelProps {
   /** cards to show (empty = none) */
   cards: BoosterCard[];
   cardHint: string | null;
-  cardState: (id: string) => { clickable: boolean; selected: boolean; onClick?: (() => void) | undefined };
+  cardState: (id: string) => {
+    clickable: boolean;
+    selected: boolean;
+    onClick?: (() => void) | undefined;
+    pulse?: "urgent" | "new" | null;
+  };
   combatTitle: string | null;
   combatSub: string | null;
   buttons: PanelButton[];
   /** homecoming upgrade offer — pick one */
   equipment: EquipChoice[];
   onEquip: (id: string) => void;
+  /** over the hand limit — redden the frame and keep every card pulsing until resolved */
+  urgent?: boolean;
 }
 
 export function BottomPanel({
@@ -37,10 +44,11 @@ export function BottomPanel({
   buttons,
   equipment,
   onEquip,
+  urgent,
 }: BottomPanelProps) {
   if (!cards.length && !combatTitle && !buttons.length && !equipment.length) return null;
   return (
-    <div className="bottompanel">
+    <div className={`bottompanel${urgent ? " urgent" : ""}`}>
       {equipment.length > 0 && <div className="bp-title">Delivered — choose an upgrade</div>}
       {combatTitle && <div className="bp-title">{combatTitle}</div>}
       {combatSub && <div className="hint">{combatSub}</div>}
@@ -75,6 +83,7 @@ export function BottomPanel({
                 clickable={s.clickable}
                 selected={s.selected}
                 onClick={s.onClick}
+                pulse={s.pulse}
               />
             );
           })}

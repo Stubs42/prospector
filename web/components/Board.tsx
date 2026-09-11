@@ -38,6 +38,10 @@ export interface BoardProps {
   burnPreview: { path: Hex[]; cost: number } | null;
   radial: RadialAction[];
   onCoast: (() => void) | null;
+  /** the active player's own base cells — clicking one (off a burn target) asks to scrap */
+  scrapCells: readonly Hex[];
+  /** a confirm dialog (e.g. "scrap your ship?") drawn centred, dimming the rest of the board */
+  confirm: { center: Hex; lines: string[]; onYes: () => void; onCancel: () => void } | null;
   /** guidance popup drawn in board space; null when no action is pending */
   popup: { center: Hex; lines: string[] } | null;
   /** false during base selection: draw only the empty field + highlights + popup */
@@ -63,6 +67,8 @@ export function Board({
   burnPreview,
   radial,
   onCoast,
+  scrapCells,
+  confirm,
   popup,
   world,
   reducedMotion,
@@ -167,6 +173,7 @@ export function Board({
   };
 
   const hi = new Set(highlight.cells.map(hexKey));
+  const scrapSet = new Set(scrapCells.map(hexKey));
   const px = (hx: Hex) => {
     const c = board.cell(hx);
     if (c) return { x: c.x * S, y: c.y * S };
@@ -237,6 +244,7 @@ export function Board({
               ? SHIP_VAR[c.base as Colour]
               : "#2b4034";
         const baseHi = isHi && highlight.kind === "base";
+        const clickable = isHi || scrapSet.has(key);
         return (
           <polygon
             key={key}
@@ -246,10 +254,10 @@ export function Board({
             stroke={stroke}
             strokeWidth={c.origin ? 2.5 : isHi ? (baseHi ? 3 : 2.5) : c.base ? 1.6 : 1}
             strokeOpacity={c.base ? 0.9 : 1}
-            className={isHi ? (baseHi ? "cell-hit base-pick" : "cell-hit") : undefined}
-            onClick={isHi ? () => onCell({ q: c.q, r: c.r }) : undefined}
-            onMouseEnter={isHi ? () => onCellHover({ q: c.q, r: c.r }) : undefined}
-            onMouseLeave={isHi ? () => onCellHover(null) : undefined}
+            className={clickable ? (baseHi ? "cell-hit base-pick" : "cell-hit") : undefined}
+            onClick={clickable ? () => onCell({ q: c.q, r: c.r }) : undefined}
+            onMouseEnter={clickable ? () => onCellHover({ q: c.q, r: c.r }) : undefined}
+            onMouseLeave={clickable ? () => onCellHover(null) : undefined}
           />
         );
       })}
@@ -397,6 +405,21 @@ export function Board({
             );
           })}
         </g>
+      )}
+
+      {/* confirm dialog (e.g. scrap?) — dims + blocks the rest of the board until answered */}
+      {confirm && (
+        <>
+          <rect x={vb.x} y={vb.y} width={vb.w} height={vb.h} fill="rgba(4,10,7,0.55)" onClick={confirm.onCancel} />
+          <HexPopup
+            center={confirm.center}
+            lines={confirm.lines}
+            actions={[
+              { label: "Cancel", onClick: confirm.onCancel },
+              { label: "Yes", kind: "danger", onClick: confirm.onYes },
+            ]}
+          />
+        </>
       )}
     </svg>
       {tip && (

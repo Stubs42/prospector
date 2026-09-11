@@ -470,7 +470,7 @@ export function applyAction(prev: GameState, action: Action): StepResult {
     }
 
     case "scrapShip": {
-      if (state.phase !== "start" || p.turn.boosterDrawn) return fail("can only scrap at the very start of the turn");
+      if (state.phase !== "start" || !p.placed) return fail("can only scrap during your own move");
       if (!state.config.core.turn.allowScrapBeforeDraw) return fail("scrapping disabled");
       loseShip(state, board, p, "voluntary scrap");
       return advanceTurn(state, board);

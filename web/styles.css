@@ -109,6 +109,14 @@ button.danger { border-color: #6a3a2f; }
 .bottompanel .bp-title { font-weight: 700; }
 .bottompanel .hand { justify-content: center; }
 .bottompanel .actions { justify-content: center; }
+.bottompanel.urgent {
+  border-color: #c1573c;
+  animation: panel-pulse 1.2s ease-in-out infinite;
+}
+@keyframes panel-pulse {
+  0%, 100% { box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); }
+  50% { box-shadow: 0 0 0 3px rgba(193, 87, 60, 0.55), 0 10px 30px rgba(0, 0, 0, 0.5); }
+}
 
 .equip-choice { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 .equip-card {
@@ -131,6 +139,12 @@ button.danger { border-color: #6a3a2f; }
   filter: drop-shadow(0 10px 26px rgba(0, 0, 0, 0.55));
 }
 .hexpopup text { fill: var(--ink); font-size: 13px; font-weight: 600; letter-spacing: 0.01em; }
+.hexpopup-btn { cursor: pointer; }
+.hexpopup-btn rect { fill: #17251f; stroke: var(--line-strong, #3a444e); stroke-width: 1.6; }
+.hexpopup-btn:hover rect { stroke: var(--gold); }
+.hexpopup-btn.danger rect { stroke: #c1573c; }
+.hexpopup-btn.danger text { fill: #e08a7a; }
+.hexpopup-btn text { fill: var(--ink); font-size: 12px; font-weight: 700; pointer-events: none; }
 
 /* a base cell you can pick as your start base */
 .base-pick { animation: base-pulse 1.6s ease-in-out infinite; }
@@ -254,6 +268,19 @@ button.danger { border-color: #6a3a2f; }
 .card .ctype { font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
 .card .cval { font-size: 1.3rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .card .ceff { font-size: 0.56rem; color: var(--muted); line-height: 1.25; margin-top: auto; }
+@keyframes card-pulse {
+  0%, 100% { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); transform: scale(1); }
+  50% { box-shadow: 0 0 0 3px rgba(230, 176, 60, 0.55), 0 2px 10px rgba(0, 0, 0, 0.4); transform: scale(1.035); }
+}
+.card.pulse-new { animation: card-pulse 0.8s ease-in-out 3; }
+.card.pulse-urgent {
+  border-color: #c1573c;
+  animation: card-pulse-urgent 1s ease-in-out infinite;
+}
+@keyframes card-pulse-urgent {
+  0%, 100% { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); transform: scale(1); }
+  50% { box-shadow: 0 0 0 3px rgba(193, 87, 60, 0.55), 0 2px 10px rgba(0, 0, 0, 0.4); transform: scale(1.035); }
+}
 /* card accent = the shared aspect palette (see aspects.ts) */
 .card.booster-shield { border-color: #e9e9e9; }
 .card.booster-shield .ctype, .card.booster-shield .cval { color: #e9e9e9; }
@@ -367,5 +394,6 @@ circle.cell-hit { pointer-events: all; }
 @media (prefers-reduced-motion: reduce) {
   .ore-chip, .base-pick { animation: none; }
   .base-pick { fill-opacity: 1; }
+  .card.pulse-new, .card.pulse-urgent, .bottompanel.urgent { animation: none; }
   * { transition: none !important; }
 }

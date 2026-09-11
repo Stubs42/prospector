@@ -89,15 +89,18 @@ export function BoosterCardFace({
   onClick,
   clickable,
   selected,
+  pulse,
 }: {
   card: BoosterCardT;
   onClick?: (() => void) | undefined;
   clickable?: boolean | undefined;
   selected?: boolean | undefined;
+  /** "new" = briefly highlight a just-drawn card; "urgent" = keep pulsing (over the hand limit) */
+  pulse?: "urgent" | "new" | null | undefined;
 }) {
   return (
     <div
-      className={`card booster-${card.type}${selected ? " picked" : ""}`}
+      className={`card booster-${card.type}${selected ? " picked" : ""}${pulse ? ` pulse-${pulse}` : ""}`}
       style={{ cursor: clickable ? "pointer" : "default" }}
       onClick={onClick}
     >

@@ -80,13 +80,15 @@ export function legalActions(state: GameState, opts?: LegalOpts): Action[] {
   };
 
   if (state.phase === "start") {
-    if (!p.turn.boosterDrawn) {
-      if (!p.placed) {
-        for (const c of board.baseCells(p.colour)) {
-          if (!hexEq(c, p.pose.current)) out.push({ type: "placeShip", cell: c });
-        }
+    if (!p.turn.boosterDrawn && !p.placed) {
+      for (const c of board.baseCells(p.colour)) {
+        if (!hexEq(c, p.pose.current)) out.push({ type: "placeShip", cell: c });
       }
-      if (state.config.core.turn.allowScrapBeforeDraw) out.push({ type: "scrapShip" });
+    }
+    // voluntary scrap is available any time during the move, once the ship is launched
+    if (p.placed && state.config.core.turn.allowScrapBeforeDraw) out.push({ type: "scrapShip" });
+
+    if (!p.turn.boosterDrawn) {
       out.push({ type: "drawBooster" });
       return out;
     }
@@ -141,7 +143,7 @@ export function legalActions(state: GameState, opts?: LegalOpts): Action[] {
       }
       // endMove is legal when the move settled cleanly, OR as the "ship lost" escape when a
       // mandatory burn cannot be afforded / reached.
-      if (!p.turn.mustBurn || out.length === 0) out.push({ type: "endMove" });
+      if (!p.turn.mustBurn || !out.some((a) => a.type === "burn")) out.push({ type: "endMove" });
       return out;
     }
     out.push({ type: "endMove" });

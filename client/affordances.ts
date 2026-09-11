@@ -80,7 +80,9 @@ export function affordances(state: GameState, opts: AffordanceOpts = {}): Afford
 
   return {
     legal,
-    overLimit: legal.length > 0 && legal.every((a) => a.type === "discardBooster"),
+    // discardBooster only ever appears when over the hand limit (scrapShip may be legal
+    // alongside it now, since scrapping is available throughout the move)
+    overLimit: legal.some((a) => a.type === "discardBooster"),
     placeCells: legal.flatMap((a) => (a.type === "placeShip" ? [a.cell] : [])),
     loadCells: legal.flatMap((a) => (a.type === "loadResource" ? [a.from] : [])),
     burnTargets: [...burnByCell.values()].map((a) => ({
