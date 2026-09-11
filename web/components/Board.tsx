@@ -175,6 +175,10 @@ export function Board({
     const r = svgRef.current?.getBoundingClientRect();
     setTip({ text, x: e.clientX - (r?.left ?? 0), y: e.clientY - (r?.top ?? 0) });
   };
+  /** clicking a tipped target can remove it from the DOM before onMouseLeave ever
+     fires (chip consumed, ship un-attackable, cell no longer pickable) — clear
+     the tooltip explicitly at the click site instead of relying on mouseleave */
+  const clicked = (fn: () => void) => () => { setTip(null); fn(); };
 
   const hi = new Set(highlight.cells.map(hexKey));
   const scrapSet = new Set(scrapCells.map(hexKey));
@@ -287,7 +291,7 @@ export function Board({
         const loadable = loadSet.has(k);
         return (
           <g key={`res-${k}`} className={`ore-chip${loadable ? " cell-hit pulse-avail" : ""}`}
-             onClick={loadable ? () => onCell({ q, r }) : undefined}
+             onClick={loadable ? clicked(() => onCell({ q, r })) : undefined}
              onMouseMove={loadable ? (e) => onTip("Load cargo", e) : undefined}
              onMouseLeave={loadable ? (e) => onTip(null, e) : undefined}>
             <circle cx={x} cy={y} r={S * 0.42} fill={ORE_VAR[colour as OreColour]} stroke="rgba(0,0,0,0.4)" />
@@ -336,9 +340,9 @@ export function Board({
           const isAttackable = attackTargets.includes(p.id);
           const isEndTurnShip = isActive && endTurnReady;
           const interact = isAttackable
-            ? { tip: "Attack", onClick: () => onAttackTarget(p.id) }
+            ? { tip: "Attack", onClick: clicked(() => onAttackTarget(p.id)) }
             : isEndTurnShip
-              ? { tip: "End turn (own ship)", onClick: onEndTurn! }
+              ? { tip: "End turn (own ship)", onClick: clicked(onEndTurn!) }
               : null;
           const pulse = isAttackable || isEndTurnShip;
           if (moveAnim && moveAnim.playerId === p.id) {
@@ -394,7 +398,7 @@ export function Board({
         const col = SHIP_VAR[active.colour];
         return (
           <g key={`hi-${hexKey(hx)}`} className="cell-hit pulse-avail"
-             onClick={() => onCell(hx)}
+             onClick={clicked(() => onCell(hx))}
              onMouseMove={(e) => onTip("Launch here", e)}
              onMouseLeave={(e) => onTip(null, e)}>
             <circle cx={x} cy={y} r={S * 0.42} fill={col} fillOpacity={0.12} stroke={col} strokeWidth={2.4} />
