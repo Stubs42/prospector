@@ -271,6 +271,8 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     moveAnim,
     animLive,
     newCardIds,
+    /** the action about to auto-fire on its own, if any — GUIs should hide it as a click target */
+    autoAction,
     endMoveAnim: endAnim,
     dispatch,
     dispatchBurn,

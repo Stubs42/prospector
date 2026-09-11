@@ -156,9 +156,12 @@ export default function App() {
   }
 
   // --- radial menu around the active ship --------------------------
+  // an action about to fire on its own (drawBooster, drift, a forced endTurn, ...) should
+  // never show up as a click target first — that's just a flash before it vanishes again
+  const autoPendingType = s.autoAction?.type ?? null;
   // "coast" (endMove) is a green circle on the ship's own cell, not a radial chip
   const coastAction =
-    interactive && !pc && attackTarget === null && !overLimit
+    interactive && !pc && attackTarget === null && !overLimit && autoPendingType !== "endMove"
       ? afford.plainActions.find((a) => a.type === "endMove") ?? null
       : null;
   const onCoast = coastAction ? () => dispatch(coastAction) : null;
@@ -166,8 +169,9 @@ export default function App() {
   const radial: RadialAction[] = useMemo(() => {
     if (!interactive || pc || attackTarget !== null || overLimit || launchPhase) return [];
     const out: RadialAction[] = afford.plainActions
-      // "coast" is the green ship-cell circle; scrapping is a click-your-base-and-confirm gesture
-      .filter((a) => a.type !== "endMove" && a.type !== "scrapShip")
+      // "coast" is the green ship-cell circle; scrapping is a click-your-base-and-confirm gesture;
+      // whatever's about to auto-fire shouldn't flash up as a chip first
+      .filter((a) => a.type !== "endMove" && a.type !== "scrapShip" && a.type !== autoPendingType)
       .map((a) => ({
         id: a.type,
         label: CHIP_LABEL[a.type] ?? a.type,
@@ -184,7 +188,7 @@ export default function App() {
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, afford, interactive, pc, attackTarget, overLimit, launchPhase]);
+  }, [state, afford, interactive, pc, attackTarget, overLimit, launchPhase, autoPendingType]);
 
   // --- board affordances ------------------------------------------
   const freeBaseColours = ALL_COLOURS.filter((c) => !s.setup.picks.includes(c));

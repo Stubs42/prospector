@@ -183,6 +183,19 @@ export function Board({
   const active = state.players[state.activePlayerIndex]!;
   const activeAt = px(active.pose.current);
 
+  // space cancels a confirm dialog (e.g. the scrap prompt) — Cancel is the safe default
+  useEffect(() => {
+    if (!confirm) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code === "Space" || e.key === " ") {
+        e.preventDefault();
+        confirm.onCancel();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [confirm]);
+
   // drive the slide animation with rAF; end it (and let the timers resume) when done.
   // a held "drift" has no motion — it just sits there, so it needs no loop.
   const [, forceFrame] = useReducer((n: number) => n + 1, 0);
@@ -414,8 +427,9 @@ export function Board({
           <HexPopup
             center={confirm.center}
             lines={confirm.lines}
+            radius={3}
             actions={[
-              { label: "Cancel", onClick: confirm.onCancel },
+              { label: "Cancel", kind: "primary", onClick: confirm.onCancel },
               { label: "Yes", kind: "danger", onClick: confirm.onYes },
             ]}
           />

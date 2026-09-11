@@ -15,9 +15,20 @@ export interface HexPopupAction {
   onClick: () => void;
 }
 
-export function HexPopup({ center, lines, actions }: { center: Hex; lines: string[]; actions?: HexPopupAction[] }) {
+export function HexPopup({
+  center,
+  lines,
+  actions,
+  radius = 2,
+}: {
+  center: Hex;
+  lines: string[];
+  actions?: HexPopupAction[];
+  /** hex "radius" in cells — each edge spans this many cells. Bump it up when there are buttons to fit. */
+  radius?: number;
+}) {
   const pts = DIRECTIONS.map((d) => {
-    const p = axialToPixel(add(center, scale(d, 2)));
+    const p = axialToPixel(add(center, scale(d, radius)));
     return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;
   }).join(" ");
   const o = axialToPixel(center);
@@ -25,8 +36,8 @@ export function HexPopup({ center, lines, actions }: { center: Hex; lines: strin
   const hasActions = !!actions?.length;
   const y0 = o.y - ((lines.length - 1) * lh) / 2 - (hasActions ? 16 : 0);
 
-  const bw = 72;
-  const bh = 26;
+  const bw = 56;
+  const bh = 22;
   const gap = 10;
   const btnY = o.y + (lines.length - 1) * (lh / 2) + 26;
   const totalW = hasActions ? actions!.length * bw + (actions!.length - 1) * gap : 0;
