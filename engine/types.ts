@@ -222,6 +222,7 @@ export type Action =
   | { type: "drawBooster" }
   | { type: "discardBooster"; cardId: string }
   | { type: "drift" }
+  | { type: "useReserveFuel"; cardId: string }
   | { type: "burn"; path: Hex[]; engineBoosters?: string[]; reserveFuelBoosters?: string[] }
   | { type: "hyperspace"; via: "booster" | "engines"; boosterId?: string }
   | { type: "endMove" }

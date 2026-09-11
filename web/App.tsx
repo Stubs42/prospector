@@ -75,13 +75,15 @@ export default function App() {
         ? "laser"
         : null;
 
+  const canRefuel = (id: string) => afford.legal.some((a) => a.type === "useReserveFuel" && a.cardId === id);
   const cardState = (id: string) => {
     const c = handOwner.hand.find((x) => x.id === id)!;
     let onClick: (() => void) | undefined;
-    const fuelUseful = c.type !== "reserveFuel" || handOwner.fuel < handOwner.fuelMax;
     if (overLimit) onClick = () => dispatch({ type: "discardBooster", cardId: id });
-    else if (inBurnPhase && (c.type === "engine" || c.type === "reserveFuel") && fuelUseful)
-      onClick = () => s.toggleArmed(id);
+    // reserve fuel isn't armed for a later burn — it's used up the instant it's clicked
+    else if (inBurnPhase && c.type === "reserveFuel" && canRefuel(id))
+      onClick = () => dispatch({ type: "useReserveFuel", cardId: id });
+    else if (inBurnPhase && c.type === "engine") onClick = () => s.toggleArmed(id);
     else if (combatCardType && c.type === combatCardType) onClick = () => s.toggleCombatSel(id);
     const pulse: "urgent" | "new" | "ready" | null = overLimit
       ? "urgent"
@@ -107,7 +109,7 @@ export default function App() {
   const cardHint = overLimit
     ? null // the centred hex popup carries this message instead
     : inBurnPhase && p.hand.some((c) => c.type === "engine" || c.type === "reserveFuel")
-      ? "Tap an engine / reserve-fuel card to arm it for this burn."
+      ? "Tap an engine card to arm it for this burn, or a reserve-fuel card to refuel now."
       : combatCardType === "shield"
         ? "Tap shield cards to add to your defence."
         : combatCardType === "laser"

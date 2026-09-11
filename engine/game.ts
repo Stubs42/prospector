@@ -518,6 +518,23 @@ export function applyAction(prev: GameState, action: Action): StepResult {
       return done();
     }
 
+    case "useReserveFuel": {
+      // stand-alone card play: unlike engine boosters (which only mean something bundled
+      // with a specific burn), a reserve-fuel card just tops up the tank — it's used up the
+      // moment it's clicked, not staged/armed for a later burn.
+      if (state.phase !== "start" || !p.placed) return fail("not your move to make");
+      if (p.turn.moved) return fail("already moved");
+      const card = p.hand.find((c) => c.id === action.cardId);
+      if (!card || card.type !== "reserveFuel") return fail("no such reserve-fuel card in hand");
+      if (p.fuel >= p.fuelMax) return fail("fuel already at max");
+      p.hand = p.hand.filter((c) => c.id !== action.cardId);
+      state.decks.booster = discardCards(state.decks.booster, [card]);
+      p.turn.boostersUsed.push(action.cardId);
+      p.fuel = Math.min(p.fuel + (card.value ?? 0), p.fuelMax);
+      logBoosters(p, [card], "refuel");
+      return done();
+    }
+
     case "burn": {
       if (state.phase !== "start" || !p.turn.driftDone) return fail("drift first");
       if (p.turn.moved) return fail("already burned this turn");

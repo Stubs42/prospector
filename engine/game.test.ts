@@ -87,6 +87,42 @@ describe("voluntary scrap", () => {
   });
 });
 
+describe("reserve fuel card", () => {
+  it("is used up the instant it's played, not armed/staged for a later burn", () => {
+    let s = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0 });
+    const Y = () => s.players[0]!;
+
+    s = run(s, { type: "placeShip", cell: Y().pose.current });
+    s = run(s, { type: "drawBooster" });
+    const card = { id: "test-fuel", deck: "booster" as const, type: "reserveFuel" as const, value: 3, effect: "" };
+    Y().hand = [...Y().hand, card];
+    Y().fuel = Math.max(0, Y().fuelMax - 2);
+    const before = Y().fuel;
+    const beforeDiscard = s.decks.booster.discard.length;
+
+    expect(legalActions(s).some((a) => a.type === "useReserveFuel" && a.cardId === card.id)).toBe(true);
+    s = run(s, { type: "useReserveFuel", cardId: card.id });
+
+    expect(Y().fuel).toBe(Math.min(before + 3, Y().fuelMax));
+    expect(Y().hand.some((c) => c.id === card.id)).toBe(false); // gone from hand
+    expect(s.decks.booster.discard.length).toBe(beforeDiscard + 1); // ... into the discard pile
+    expect(s.phase).toBe("start"); // playing it doesn't end/advance the move
+  });
+
+  it("isn't offered once fuel is already at max", () => {
+    let s = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0 });
+    const Y = () => s.players[0]!;
+    s = run(s, { type: "placeShip", cell: Y().pose.current });
+    s = run(s, { type: "drawBooster" });
+    const card = { id: "test-fuel", deck: "booster" as const, type: "reserveFuel" as const, value: 3, effect: "" };
+    Y().hand = [...Y().hand, card]; // fuel already at max from createGame
+
+    expect(legalActions(s).some((a) => a.type === "useReserveFuel")).toBe(false);
+    const r = applyAction(s, { type: "useReserveFuel", cardId: card.id });
+    expect(r.ok).toBe(false);
+  });
+});
+
 describe("homecoming upgrade pick", () => {
   it("a delivery pauses for a 3-card equipment choice, then applies it", () => {
     let s = createGame({ seed: 8, colours: ["yellow", "black"], startPlayer: 0 });

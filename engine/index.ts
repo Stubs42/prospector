@@ -86,6 +86,11 @@ export function legalActions(state: GameState, opts?: LegalOpts): Action[] {
     }
     // voluntary scrap is available any time during the move, once the ship is launched
     if (p.placed && state.config.core.turn.allowScrapBeforeDraw) out.push({ type: "scrapShip" });
+    // a reserve-fuel card can be played the instant it's useful — any time before this
+    // turn's move is settled, not staged/armed like an engine booster
+    if (p.placed && !p.turn.moved && p.fuel < p.fuelMax) {
+      for (const c of p.hand) if (c.type === "reserveFuel") out.push({ type: "useReserveFuel", cardId: c.id });
+    }
 
     if (!p.turn.boosterDrawn) {
       out.push({ type: "drawBooster" });

@@ -33,6 +33,8 @@ const AUTO_HIDE = new Set<Action["type"]>([
   // scrapping is now a click-your-base-and-confirm gesture, not a turn-start choice —
   // never auto-fire it, and never let its presence block the auto-draw/auto-drift chain
   "scrapShip",
+  // playing a reserve-fuel card is always the player's voluntary choice — never auto-fire it
+  "useReserveFuel",
 ]);
 
 /** how long a freshly-drawn card keeps its "new" pulse */
@@ -74,14 +76,8 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   const armedEngine = p.hand
     .filter((c) => c.type === "engine" && armed.has(c.id))
     .reduce((a, c) => a + (c.value ?? 0), 0);
-  const armedFuel = p.hand
-    .filter((c) => c.type === "reserveFuel" && armed.has(c.id))
-    .reduce((a, c) => a + (c.value ?? 0), 0);
 
-  const afford = useMemo(
-    () => affordances(state, { extraEngines: armedEngine, extraFuel: armedFuel }),
-    [state, armedEngine, armedFuel],
-  );
+  const afford = useMemo(() => affordances(state, { extraEngines: armedEngine }), [state, armedEngine]);
 
   const humansCount = humansIn(seats);
   const activeIsBot = activeIsBotOf(state, seats);
@@ -118,15 +114,10 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     } else console.warn("rejected", a, r.error);
   }
   function dispatchBurn(burn: Extract<Action, { type: "burn" }>) {
+    // reserve-fuel cards are no longer staged here — they're played (and their fuel
+    // banked) the instant they're clicked, via useReserveFuel — only engine cards arm.
     const engineBoosters = p.hand.filter((c) => c.type === "engine" && armed.has(c.id)).map((c) => c.id);
-    const reserveFuelBoosters = p.hand
-      .filter((c) => c.type === "reserveFuel" && armed.has(c.id))
-      .map((c) => c.id);
-    dispatch(
-      engineBoosters.length || reserveFuelBoosters.length
-        ? { ...burn, engineBoosters, reserveFuelBoosters }
-        : burn,
-    );
+    dispatch(engineBoosters.length ? { ...burn, engineBoosters } : burn);
   }
   function openSetup(h = humans, b = bots) {
     setHumans(h);
