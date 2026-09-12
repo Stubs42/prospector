@@ -31,6 +31,9 @@ export interface BoardProps {
   highlight: { cells: Hex[]; kind: "place" | "base" | null };
   /** during a "pick a random base" spin: the one base region to trace solid (not pulsing) */
   spinHighlight?: Colour | null;
+  /** a single-cell marker for the coordinate-dice spin (initial resource seeding, hyperspace) —
+     a ring "landing" on a cell, narrowing in step by step */
+  spinPoint?: Hex | null;
   /** resource cells the active player can load from right now — the ore chip itself pulses */
   loadCells: readonly Hex[];
   burnTargets: { cell: Hex; cost: number }[];
@@ -71,6 +74,7 @@ export function Board({
   scores,
   highlight,
   spinHighlight = null,
+  spinPoint = null,
   loadCells,
   burnTargets,
   driftGhost,
@@ -358,6 +362,23 @@ export function Board({
               stroke="var(--gold)"
               strokeWidth={3.5}
               strokeLinejoin="round"
+              pointerEvents="none"
+            />
+          );
+        })()}
+
+      {spinPoint &&
+        (() => {
+          const { x, y } = px(spinPoint);
+          return (
+            <circle
+              cx={x}
+              cy={y}
+              r={S * 0.5}
+              fill="var(--gold)"
+              fillOpacity={0.22}
+              stroke="var(--gold)"
+              strokeWidth={2.5}
               pointerEvents="none"
             />
           );

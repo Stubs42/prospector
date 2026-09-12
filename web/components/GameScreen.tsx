@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from "react";
 import { score } from "../../engine/index.js";
 import { boardFor } from "../../engine/game.js";
-import { hexKey } from "../../engine/hex.js";
+import { add, hexKey, scale } from "../../engine/hex.js";
 import type { BoardModel } from "../../engine/board.js";
 import type { Colour, Hex } from "../../engine/index.js";
 import { Board } from "./Board.js";
@@ -58,8 +58,54 @@ export function GameScreen({
   const board = boardFor(state);
   const mode = state.config.modes.prospector;
   const sc = score(state);
+
+  // --- initial resource placement: a one-time reveal, right when the real game opens -----
+  // populateGame already placed every resource atomically; this replays each one's own
+  // coordinate-dice roll (resourceSeeded log entries, see engine/game.ts) as three sequential
+  // spins narrowing in (largest step first) before the tile actually appears. Nobody's turn —
+  // "the system" is doing this — so the normal auto-draw/bot timers are held off the whole
+  // time (see useSession's holdAdvance) and the status panel shows a placeholder identity.
+  const [seedEntries] = useState(() => state.log.filter((l) => l.event === "resourceSeeded"));
+  const [revealed, setRevealed] = useState<Set<string>>(new Set());
+  const [spinPoint, setSpinPoint] = useState<Hex | null>(null);
+  const [placing, setPlacing] = useState(seedEntries.length > 0);
+  useEffect(() => {
+    if (!placing) return;
+    s.setHoldAdvance(true);
+    let cancelled = false;
+    const sleep = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));
+    (async () => {
+      for (const entry of seedEntries) {
+        const d = entry.detail as { cell: Hex; dice: { step: number; colour: Colour }[] };
+        const dice = [...d.dice].sort((a, b) => b.step - a.step); // coarse to fine
+        let pt: Hex = { q: 0, r: 0 };
+        for (const die of dice) {
+          pt = add(pt, scale(board.directionOf(die.colour), die.step));
+          if (cancelled) return;
+          setSpinPoint(pt);
+          await sleep(reducedMotion ? 40 : 320);
+        }
+        if (cancelled) return;
+        setRevealed((r) => new Set(r).add(hexKey(d.cell)));
+        setSpinPoint(null);
+        await sleep(reducedMotion ? 20 : 140);
+      }
+      if (!cancelled) {
+        setPlacing(false);
+        s.setHoldAdvance(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const displayState = placing
+    ? { ...state, board: { resources: Object.fromEntries([...revealed].map((k) => [k, state.board.resources[k]!])) } }
+    : state;
+
   const anim = s.animLive; // a move is actively playing — hold back prompts/targets
-  const suppress = anim || scrapConfirmOpen; // also true while the scrap confirm dialog is up
+  const suppress = anim || scrapConfirmOpen || placing; // also true while placing / the scrap dialog is up
   const interactive = !activeIsBot && !needPassGate;
   const overLimit = afford.overLimit;
   // turn 1: the ship must be placed on a base cell before anything else
@@ -302,10 +348,11 @@ export function GameScreen({
 
       <div className="stage">
         <Board
-          state={state}
+          state={displayState}
           seats={seats}
           scores={sc.byPlayer}
           highlight={suppress ? { cells: [], kind: null } : interactive ? highlight : { cells: [], kind: null }}
+          spinPoint={spinPoint}
           loadCells={loadCellsForBoard}
           burnTargets={interactive && !suppress ? afford.burnTargets : []}
           driftGhost={interactive && !suppress ? driftGhost : null}
@@ -326,12 +373,16 @@ export function GameScreen({
           onCellHover={setHoverCell}
         />
 
-        <StatusPanel
-          colour={handOwner.colour}
-          name={s.names[handOwner.id] ?? "?"}
-          bot={seats[handOwner.id] === "bot"}
-          log={moveLog}
-        />
+        {placing ? (
+          <StatusPanel colour={null} name="⚙ System" bot={false} log={["Placing resources"]} />
+        ) : (
+          <StatusPanel
+            colour={handOwner.colour}
+            name={s.names[handOwner.id] ?? "?"}
+            bot={seats[handOwner.id] === "bot"}
+            log={moveLog}
+          />
+        )}
         {isWaitingOnBot && !activeIsBot && <div className="board-toast">🤖 waiting on the bot…</div>}
         {state.gameOver && (
           <div className="board-toast win">

@@ -96,11 +96,15 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   // so this pass-gate and the bot-turn check below both already work during pickBase/pickShip
   const needPassGate =
     humansCount >= 2 && !state.gameOver && !activeIsBot && shownPlayer !== state.activePlayerIndex;
+  // held while GameScreen is playing the initial-resource-placement reveal — the real game
+  // state already has every resource placed (see populateGame), so without this the bot
+  // timer / auto-draw could silently advance the game while that animation is still playing
+  const [holdAdvance, setHoldAdvance] = useState(false);
   // during setup, SetupScreen resolves bot turns itself (the same lucky-wheel spin a human's
   // "Random" button runs, just auto-triggered) so the pick is actually watchable — this timer
   // stays out of it entirely and only drives bot turns in a real, started game
   const isWaitingOnBot =
-    !state.setup && !animLive && !state.gameOver && !needPassGate && seats[waitingOn(state)] === "bot";
+    !state.setup && !holdAdvance && !animLive && !state.gameOver && !needPassGate && seats[waitingOn(state)] === "bot";
 
   // --- state transitions -------------------------------------------------
   const clearStaging = () => {
@@ -196,6 +200,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   const autoAction =
     prefs.autoSingle &&
     !state.setup &&
+    !holdAdvance &&
     !animLive &&
     !state.gameOver &&
     !needPassGate &&
@@ -306,6 +311,8 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     pickBase,
     pickShip,
     finishSetup,
+    holdAdvance,
+    setHoldAdvance,
     revealTurn,
     toggleArmed: toggle(setArmed),
     toggleCombatSel: toggle(setCombatSel),
