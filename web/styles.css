@@ -182,10 +182,10 @@ button.danger { border-color: #6a3a2f; }
 /* general "you can act on this" guide: anything clickable on the board (a loadable
    resource, an attackable ship, your own ship when it can end the turn, ...) breathes
    gently. Buttons are exempt — they're already self-explanatory as clickable. */
-.pulse-avail { animation: avail-pulse 1.3s ease-in-out infinite; }
+.pulse-avail { animation: avail-pulse 1.1s ease-in-out infinite; }
 @keyframes avail-pulse {
-  0%, 100% { opacity: 0.65; }
-  50% { opacity: 1; }
+  0%, 100% { opacity: 0.4; filter: drop-shadow(0 0 0 transparent); }
+  50% { opacity: 1; filter: drop-shadow(0 0 7px var(--gold)); }
 }
 
 /* log / history overlay */
@@ -372,6 +372,9 @@ button.danger { border-color: #6a3a2f; }
 /* board bits */
 .cell-hit { cursor: pointer; }
 .cell-hit:hover { stroke: var(--gold); stroke-width: 2.5; }
+/* stroke is an inherited SVG property — without this, hovering an .ore-chip's <g> (a
+   .cell-hit) paints its resource-count <text> with a gold outline too */
+.cell-hit:hover text { stroke: none; }
 /* a base-pick cell: clickable, but the region outline is the only visual cue — a
    tooltip stands in for the per-cell hover highlight every other cell-hit gets */
 .cell-hit-quiet { cursor: pointer; }

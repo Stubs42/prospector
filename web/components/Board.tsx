@@ -301,13 +301,7 @@ export function Board({
           : c.region === "outer"
             ? "#1c2b25"
             : "#0e1b15";
-        const stroke = c.origin
-          ? "var(--gold)"
-          : isCellHi
-            ? "var(--gold)"
-            : assigned
-              ? SHIP_VAR[assigned]
-              : "#2b4034";
+        const stroke = isCellHi ? "var(--gold)" : assigned ? SHIP_VAR[assigned] : "#2b4034";
         const clickable = isHi || scrapSet.has(key);
         // a base-pick cell shows a tooltip, not its own hover highlight — the region
         // outline (below) is the only visual indicator for "you can pick this"
@@ -319,7 +313,7 @@ export function Board({
             fill={fill}
             fillOpacity={assigned ? 0.85 : 1}
             stroke={stroke}
-            strokeWidth={c.origin ? 2.5 : isCellHi ? 2.5 : assigned ? 1.6 : 1}
+            strokeWidth={isCellHi ? 2.5 : assigned ? 1.6 : 1}
             strokeOpacity={assigned ? 0.9 : 1}
             className={clickable ? (isBaseCell ? "cell-hit-quiet" : "cell-hit") : undefined}
             onClick={clickable ? clicked(() => onCell({ q: c.q, r: c.r })) : undefined}
