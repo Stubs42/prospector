@@ -48,8 +48,10 @@ export function SetupScreen({
   // one before dispatching pickBase; purely a client-side convenience (equivalent to the
   // player clicking that base themselves), so there's nothing for the engine to know about.
   const [spinning, setSpinning] = useState<Colour | null>(null);
+  // only pulse the still-free bases while it's actually a human's turn to pick one — during
+  // a bot's turn (or while spinning) nothing is clickable, so nothing should look clickable
   const highlightCells =
-    setup.stage === "pickBase" && !spinning ? freeBases.flatMap((c) => [...board.baseCells(c)]) : [];
+    canPickNow && !spinning ? freeBases.flatMap((c) => [...board.baseCells(c)]) : [];
 
   function spinRandomBase() {
     if (!canPickNow || spinning || freeBases.length === 0) return;
