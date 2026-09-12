@@ -334,7 +334,7 @@ describe("scoring", () => {
   });
 });
 
-describe("interactive setup: pickBase -> (engine picks start player) -> pickShip", () => {
+describe("interactive setup: per seat, pickBase -> pickShip; then rollOff -> finishSetup", () => {
   const seats: SeatKind[] = ["human", "human", "bot"];
 
   it("createGame({ seats }) starts pending at pickBase, no players yet", () => {
@@ -347,39 +347,43 @@ describe("interactive setup: pickBase -> (engine picks start player) -> pickShip
     expect(acts.every((a) => a.type === "pickBase")).toBe(true);
   });
 
-  it("assigns bases to seats in order; the last pick instantly settles the start player and ship order", () => {
+  it("each seat picks its base then immediately its ship, before the next seat's turn", () => {
     let s = createGame({ seed: 7, seats });
 
-    // pickBase, seat by seat — each pick shrinks the free set for the next seat
     for (let i = 0; i < seats.length; i++) {
-      const acts = legalActions(s).filter((a) => a.type === "pickBase") as Extract<Action, { type: "pickBase" }>[];
-      expect(acts).toHaveLength(6 - i);
-      s = run(s, acts[0]!);
-      expect(s.setup!.bases[i]).toBe(acts[0]!.base);
+      expect(s.setup!.stage).toBe("pickBase");
+      expect(s.setup!.turnIndex).toBe(i);
+      const baseActs = legalActions(s).filter((a) => a.type === "pickBase") as Extract<Action, { type: "pickBase" }>[];
+      expect(baseActs).toHaveLength(6 - i);
+      s = run(s, baseActs[0]!);
+      expect(s.setup!.bases[i]).toBe(baseActs[0]!.base);
+      // the same seat's ship pick is offered next, not the next seat's base
+      expect(s.setup!.stage).toBe("pickShip");
+      expect(s.setup!.turnIndex).toBe(i);
+      expect(s.setup!.colours[i]).toBeNull();
+
+      const shipActs = legalActions(s).filter((a) => a.type === "pickShip") as Extract<Action, { type: "pickShip" }>[];
+      expect(shipActs).toHaveLength(6 - i);
+      s = run(s, shipActs[0]!);
+      expect(s.setup!.colours[i]).toBe(shipActs[0]!.colour);
     }
-    // no separate roll action — the engine already decided, in the same step as the last pickBase
-    expect(s.setup!.stage).toBe("pickShip");
+
+    // every seat has both now — parked in rollOff with an already-decided winner
+    expect(s.setup!.stage).toBe("rollOff");
     expect(s.setup!.bases.every((b) => b !== null)).toBe(true);
+    expect(s.setup!.colours.every((c) => c !== null)).toBe(true);
     const winner = s.setup!.startSeat!;
     expect(winner).toBeGreaterThanOrEqual(0);
     expect(winner).toBeLessThan(seats.length);
-    // clockwise from the winner: seat order wraps around
-    expect(s.setup!.shipOrder).toEqual(seats.map((_, i) => (winner + i) % seats.length));
     expect(s.log.some((l) => l.event === "startPlayerChosen")).toBe(true);
+    expect(legalActions(s)).toEqual([{ type: "finishSetup" }]);
 
-    // pickShip, in shipOrder — finalizes into a real game on the last pick
-    for (let i = 0; i < seats.length; i++) {
-      const acts = legalActions(s).filter((a) => a.type === "pickShip") as Extract<Action, { type: "pickShip" }>[];
-      expect(acts).toHaveLength(6 - i);
-      const seat = s.setup!.shipOrder![i]!;
-      s = run(s, acts[0]!);
-      if (i < seats.length - 1) expect(s.setup!.colours[seat]).toBe(acts[0]!.colour);
-    }
-
+    // finishSetup finalizes into a real game
+    s = run(s, { type: "finishSetup" });
     expect(s.setup).toBeNull();
     expect(s.phase).toBe("start");
     expect(s.turnNumber).toBe(1);
-    expect(s.activePlayerIndex).toBe(winner); // the roll-off winner goes first
+    expect(s.activePlayerIndex).toBe(winner);
     expect(s.players).toHaveLength(seats.length);
     for (const p of s.players) {
       expect(p.pose.atRest).toBe(true);
@@ -391,22 +395,23 @@ describe("interactive setup: pickBase -> (engine picks start player) -> pickShip
     let s = createGame({ seed: 2, seats: ["human", "human"] });
     const base = (legalActions(s)[0] as Extract<Action, { type: "pickBase" }>).base;
     s = run(s, { type: "pickBase", base });
+    // seat 0 is now picking its ship — seat 1 can't have that base either, later
+    s = run(s, (legalActions(s)[0] as Extract<Action, { type: "pickShip" }>));
     expect(applyAction(s, { type: "pickBase", base }).ok).toBe(false);
   });
 
   it("activePlayerIndex always points at whoever is up next, for a client's bot-turn check", () => {
     let s = createGame({ seed: 4, seats: ["human", "bot", "human"] });
     for (let i = 0; i < seats.length; i++) {
-      expect(s.activePlayerIndex).toBe(i); // pickBase goes in plain seat order
-      const acts = legalActions(s).filter((a) => a.type === "pickBase") as Extract<Action, { type: "pickBase" }>[];
-      s = run(s, acts[0]!);
+      expect(s.activePlayerIndex).toBe(i); // base then ship, same seat both times
+      const baseActs = legalActions(s).filter((a) => a.type === "pickBase") as Extract<Action, { type: "pickBase" }>[];
+      s = run(s, baseActs[0]!);
+      expect(s.activePlayerIndex).toBe(i);
+      const shipActs = legalActions(s).filter((a) => a.type === "pickShip") as Extract<Action, { type: "pickShip" }>[];
+      s = run(s, shipActs[0]!);
     }
-    // pickShip goes in shipOrder, starting at the winner
-    for (let i = 0; i < seats.length; i++) {
-      expect(s.activePlayerIndex).toBe(s.setup!.shipOrder![i]);
-      const acts = legalActions(s).filter((a) => a.type === "pickShip") as Extract<Action, { type: "pickShip" }>[];
-      s = run(s, acts[0]!);
-    }
+    expect(s.setup!.stage).toBe("rollOff");
+    s = run(s, { type: "finishSetup" });
     expect(s.setup).toBeNull();
   });
 

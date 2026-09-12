@@ -15,6 +15,8 @@ import type { Hex } from "../../engine/index.js";
 
 export interface ShipPickerProps {
   center: Hex;
+  /** heading shown above the card, e.g. "Select your ship" (+ whose turn, in multi-human) */
+  title: string;
   colour: Colour;
   name: string;
   stats: ShipStats;
@@ -50,6 +52,7 @@ function arrowButton(cx: number, cy: number, dir: "prev" | "next", onClick: () =
 
 export function ShipPickerPopup({
   center,
+  title,
   colour,
   name,
   stats,
@@ -64,10 +67,15 @@ export function ShipPickerPopup({
   const pts = hexBackgroundPoints(center, RADIUS);
   const o = axialToPixel(center);
 
-  const nameY = o.y - 78;
-  const statTop = o.y - 46;
-  const rowH = 20;
-  const colX = [o.x - 58, o.x + 6];
+  const titleY = o.y - 108;
+  const cardTop = o.y - 96;
+  const cardBottom = o.y - 6;
+  const cardLeft = o.x - 95;
+  const cardRight = o.x + 95;
+  const nameY = cardTop + 22;
+  const statTop = nameY + 24;
+  const rowH = 18;
+  const colX = [cardLeft + 14, o.x + 8];
 
   const bh = 24;
   const btnY = o.y + 78;
@@ -82,9 +90,26 @@ export function ShipPickerPopup({
     <g className="hexpopup shippicker">
       <polygon points={pts} pointerEvents="none" />
 
-      <circle cx={o.x} cy={nameY - 5} r={7} fill={`var(--ship-${colour})`} pointerEvents="none" />
+      <text x={o.x} y={titleY} textAnchor="middle" fontWeight={700} pointerEvents="none">
+        {title}
+      </text>
+
+      {/* the card itself gets a frame — a placeholder for real art later, but it should
+         already read as "this is the thing being picked", not just floating text */}
+      <rect
+        x={cardLeft}
+        y={cardTop}
+        width={cardRight - cardLeft}
+        height={cardBottom - cardTop}
+        rx={10}
+        className="shippicker-card"
+        style={{ stroke: `var(--ship-${colour})` }}
+        pointerEvents="none"
+      />
+
+      <circle cx={cardLeft + 20} cy={nameY - 4} r={7} fill={`var(--ship-${colour})`} pointerEvents="none" />
       <text
-        x={o.x + 12}
+        x={cardLeft + 34}
         y={nameY}
         textAnchor="start"
         dominantBaseline="middle"

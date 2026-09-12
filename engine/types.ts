@@ -188,30 +188,30 @@ export type SeatKind = "human" | "bot";
 
 /**
  * Game start as a real, driven sequence instead of createGame resolving everything at once:
- * every seat picks a free base; the instant the last one does, the engine picks the start
- * player itself (one RNG draw — no per-seat action, nothing to resolve a tie for) and every
- * seat — starting with the start player, clockwise — picks a free ship. `state.players` stays
- * empty until the last ship is picked, at which point the engine runs the same finalize work
- * createGame always did (decks, equipment, initial resource seeding) and clears this field.
+ * each seat, in turn, picks a free base and then immediately a free ship (so a player's
+ * base and ship are settled back-to-back, not in two separate all-players passes). Once the
+ * last seat picks its ship, the engine decides the start player itself (one RNG draw — no
+ * per-seat action, nothing to resolve a tie for) and parks in stage "rollOff" holding that
+ * result; a `finishSetup` action (whenever the GUI is done showing it) does the same finalize
+ * work createGame always did (decks, equipment, initial resource seeding) and clears this
+ * field. `state.players` stays empty the entire time.
  *
  * The engine only ever hands back the *result* of a random pick, never how to animate it — a
- * GUI is free to show the start-player choice as a spinning wheel landing on `startSeat`, the
- * pickBase->pickShip transition itself is instant either way.
+ * GUI is free to show the start-player choice as a spinning wheel landing on `startSeat`
+ * before ever calling `finishSetup`.
  */
 export interface SetupState {
   /** fixed at creation; index = the eventual player id */
   seats: SeatKind[];
   variant?: "standard" | "short" | "long" | undefined;
-  stage: "pickBase" | "pickShip";
+  stage: "pickBase" | "pickShip" | "rollOff";
   /** per seat index; null until that seat has picked */
   bases: (Colour | null)[];
   colours: (Colour | null)[];
-  /** whose turn it is: an index into `seats` (pickBase) or into `shipOrder` (pickShip) */
+  /** the seat currently picking (its base, then its ship) — irrelevant once stage is "rollOff" */
   turnIndex: number;
-  /** the start player, decided the instant the last base is picked; null before that */
+  /** the start player; null until stage is "rollOff" */
   startSeat: number | null;
-  /** seat order for pickShip, clockwise from `startSeat`; set at the same moment */
-  shipOrder: number[] | null;
 }
 
 export interface GameState {
@@ -254,9 +254,11 @@ export interface LogEntry {
 // ---------------------------------------------------------------------------
 
 export type Action =
-  // --- setup: base -> (engine picks the start player) -> ship, before any turn begins ---
+  // --- setup: per seat, base -> ship; then the engine picks the start player and parks in
+  // stage "rollOff" until finishSetup, before any turn begins ---
   | { type: "pickBase"; base: Colour }
   | { type: "pickShip"; colour: Colour }
+  | { type: "finishSetup" }
   | { type: "placeShip"; cell: Hex }
   | { type: "scrapShip" }
   | { type: "drawBooster" }

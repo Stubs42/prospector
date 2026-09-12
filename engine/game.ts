@@ -118,7 +118,6 @@ export function createGame(opts: CreateGameOptions = {}): GameState {
       colours: seats.map(() => null),
       turnIndex: 0,
       startSeat: null,
-      shipOrder: null,
     };
     return state;
   }
@@ -218,7 +217,7 @@ function populateGame(
 }
 
 // ---------------------------------------------------------------------------
-// interactive setup: pickBase -> (engine picks the start player) -> pickShip
+// interactive setup: per seat, pickBase -> pickShip; then rollOff -> finishSetup
 // ---------------------------------------------------------------------------
 
 export function setupLegalActions(state: GameState): Action[] {
@@ -227,60 +226,61 @@ export function setupLegalActions(state: GameState): Action[] {
   if (setup.stage === "pickBase") {
     return colourOrder.filter((c) => !setup.bases.includes(c)).map((base) => ({ type: "pickBase", base }));
   }
-  return colourOrder.filter((c) => !setup.colours.includes(c)).map((colour) => ({ type: "pickShip", colour }));
+  if (setup.stage === "pickShip") {
+    return colourOrder.filter((c) => !setup.colours.includes(c)).map((colour) => ({ type: "pickShip", colour }));
+  }
+  return [{ type: "finishSetup" }];
 }
 
 function stepSetup(state: GameState, prev: GameState, board: BoardModel, action: Action): StepResult {
   const setup = state.setup!;
   const fail = (error: string): StepResult => ({ state: prev, ok: false, error });
   const done = (): StepResult => ({ state, ok: true });
+  const seat = setup.turnIndex;
 
   if (setup.stage === "pickBase") {
     if (action.type !== "pickBase") return fail("pick a base first");
     if (setup.bases.includes(action.base)) return fail("that base is already taken");
-    const seat = setup.turnIndex;
     setup.bases[seat] = action.base;
     state.activePlayerIndex = seat; // tag the log entry with whoever just picked
     log(state, "basePicked", { seat, base: action.base });
+    setup.stage = "pickShip"; // the same seat picks its ship next, right away
+    return done();
+  }
+
+  if (setup.stage === "pickShip") {
+    if (action.type !== "pickShip") return fail("pick a ship");
+    if (setup.colours.includes(action.colour)) return fail("that ship is already taken");
+    setup.colours[seat] = action.colour;
+    state.activePlayerIndex = seat; // tag the log entry with whoever just picked
+    log(state, "shipPicked", { seat, colour: action.colour });
     setup.turnIndex += 1;
     if (setup.turnIndex === setup.seats.length) {
-      // the engine just hands back a result here — a single, immediate random pick, with no
-      // per-seat action to resolve. Any "everyone rolls, it comes down to the wire" moment is
-      // purely a GUI animation landing on this seat, not something the engine plays out.
+      // every seat has both now — the engine just hands back a result here, a single
+      // immediate random pick with no per-seat action to resolve. Any "it comes down to the
+      // wire" moment is purely a GUI animation landing on this seat, not something the
+      // engine plays out; it parks in "rollOff" until the GUI is done showing it.
       const winner = withRng(state, (r) => r.int(0, setup.seats.length - 1));
       setup.startSeat = winner;
-      setup.shipOrder = setup.seats.map((_, i) => (winner + i) % setup.seats.length);
-      setup.stage = "pickShip";
-      setup.turnIndex = 0;
+      setup.stage = "rollOff";
       log(state, "startPlayerChosen", { seat: winner });
-      state.activePlayerIndex = setup.shipOrder[0]!; // first to pick a ship
     } else {
-      state.activePlayerIndex = setup.turnIndex; // next seat up to pick a base
+      setup.stage = "pickBase"; // next seat's turn, base first
+      state.activePlayerIndex = seat + 1;
     }
     return done();
   }
 
-  // pickShip
-  if (action.type !== "pickShip") return fail("pick a ship");
-  if (setup.colours.includes(action.colour)) return fail("that ship is already taken");
-  const seat = setup.shipOrder![setup.turnIndex]!;
-  setup.colours[seat] = action.colour;
-  state.activePlayerIndex = seat; // tag the log entry with whoever just picked
-  log(state, "shipPicked", { seat, colour: action.colour });
-  setup.turnIndex += 1;
-  if (setup.turnIndex === setup.seats.length) {
-    const colours = setup.colours.map((c) => c!);
-    const bases = setup.bases.map((b) => b!);
-    const winner = setup.shipOrder![0]!;
-    const variant = setup.variant;
-    populateGame(state, board, colours, bases, variant);
-    state.activePlayerIndex = winner; // the real game's start player
-    state.players[winner]!.turn = freshTurn();
-    state.turnNumber = 1;
-    state.setup = null;
-  } else {
-    state.activePlayerIndex = setup.shipOrder![setup.turnIndex]!; // next seat up to pick a ship
-  }
+  // rollOff
+  if (action.type !== "finishSetup") return fail("setup isn't finished yet");
+  const colours = setup.colours.map((c) => c!);
+  const bases = setup.bases.map((b) => b!);
+  const winner = setup.startSeat!;
+  populateGame(state, board, colours, bases, setup.variant);
+  state.activePlayerIndex = winner; // the real game's start player
+  state.players[winner]!.turn = freshTurn();
+  state.turnNumber = 1;
+  state.setup = null;
   return done();
 }
 

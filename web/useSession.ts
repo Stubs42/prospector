@@ -142,6 +142,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   }
   const pickBase = (base: Colour) => dispatch({ type: "pickBase", base });
   const pickShip = (colour: Colour) => dispatch({ type: "pickShip", colour });
+  const finishSetup = () => dispatch({ type: "finishSetup" });
   const revealTurn = () => setShownPlayer(state.activePlayerIndex);
   const toggle = (setter: typeof setArmed) => (id: string) =>
     setter((s) => {
@@ -272,7 +273,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     humans,
     bots,
     /** `data` is the engine's own SetupState — GUIs read stage/bases/colours/turnIndex/
-       startSeat/shipOrder straight off it instead of re-deriving them client-side */
+       startSeat straight off it instead of re-deriving them client-side */
     setup: { open: state.setup !== null, data: state.setup },
     staging: { armed, combatSel, attackTarget },
     afford,
@@ -292,6 +293,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     openSetup,
     pickBase,
     pickShip,
+    finishSetup,
     revealTurn,
     toggleArmed: toggle(setArmed),
     toggleCombatSel: toggle(setCombatSel),

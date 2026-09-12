@@ -1,12 +1,14 @@
 /**
- * Interactive game start: pickBase, then pickShip, both real engine actions
- * (see engine/game.ts stepSetup) — this component just renders whichever stage
- * state.setup is at and dispatches the click.
+ * Interactive game start, both real engine actions (see engine/game.ts stepSetup) — this
+ * component just renders whichever stage state.setup is at and dispatches the click.
  *
- * pickBase reuses the board (click a highlighted base region, same pattern as every
- * other board-native pick in this app). pickShip is a one-card-at-a-time carousel
- * inside a big hex (ShipPickerPopup) — ‹ › to browse, Select to confirm, 🎲 Random to
- * spin the same browsing motion onto a random one.
+ * Per seat, in turn: pickBase (reuses the board — click a highlighted base region, same
+ * pattern as every other board-native pick), then immediately pickShip (a one-card-at-a-time
+ * carousel inside a big hex — ‹ › to browse, Select to confirm, 🎲 Random to spin the same
+ * browsing motion onto a random one) for that same seat, before the next seat's turn. Once
+ * every seat has both, the engine parks in "rollOff" with the start player already decided;
+ * this plays that as a reveal (spinning the same base-outline highlight over the now fully
+ * owned regions) and then dispatches finishSetup to open the real game.
  */
 import { useEffect, useRef, useState } from "react";
 import { boardFor } from "../../engine/game.js";
@@ -37,8 +39,9 @@ export function SetupScreen({
   const freeBases = colourOrder.filter((c) => !setup.bases.includes(c));
   const freeShips = colourOrder.filter((c) => !setup.colours.includes(c));
 
-  const current =
-    setup.stage === "pickBase" ? setup.turnIndex : (setup.shipOrder?.[setup.turnIndex] ?? 0);
+  // base and ship are the same seat's turn back-to-back now, so `current` is just
+  // turnIndex for both stages; during the roll-off reveal there's no "turn", only a winner
+  const current = setup.stage === "rollOff" ? (setup.startSeat ?? 0) : setup.turnIndex;
   const currentIsBot = seats[current] === "bot";
   const canPickNow = setup.stage === "pickBase" && !currentIsBot && !s.needPassGate;
   const canPickShipNow = setup.stage === "pickShip" && !currentIsBot && !s.needPassGate;
@@ -95,44 +98,6 @@ export function SetupScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setup.stage, current, currentIsBot, s.needPassGate]);
 
-  // The start-player roll-off: the engine decides it instantly, in the same step as the
-  // last pickBase (see stepSetup) — there's no per-seat action to wait for. This spin is
-  // purely a reveal, over the seats' now-fully-assigned base regions (reusing the same
-  // outline highlight pickBase's own spin uses), landing on the winner before pickShip
-  // opens up. Keyed off `startSeat` itself (via a ref) so it plays exactly once per game,
-  // the instant that value first appears, and never replays on later re-renders.
-  const [rollOffPhase, setRollOffPhase] = useState<"idle" | "spinning" | "landed">("idle");
-  const [rollOffBase, setRollOffBase] = useState<Colour | null>(null);
-  const rollOffFor = useRef<number | null>(null);
-  useEffect(() => {
-    if (setup.startSeat === null) {
-      rollOffFor.current = null;
-      setRollOffPhase("idle");
-      return;
-    }
-    if (rollOffFor.current === setup.startSeat) return; // already played for this game
-    rollOffFor.current = setup.startSeat;
-    const bases = setup.bases.map((b) => b!); // every seat has one by now
-    const startIdx = setup.startSeat;
-    const ticks = bases.length * 2 + 6;
-    setRollOffPhase("spinning");
-    const tick = (k: number) => {
-      const stepsFromEnd = ticks - 1 - k;
-      const idx = ((startIdx - stepsFromEnd) % bases.length + bases.length) % bases.length;
-      setRollOffBase(bases[idx]!);
-      if (k < ticks - 1) {
-        const t = k / (ticks - 1);
-        window.setTimeout(() => tick(k + 1), 70 + t * t * 260);
-      } else {
-        setRollOffPhase("landed");
-        window.setTimeout(() => setRollOffPhase("idle"), 1100); // linger on the winner, then open pickShip
-      }
-    };
-    tick(0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setup.startSeat]);
-  const rollOffActive = rollOffPhase !== "idle";
-
   function onCell(h: Hex) {
     if (!canPickNow || spinning) return;
     const k = hexKey(h);
@@ -187,30 +152,65 @@ export function SetupScreen({
   }
 
   // a bot's own pickShip turn spins the same wheel, automatically — see the pickBase effect.
-  // Waits out the start-player roll-off first (rollOffActive) so a bot's ship pick never
-  // fires while that reveal is still playing.
+  // rollOff can never overlap a pickShip turn now (it only starts once every seat has both).
   useEffect(() => {
-    if (setup.stage !== "pickShip" || !currentIsBot || s.needPassGate || shipSpinning || rollOffActive) return;
+    if (setup.stage !== "pickShip" || !currentIsBot || s.needPassGate || shipSpinning) return;
     const id = window.setTimeout(runShipSpin, 400);
     return () => window.clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setup.stage, current, currentIsBot, s.needPassGate, rollOffActive]);
+  }, [setup.stage, current, currentIsBot, s.needPassGate]);
 
   function selectShip() {
     if (!canPickShipNow || shipSpinning || !shownShip) return;
     s.pickShip(shownShip);
   }
 
+  // The start-player roll-off: the engine has already decided it (one RNG draw, no per-seat
+  // action) and parked in stage "rollOff" waiting for finishSetup. This plays that as a
+  // reveal — spinning the same base-outline highlight, now over every seat's own (fully
+  // assigned) region — before dispatching finishSetup to actually open the real game. It's
+  // public/spectator content, not anyone's private turn, so it's not gated by needPassGate.
+  const [rollOffBase, setRollOffBase] = useState<Colour | null>(null);
+  const [rollOffLanded, setRollOffLanded] = useState(false);
+  const rollOffStarted = useRef(false);
+  useEffect(() => {
+    if (setup.stage !== "rollOff") {
+      rollOffStarted.current = false;
+      setRollOffLanded(false);
+      return;
+    }
+    if (rollOffStarted.current) return;
+    rollOffStarted.current = true;
+    const bases = setup.bases.map((b) => b!); // every seat has one by now
+    const startIdx = setup.startSeat!;
+    const ticks = bases.length * 2 + 6;
+    const tick = (k: number) => {
+      const stepsFromEnd = ticks - 1 - k;
+      const idx = ((startIdx - stepsFromEnd) % bases.length + bases.length) % bases.length;
+      setRollOffBase(bases[idx]!);
+      if (k < ticks - 1) {
+        const t = k / (ticks - 1);
+        window.setTimeout(() => tick(k + 1), 70 + t * t * 260);
+      } else {
+        setRollOffLanded(true);
+        window.setTimeout(() => s.finishSetup(), 1100); // linger on the winner, then open the game
+      }
+    };
+    tick(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setup.stage]);
+  const rollOffActive = setup.stage === "rollOff";
+
   const lines =
     setup.stage === "pickBase"
       ? seats.length > 1
         ? ["Please select a base", `player ${current + 1} of ${seats.length}`]
         : ["Please select", "a base"]
-      : rollOffPhase === "spinning"
-        ? ["Rolling for", "start player..."]
-        : rollOffPhase === "landed"
+      : rollOffActive
+        ? rollOffLanded
           ? [`Player ${setup.startSeat! + 1}`, "goes first!"]
-          : [];
+          : ["Rolling for", "start player..."]
+        : [];
 
   return (
     <div className="app board-only">
@@ -254,7 +254,13 @@ export function SetupScreen({
           seats={seats}
           scores={[]}
           highlight={{ cells: highlightCells, kind: "base" }}
-          spinHighlight={setup.stage === "pickBase" ? spinning : rollOffActive ? rollOffBase : null}
+          spinHighlight={
+            setup.stage === "pickBase"
+              ? spinning
+              : rollOffActive
+                ? rollOffBase
+                : (setup.bases[current] ?? null) // pickShip: your own base, steady, so you can see it
+          }
           loadCells={[]}
           burnTargets={[]}
           driftGhost={null}
@@ -279,9 +285,11 @@ export function SetupScreen({
                 : null
           }
           shipPicker={
-            !s.needPassGate && setup.stage === "pickShip" && !rollOffActive && shownShip
+            !s.needPassGate && setup.stage === "pickShip" && shownShip
               ? {
                   center: { q: 0, r: 0 },
+                  title:
+                    seats.length > 1 ? `Select your ship — player ${current + 1} of ${seats.length}` : "Select your ship",
                   colour: shownShip,
                   name: mode.ships[shownShip].name,
                   stats: mode.ships[shownShip],

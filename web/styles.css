@@ -150,6 +150,8 @@ button.danger { border-color: #6a3a2f; }
 /* ship carousel (pickShip stage) */
 .shippicker-stat { fill: var(--muted); font-size: 12px; font-weight: 600; }
 .ship-arrow text { font-size: 16px; }
+/* a placeholder frame for the card being picked — real card art comes later */
+.shippicker-card { fill: rgba(255, 255, 255, 0.03); stroke-width: 2; }
 
 /* a whole base region you can pick as your start base — one pulsing outline around the
    4-cell cluster, not a fill on each cell */
