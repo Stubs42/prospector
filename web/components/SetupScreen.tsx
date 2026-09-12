@@ -189,13 +189,13 @@ export function SetupScreen({
           onEndTurn={null}
           confirm={null}
           popup={
-            s.needPassGate || setup.stage !== "pickBase"
+            !canPickNow || setup.stage !== "pickBase"
               ? null
               : {
                   center: { q: 0, r: 0 },
                   lines,
-                  radius: canPickNow ? 3 : 2,
-                  actions: canPickNow ? [{ label: "🎲 Random", kind: "primary", onClick: spinRandomBase }] : undefined,
+                  radius: 3,
+                  actions: [{ label: "🎲 Random", kind: "primary", onClick: spinRandomBase }],
                 }
           }
           shipPicker={
