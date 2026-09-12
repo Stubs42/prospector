@@ -43,17 +43,22 @@ export function SetupScreen({
   const canPickNow = setup.stage === "pickBase" && !currentIsBot && !s.needPassGate;
   const canPickShipNow = setup.stage === "pickShip" && !currentIsBot && !s.needPassGate;
 
-  // "random base" — a lucky-wheel spin over the free bases, landing on a genuinely random
-  // one before dispatching pickBase; purely a client-side convenience (equivalent to the
-  // player clicking that base themselves), so there's nothing for the engine to know about.
+  // A lucky-wheel spin over the free bases, landing on a genuinely random one before
+  // dispatching pickBase. Used for both the human's "🎲 Random" button *and* bot turns
+  // (below) — a bot has no strategy to speak of here, so "spin and land on one" is exactly
+  // as good a bot policy as any, and it's the one that's actually watchable.
   const [spinning, setSpinning] = useState<Colour | null>(null);
   // only pulse the still-free bases while it's actually a human's turn to pick one — during
   // a bot's turn (or while spinning) nothing is clickable, so nothing should look clickable
   const highlightCells =
     canPickNow && !spinning ? freeBases.flatMap((c) => [...board.baseCells(c)]) : [];
 
-  function spinRandomBase() {
-    if (!canPickNow || spinning || freeBases.length === 0) return;
+  function runBaseSpin() {
+    if (freeBases.length === 0) return;
+    if (freeBases.length === 1) {
+      s.pickBase(freeBases[0]!);
+      return;
+    }
     const target = freeBases[Math.floor(Math.random() * freeBases.length)]!;
     const startIdx = freeBases.indexOf(target);
     const ticks = freeBases.length * 2 + 6; // a couple of laps, then a settling lap onto target
@@ -76,6 +81,19 @@ export function SetupScreen({
     };
     tick(0);
   }
+  function spinRandomBase() {
+    if (!canPickNow || spinning) return;
+    runBaseSpin();
+  }
+
+  // a bot's own pickBase turn spins the same wheel, automatically, after a short pause —
+  // every pick reads the same regardless of who made it, and nothing just instantly appears
+  useEffect(() => {
+    if (setup.stage !== "pickBase" || !currentIsBot || s.needPassGate || spinning) return;
+    const id = window.setTimeout(runBaseSpin, 400);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setup.stage, current, currentIsBot, s.needPassGate]);
 
   function onCell(h: Hex) {
     if (!canPickNow || spinning) return;
@@ -97,11 +115,15 @@ export function SetupScreen({
     setShipIndex((i) => i + delta);
   }
 
-  // "random ship" — the same lucky-wheel motion as "random base": spin through the free
-  // ships, decelerating, and confirm whichever one it lands on (same as "random base"
-  // dispatches pickBase directly — no separate confirm step for a random pick).
-  function spinRandomShip() {
-    if (!canPickShipNow || shipSpinning || freeShips.length < 2) return;
+  // the same lucky-wheel motion as "random base": spin through the free ships, decelerating,
+  // and confirm whichever one it lands on. Used for both the human's "🎲 Random" button and
+  // a bot's own pickShip turn (below).
+  function runShipSpin() {
+    if (freeShips.length === 0) return;
+    if (freeShips.length === 1) {
+      s.pickShip(freeShips[0]!);
+      return;
+    }
     const targetIdx = Math.floor(Math.random() * freeShips.length);
     const target = shipAt(targetIdx)!;
     const ticks = freeShips.length * 2 + 6;
@@ -121,6 +143,18 @@ export function SetupScreen({
     };
     tick(0);
   }
+  function spinRandomShip() {
+    if (!canPickShipNow || shipSpinning || freeShips.length < 2) return;
+    runShipSpin();
+  }
+
+  // a bot's own pickShip turn spins the same wheel, automatically — see the pickBase effect
+  useEffect(() => {
+    if (setup.stage !== "pickShip" || !currentIsBot || s.needPassGate || shipSpinning) return;
+    const id = window.setTimeout(runShipSpin, 400);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setup.stage, current, currentIsBot, s.needPassGate]);
 
   function selectShip() {
     if (!canPickShipNow || shipSpinning || !shownShip) return;
@@ -199,7 +233,7 @@ export function SetupScreen({
                 }
           }
           shipPicker={
-            !s.needPassGate && setup.stage === "pickShip" && !currentIsBot && shownShip
+            !s.needPassGate && setup.stage === "pickShip" && shownShip
               ? {
                   center: { q: 0, r: 0 },
                   colour: shownShip,
@@ -207,6 +241,9 @@ export function SetupScreen({
                   stats: mode.ships[shownShip],
                   canBrowse: freeShips.length > 1,
                   spinning: shipSpinning,
+                  // a bot's own turn is watch-only — the card still spins, but there's
+                  // nothing for the human to click on the bot's behalf
+                  interactive: !currentIsBot,
                   onPrev: () => browseShip(-1),
                   onNext: () => browseShip(1),
                   onSelect: selectShip,

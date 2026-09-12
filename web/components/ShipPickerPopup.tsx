@@ -3,6 +3,9 @@
  * to browse the still-free ships, a Select to confirm, and a Random that spins the same
  * browsing motion (fast, then decelerating) to land on one — same shape as the pickBase
  * stage's "🎲 Random" lucky wheel, just cycling ship cards instead of board regions.
+ *
+ * During a bot's own turn the card still shows and spins (so the pick is watchable), but
+ * `interactive: false` hides the whole button row — there's nothing for the human to do.
  */
 import type { Colour, ShipStats, StatKey } from "../../engine/index.js";
 import { ASPECT_ORDER, ASPECT_TAG } from "./aspects.js";
@@ -18,6 +21,9 @@ export interface ShipPickerProps {
   /** false when only one ship remains — no point browsing */
   canBrowse: boolean;
   spinning: boolean;
+  /** false during a bot's own turn: the card still shows (and spins), but there's nothing
+     for the human to click on the bot's behalf, so the whole button row is hidden */
+  interactive?: boolean | undefined;
   onPrev: () => void;
   onNext: () => void;
   onSelect: () => void;
@@ -49,6 +55,7 @@ export function ShipPickerPopup({
   stats,
   canBrowse,
   spinning,
+  interactive = true,
   onPrev,
   onNext,
   onSelect,
@@ -107,25 +114,27 @@ export function ShipPickerPopup({
         })}
       </g>
 
-      {canBrowse && !spinning && arrowButton(o.x - 130, o.y, "prev", onPrev, false)}
-      {canBrowse && !spinning && arrowButton(o.x + 130, o.y, "next", onNext, false)}
+      {interactive && canBrowse && !spinning && arrowButton(o.x - 130, o.y, "prev", onPrev, false)}
+      {interactive && canBrowse && !spinning && arrowButton(o.x + 130, o.y, "next", onNext, false)}
 
-      <g>
-        {canBrowse && (
-          <g className={`hexpopup-btn${spinning ? " disabled" : ""}`} onClick={spinning ? undefined : onRandom}>
-            <polygon points={hexButtonPoints(randomX, btnY - bh / 2, randomW, bh)} />
-            <text x={randomX + randomW / 2} y={btnY + 4} textAnchor="middle">
-              🎲 Random
+      {interactive && (
+        <g>
+          {canBrowse && (
+            <g className={`hexpopup-btn${spinning ? " disabled" : ""}`} onClick={spinning ? undefined : onRandom}>
+              <polygon points={hexButtonPoints(randomX, btnY - bh / 2, randomW, bh)} />
+              <text x={randomX + randomW / 2} y={btnY + 4} textAnchor="middle">
+                🎲 Random
+              </text>
+            </g>
+          )}
+          <g className={`hexpopup-btn primary${spinning ? " disabled" : ""}`} onClick={spinning ? undefined : onSelect}>
+            <polygon points={hexButtonPoints(selectX, btnY - bh / 2, selectW, bh)} />
+            <text x={selectX + selectW / 2} y={btnY + 4} textAnchor="middle">
+              Select
             </text>
           </g>
-        )}
-        <g className={`hexpopup-btn primary${spinning ? " disabled" : ""}`} onClick={spinning ? undefined : onSelect}>
-          <polygon points={hexButtonPoints(selectX, btnY - bh / 2, selectW, bh)} />
-          <text x={selectX + selectW / 2} y={btnY + 4} textAnchor="middle">
-            Select
-          </text>
         </g>
-      </g>
+      )}
     </g>
   );
 }
