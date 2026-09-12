@@ -389,7 +389,7 @@ circle.cell-hit { pointer-events: all; }
 /* a chip being placed on the board settles in (scale, no fade — a real chip has weight) */
 .ore-chip { transform-box: fill-box; transform-origin: center; animation: chip-place 220ms cubic-bezier(.3,1.3,.5,1); }
 /* a loadable chip needs both: the one-shot "just placed" pop and the ongoing "you can act" pulse */
-.ore-chip.pulse-avail { animation: chip-place 220ms cubic-bezier(.3,1.3,.5,1), avail-pulse 1.3s ease-in-out infinite; }
+.ore-chip.pulse-avail { animation: chip-place 220ms cubic-bezier(.3,1.3,.5,1), avail-pulse 1.1s ease-in-out infinite; }
 @keyframes chip-place {
   from { transform: scale(0.6) translateY(-3px); }
   to { transform: scale(1) translateY(0); }
