@@ -54,8 +54,12 @@ import type {
 
 export interface CreateGameOptions {
   seed?: number;
-  /** player colours, in seating order; 2..6 of them */
+  /** player ship colours (stats + visual identity), in seating order; 2..6 of them */
   colours?: Colour[];
+  /** player home-base positions, parallel to `colours`; defaults to the same array, i.e.
+     the classic fixed colour-equals-base pairing. Pass a different permutation to let base
+     and ship be chosen independently. */
+  bases?: Colour[];
   variant?: "standard" | "short" | "long";
   config?: Config;
   /** force the start player (seat index); default: rolled */
@@ -92,10 +96,15 @@ export function createGame(opts: CreateGameOptions = {}): GameState {
   let equipmentDraw = rng.shuffle(content.decks.equipment.cards);
   const equipmentDiscard: (typeof equipmentDraw)[number][] = [];
 
+  const homeBases = opts.bases ?? colours;
+  if (homeBases.length !== colours.length) {
+    throw new Error("bases must be the same length as colours");
+  }
   const players: PlayerState[] = colours.map((colour, i) => {
+    const homeBase = homeBases[i]!;
     const ship = mode.ships[colour];
-    const bases = board.baseCells(colour);
-    const start = bases[0]!;
+    const baseCells = board.baseCells(homeBase);
+    const start = baseCells[0]!;
     // setup equipment: draw 3, keep the first (choice not modelled at setup), bottom the rest
     const drawn = equipmentDraw.slice(0, mode.homeBase.setupEquipmentDraw);
     equipmentDraw = equipmentDraw.slice(mode.homeBase.setupEquipmentDraw);
@@ -106,6 +115,7 @@ export function createGame(opts: CreateGameOptions = {}): GameState {
     return {
       id: i,
       colour,
+      homeBase,
       eliminated: false,
       placed: false,
       pose: atRestPose(start),
@@ -332,7 +342,7 @@ function loseShip(state: GameState, board: BoardModel, p: PlayerState, reason: s
     p.eliminated = true;
     log(state, "shipEliminated", { player: p.id, reason });
   } else {
-    p.pose = atRestPose(board.baseCells(p.colour)[0]!);
+    p.pose = atRestPose(board.baseCells(p.homeBase)[0]!);
     if (mode.homeBase.refuel) p.fuel = p.fuelMax; // refit at base
     log(state, "shipLost", { player: p.id, reason });
   }
@@ -344,7 +354,7 @@ function loseShip(state: GameState, board: BoardModel, p: PlayerState, reason: s
 
 function arriveHomeBaseIfAny(state: GameState, board: BoardModel, p: PlayerState): void {
   const mode = state.config.modes.prospector;
-  if (board.baseOwnerAt(p.pose.current) !== p.colour) return;
+  if (board.baseOwnerAt(p.pose.current) !== p.homeBase) return;
   // Only an *arrival* brakes the ship. A ship that began its move on its own base is
   // departing — moving within the base cluster keeps the velocity it has built up.
   if (p.turn.moveStartedOnOwnBase) return;
@@ -461,7 +471,7 @@ export function applyAction(prev: GameState, action: Action): StepResult {
     case "placeShip": {
       if (state.phase !== "start" || p.turn.boosterDrawn) return fail("too late to choose a launch cell");
       if (p.placed) return fail("launch cell already chosen");
-      const owns = board.baseCells(p.colour).some((c) => hexEq(c, action.cell));
+      const owns = board.baseCells(p.homeBase).some((c) => hexEq(c, action.cell));
       if (!owns) return fail("not one of your base cells");
       p.pose = atRestPose(action.cell);
       p.placed = true;
@@ -506,7 +516,7 @@ export function applyAction(prev: GameState, action: Action): StepResult {
       if (overHandLimit(state, p)) return fail("discard down to the booster hand limit first");
       if (p.turn.driftDone) return fail("already drifted");
       p.turn.moveStarted = true;
-      p.turn.moveStartedOnOwnBase = board.baseOwnerAt(p.pose.current) === p.colour;
+      p.turn.moveStartedOnOwnBase = board.baseOwnerAt(p.pose.current) === p.homeBase;
       const res = drift(p.pose, board, freeFor(state, board, p.id));
       p.turn.driftDone = true;
       if (res.offField) {
@@ -604,7 +614,7 @@ export function applyAction(prev: GameState, action: Action): StepResult {
       });
       p.turn.moved = true;
       p.turn.mustBurn = false;
-      return p.eliminated || board.baseOwnerAt(p.pose.current) === p.colour ? advanceOrMoved(state, board) : done();
+      return p.eliminated || board.baseOwnerAt(p.pose.current) === p.homeBase ? advanceOrMoved(state, board) : done();
     }
 
     case "endMove": {

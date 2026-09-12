@@ -209,13 +209,13 @@ export default function App() {
             : ["Please select", "your base"],
       }
     : launchPhase
-      ? { center: launchAnchor(board, p.colour), lines: ["Select your", "launch cell"] }
+      ? { center: launchAnchor(board, p.homeBase), lines: ["Select your", "launch cell"] }
       : interactive && overLimit
         ? { center: { q: 0, r: 0 }, lines: ["Too many cards!", "Discard one to continue"] }
         : null;
 
   // clicking your own base (off a burn target) asks to scrap — available any time during the move
-  const scrapCells = interactive && !pc && attackTarget === null && !launchPhase ? board.baseCells(p.colour) : [];
+  const scrapCells = interactive && !pc && attackTarget === null && !launchPhase ? board.baseCells(p.homeBase) : [];
   const scrapConfirm =
     scrapConfirmOpen && scrapCells.length
       ? {

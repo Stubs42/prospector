@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createGame, applyAction, score } from "./game.js";
+import { createGame, applyAction, score, boardFor } from "./game.js";
 import { legalActions } from "./index.js";
 import type { Action, GameState } from "./types.js";
 
@@ -35,6 +35,47 @@ describe("createGame", () => {
     expect(g.decks.booster.draw).toHaveLength(45);
     // 36 equipment minus 4 players * 1 kept
     expect(g.decks.equipment.draw).toHaveLength(36 - 4);
+  });
+
+  it("defaults homeBase to colour (the classic fixed pairing) when `bases` is omitted", () => {
+    for (const p of g.players) expect(p.homeBase).toBe(p.colour);
+  });
+});
+
+describe("base picked independently of ship colour", () => {
+  const board = boardFor(createGame({ seed: 1 }));
+  // black's ship stats/visuals, but sitting at the blue base — a permutation with no overlap
+  const s0 = createGame({ seed: 5, colours: ["black", "red"], bases: ["blue", "white"] });
+  const P = () => s0.players[0]!;
+
+  it("starts on its home base's cells, not its ship colour's", () => {
+    const blueCells = board.baseCells("blue");
+    const blackCells = board.baseCells("black");
+    expect(blueCells.some((c) => c.q === P().pose.current.q && c.r === P().pose.current.r)).toBe(true);
+    expect(blackCells.some((c) => c.q === P().pose.current.q && c.r === P().pose.current.r)).toBe(false);
+  });
+
+  it("still uses its ship colour's stats", () => {
+    const mode = s0.config.modes.prospector;
+    for (const key of ["shields", "lasers", "fuelTanks", "cargo", "engines", "booster"] as const) {
+      expect(mode.ships[P().colour][key]).toBe(mode.ships.black[key]);
+    }
+  });
+
+  it("offers the home-base cells (not the ship-colour cells) as launch choices", () => {
+    let s = s0;
+    const opts = legalActions(s).filter((a) => a.type === "placeShip") as Extract<Action, { type: "placeShip" }>[];
+    const blueCells = board.baseCells("blue");
+    expect(opts).toHaveLength(blueCells.length);
+    for (const o of opts) expect(blueCells.some((c) => c.q === o.cell.q && c.r === o.cell.r)).toBe(true);
+    s = run(s, { type: "placeShip", cell: opts[0]!.cell });
+    expect(s.players[0]!.placed).toBe(true);
+  });
+
+  it("rejects a placeShip on the ship-colour's (non-home) base cells", () => {
+    const blackCells = board.baseCells("black");
+    const r = applyAction(s0, { type: "placeShip", cell: blackCells[0]! });
+    expect(r.ok).toBe(false);
   });
 });
 

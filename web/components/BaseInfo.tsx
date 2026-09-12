@@ -31,8 +31,8 @@ function hexPts(cx: number, cy: number, size: number): string {
 }
 
 /** outer cells hugging a base: near (dist 10) & far (dist 11) arcs sorted left→right, plus each arc's corner index */
-function outerArcs(board: BoardModel, colour: Colour) {
-  const bc = board.baseCells(colour);
+function outerArcs(board: BoardModel, baseId: Colour) {
+  const bc = board.baseCells(baseId);
   const centres = bc.map((h) => board.cell(h)!).filter(Boolean);
   const base0 = Math.atan2(
     centres.reduce((a, c) => a + c.y, 0) / centres.length,
@@ -192,7 +192,7 @@ export function BaseInfo({ board, state, seats, scores, onTip }: {
       {state.players
         .filter((p) => !p.eliminated)
         .map((p) => {
-          const { near, far } = outerArcs(board, p.colour);
+          const { near, far } = outerArcs(board, p.homeBase);
           if (near.cells.length < 7 || far.cells.length < 5) return null;
           const active = p.id === state.activePlayerIndex;
           const stats = statsOf(state, p);

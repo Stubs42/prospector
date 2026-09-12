@@ -137,7 +137,12 @@ export interface ShipPose {
 
 export interface PlayerState {
   id: number;
+  /** ship type — drives stats (mode.ships[colour]) and visual identity everywhere */
   colour: Colour;
+  /** which of the board's six base regions this player's home is — a separate choice from
+     `colour` when base and ship are picked independently; defaults to the same value as
+     `colour` for the classic fixed pairing (see createGame's `bases` option) */
+  homeBase: Colour;
   eliminated: boolean;
   /** false until the player has taken their one-time launch base-cell choice */
   placed: boolean;

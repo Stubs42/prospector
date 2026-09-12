@@ -82,7 +82,7 @@ export function legalActions(state: GameState, opts?: LegalOpts): Action[] {
   if (state.phase === "start") {
     if (!p.turn.boosterDrawn && !p.placed) {
       // all four base cells are genuine choices — the ship isn't shown anywhere until one is picked
-      for (const c of board.baseCells(p.colour)) out.push({ type: "placeShip", cell: c });
+      for (const c of board.baseCells(p.homeBase)) out.push({ type: "placeShip", cell: c });
     }
     // voluntary scrap is available any time during the move, once the ship is launched
     if (p.placed && state.config.core.turn.allowScrapBeforeDraw) out.push({ type: "scrapShip" });
@@ -223,7 +223,7 @@ export const greedyBot: Bot = (state, rng) => {
   }
 
   const carrying = p.cargo.length > 0;
-  const onOwnBase = board.baseOwnerAt(p.pose.current) === p.colour;
+  const onOwnBase = board.baseOwnerAt(p.pose.current) === p.homeBase;
   const stranded =
     p.pose.atRest && p.fuel === 0 && !onOwnBase && !p.hand.some((c) => c.type === "reserveFuel");
 
@@ -250,7 +250,7 @@ export const greedyBot: Bot = (state, rng) => {
   const reserveFuelIds =
     p.fuel <= 3 ? p.hand.filter((c) => c.type === "reserveFuel").map((c) => c.id) : [];
 
-  const baseCells = board.baseCells(p.colour);
+  const baseCells = board.baseCells(p.homeBase);
   const baseKeys = new Set(baseCells.map(hexKey));
   const home = baseCells[0]!;
   const resourceCells = Object.keys(state.board.resources).map(parseHexKey);
