@@ -15,6 +15,21 @@ export interface HexPopupAction {
   onClick: () => void;
 }
 
+/** a flattened hexagon (pointed left/right ends) sized to fit a button label —
+   keeps the popup's action buttons in the same hex language as everything else */
+function hexButtonPoints(bx: number, by: number, bw: number, bh: number): string {
+  const cut = bh / 2;
+  const pts: [number, number][] = [
+    [bx, by + bh / 2],
+    [bx + cut, by],
+    [bx + bw - cut, by],
+    [bx + bw, by + bh / 2],
+    [bx + bw - cut, by + bh],
+    [bx + cut, by + bh],
+  ];
+  return pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+}
+
 export function HexPopup({
   center,
   lines,
@@ -58,7 +73,7 @@ export function HexPopup({
             const bx = o.x - totalW / 2 + i * (bw + gap);
             return (
               <g key={i} className={`hexpopup-btn ${a.kind ?? ""}`} onClick={a.onClick}>
-                <rect x={bx} y={btnY - bh / 2} width={bw} height={bh} rx={7} />
+                <polygon points={hexButtonPoints(bx, btnY - bh / 2, bw, bh)} />
                 <text x={bx + bw / 2} y={btnY + 4} textAnchor="middle">
                   {a.label}
                 </text>

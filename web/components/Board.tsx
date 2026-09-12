@@ -271,6 +271,9 @@ export function Board({
         const cy = c.y * S;
         const key = hexKey(c);
         const isHi = hi.has(key);
+        // a "base" pick highlights the whole region as one outline (below), not each cell —
+        // so a cell here only gets the per-cell gold border for "place" (launch-cell) picks
+        const isCellHi = isHi && highlight.kind !== "base";
         const assigned = c.base ? baseColourOf.get(c.base) : undefined;
         const fill = assigned
           ? SHIP_VAR[assigned]
@@ -279,7 +282,7 @@ export function Board({
             : "#0e1b15";
         const stroke = c.origin
           ? "var(--gold)"
-          : isHi
+          : isCellHi
             ? "var(--gold)"
             : assigned
               ? SHIP_VAR[assigned]
@@ -292,7 +295,7 @@ export function Board({
             fill={fill}
             fillOpacity={assigned ? 0.85 : 1}
             stroke={stroke}
-            strokeWidth={c.origin ? 2.5 : isHi ? 2.5 : assigned ? 1.6 : 1}
+            strokeWidth={c.origin ? 2.5 : isCellHi ? 2.5 : assigned ? 1.6 : 1}
             strokeOpacity={assigned ? 0.9 : 1}
             className={clickable ? "cell-hit" : undefined}
             onClick={clickable ? () => onCell({ q: c.q, r: c.r }) : undefined}
