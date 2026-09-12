@@ -4,7 +4,7 @@ import { hexKey } from "../../engine/hex.js";
 import type { GameState, Hex, Colour, OreColour } from "../../engine/index.js";
 import { SHIP_VAR, ORE_VAR } from "./kit.js";
 import { BaseInfo, type TipFn } from "./BaseInfo.js";
-import { HexPopup } from "./HexPopup.js";
+import { HexPopup, type HexPopupAction } from "./HexPopup.js";
 import { ShipMarker } from "./ShipMarker.js";
 import { moveFrame, animDone, type MoveAnim } from "../anim.js";
 import type { Seat } from "../../client/index.js";
@@ -46,7 +46,7 @@ export interface BoardProps {
   /** a confirm dialog (e.g. "scrap your ship?") drawn centred, dimming the rest of the board */
   confirm: { center: Hex; lines: string[]; onYes: () => void; onCancel: () => void } | null;
   /** guidance popup drawn in board space; null when no action is pending */
-  popup: { center: Hex; lines: string[] } | null;
+  popup: { center: Hex; lines: string[]; actions?: HexPopupAction[] | undefined; radius?: number | undefined } | null;
   /** false during base selection: draw only the empty field + highlights + popup */
   world: boolean;
   reducedMotion: boolean;
@@ -468,7 +468,9 @@ export function Board({
       {world && <BaseInfo board={board} state={state} seats={seats} scores={scores} onTip={onTip} />}
 
       {/* guidance popup — what to do next, anchored in board space */}
-      {popup && <HexPopup center={popup.center} lines={popup.lines} />}
+      {popup && (
+        <HexPopup center={popup.center} lines={popup.lines} actions={popup.actions} radius={popup.radius} />
+      )}
 
       {/* confirm dialog (e.g. scrap?) — dims + blocks the rest of the board until answered */}
       {confirm && (

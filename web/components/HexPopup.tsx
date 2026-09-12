@@ -23,9 +23,9 @@ export function HexPopup({
 }: {
   center: Hex;
   lines: string[];
-  actions?: HexPopupAction[];
+  actions?: HexPopupAction[] | undefined;
   /** hex "radius" in cells — each edge spans this many cells. Bump it up when there are buttons to fit. */
-  radius?: number;
+  radius?: number | undefined;
 }) {
   const pts = DIRECTIONS.map((d) => {
     const p = axialToPixel(add(center, scale(d, radius)));

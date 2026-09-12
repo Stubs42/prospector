@@ -146,7 +146,16 @@ export function SetupScreen({
           endTurnReady={false}
           onEndTurn={null}
           confirm={null}
-          popup={s.needPassGate ? null : { center: { q: 0, r: 0 }, lines }}
+          popup={
+            s.needPassGate
+              ? null
+              : {
+                  center: { q: 0, r: 0 },
+                  lines,
+                  radius: canPickNow ? 3 : 2,
+                  actions: canPickNow ? [{ label: "🎲 Random", kind: "primary", onClick: spinRandomBase }] : undefined,
+                }
+          }
           world={false}
           reducedMotion={reducedMotion}
           moveAnim={null}
@@ -154,12 +163,6 @@ export function SetupScreen({
           onCell={onCell}
           onCellHover={() => {}}
         />
-
-        {canPickNow && (
-          <button className="random-base-btn" disabled={!!spinning} onClick={spinRandomBase}>
-            🎲 Random base
-          </button>
-        )}
 
         {setup.stage === "pickShip" && !s.needPassGate && !currentIsBot && (
           <div className="shippick-overlay">
