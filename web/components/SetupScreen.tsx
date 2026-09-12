@@ -16,6 +16,7 @@ import { hexKey } from "../../engine/hex.js";
 import type { Colour, Hex } from "../../engine/index.js";
 import { Board } from "./Board.js";
 import { Settings } from "./Settings.js";
+import { StatusPanel } from "./StatusPanel.js";
 import type { Prefs } from "../prefs.js";
 import type { Session } from "../useSession.js";
 
@@ -313,7 +314,14 @@ export function SetupScreen({
           onCellHover={() => {}}
         />
 
-        {currentIsBot && !s.needPassGate && !rollOffActive && <div className="board-toast">🤖 picking…</div>}
+        {!s.needPassGate && !rollOffActive && (
+          <StatusPanel
+            colour={null} // no ship yet — bases carry no colour of their own during setup
+            name={s.names[current] ?? "?"}
+            bot={currentIsBot}
+            action={setup.stage === "pickBase" ? "Picking a base" : "Picking a ship"}
+          />
+        )}
       </div>
 
       {/* the roll-off is public/spectator content, not any one seat's private turn — let it
@@ -322,7 +330,7 @@ export function SetupScreen({
       {s.needPassGate && !rollOffActive && (
         <div className="pass setup">
           <div className="sub">pass the device to</div>
-          <div className="who">player {current + 1}</div>
+          <div className="who">{s.names[current] ?? `player ${current + 1}`}</div>
           <button className="primary" onClick={s.revealTurn}>
             {setup.stage === "pickBase" ? "Select your base" : "Select your ship"}
           </button>

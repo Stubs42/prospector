@@ -22,6 +22,7 @@ import {
 import { legalActions } from "../engine/index.js";
 import { deriveMoveAnim, coastAnim, type MoveAnim } from "./anim.js";
 import { movePhaseMs, type Prefs } from "./prefs.js";
+import { randomNames } from "./nameGen.js";
 
 const AUTO_HIDE = new Set<Action["type"]>([
   "declineCounter",
@@ -42,6 +43,9 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   const [humans, setHumans] = useState(1);
   const [bots, setBots] = useState(2);
   const [seats, setSeats] = useState<Seat[]>(() => mkSeats(1, 2));
+  // fun, easy-to-read names per seat (index = eventual player id) — assigned the moment
+  // seats are known, so they're already there for setup's "Kemu is picking a base"
+  const [names, setNames] = useState<string[]>(() => randomNames(3));
   // a fresh game always starts as an interactive setup (state.setup non-null) — pickBase and
   // pickShip are real, logged engine actions, not client-side randomness. See stepSetup in
   // engine/game.ts.
@@ -133,6 +137,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     setBots(b);
     const seatArr = mkSeats(h, b);
     setSeats(seatArr);
+    setNames(randomNames(seatArr.length));
     const g = createGame({ seats: seatArr, seed: (Math.random() * 1e9) | 0 });
     setState(g);
     setShownPlayer(g.activePlayerIndex);
@@ -270,6 +275,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   return {
     state,
     seats,
+    names,
     humans,
     bots,
     /** `data` is the engine's own SetupState — GUIs read stage/bases/colours/turnIndex/

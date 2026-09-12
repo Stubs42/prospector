@@ -9,6 +9,7 @@ import { BottomPanel, type PanelButton } from "./components/BottomPanel.js";
 import { LogOverlay } from "./components/LogOverlay.js";
 import { Settings } from "./components/Settings.js";
 import { SetupScreen } from "./components/SetupScreen.js";
+import { StatusPanel } from "./components/StatusPanel.js";
 import { axialToPixel, pixelToAxial, towardOrigin } from "./components/hexpx.js";
 import { loadPrefs, motionReduced, savePrefs, type Prefs } from "./prefs.js";
 import { useSession } from "./useSession.js";
@@ -57,7 +58,6 @@ export default function App() {
   const p = state.players[state.activePlayerIndex]!;
   const board = boardFor(state);
   const mode = state.config.modes.prospector;
-  const baseStats = mode.ships[p.colour];
   const sc = score(state);
   const anim = s.animLive; // a move is actively playing — hold back prompts/targets
   const suppress = anim || scrapConfirmOpen; // also true while the scrap confirm dialog is up
@@ -67,9 +67,27 @@ export default function App() {
   const launchPhase = interactive && !pc && afford.placeCells.length > 0;
 
   // --- hand / combat card helpers -----------------------------------
+  // whoever is actually making the current decision — the attacker/mover normally, but the
+  // *defender* while combat is waiting on them (their shields, their counter-attack call)
   const handOwner =
     pc && (pc.awaiting === "defend" || pc.awaiting === "counter") ? state.players[pc.defenderId]! : p;
   const handHidden = seats[handOwner.id] === "bot";
+
+  // --- status panel: who's doing what, right now --------------------
+  const actionLabel: string =
+    state.gameOver ? "Game over"
+    : pc?.awaiting === "defend" ? "Defending"
+    : pc?.awaiting === "resolve" ? "Rolling for combat"
+    : pc?.awaiting === "counter" ? "Deciding a counter-attack"
+    : attackTarget !== null ? "Attacking"
+    : afford.equipmentChoice ? "Choosing an upgrade"
+    : overLimit ? "Discarding a card"
+    : launchPhase ? "Picking a launch cell"
+    : !p.turn.boosterDrawn ? "Drawing a card"
+    : !p.turn.driftDone ? "Drifting"
+    : !p.turn.moved ? "Deciding a burn"
+    : !p.turn.postMoveActionTaken ? "Deciding next move"
+    : "Ending turn";
   const inBurnPhase =
     !activeIsBot && !pc && state.phase === "start" && p.turn.driftDone && !p.turn.moved && !overLimit;
   const combatCardType: "laser" | "shield" | null =
@@ -232,13 +250,7 @@ export default function App() {
     <div className="app board-only">
       <div className="topbar">
         <h1>Prospector</h1>
-        <span className="turn">
-          turn {state.turnNumber} ·{" "}
-          <span className="pill">
-            <i className="swatch" style={{ background: `var(--ship-${p.colour})` }} />
-            {activeIsBot ? `${p.colour} (bot)` : p.colour}
-          </span>
-        </span>
+        <span className="turn">turn {state.turnNumber}</span>
         <span className="spacer" />
         <button className="ghost" onClick={() => setLogOpen(true)} title="History">
           🕘 log
@@ -299,7 +311,12 @@ export default function App() {
           onCellHover={setHoverCell}
         />
 
-        {activeIsBot && <div className="board-toast">🤖 {baseStats.name} is playing…</div>}
+        <StatusPanel
+          colour={handOwner.colour}
+          name={s.names[handOwner.id] ?? "?"}
+          bot={seats[handOwner.id] === "bot"}
+          action={actionLabel}
+        />
         {isWaitingOnBot && !activeIsBot && <div className="board-toast">🤖 waiting on the bot…</div>}
         {state.gameOver && (
           <div className="board-toast win">
@@ -335,7 +352,7 @@ export default function App() {
                 className="swatch"
                 style={{ background: `var(--ship-${p.colour})`, width: "1.4rem", height: "1.4rem" }}
               />
-              {baseStats.name} · {p.colour}
+              {s.names[p.id] ?? "?"} · {p.colour}
             </span>
           </div>
           <button className="primary" onClick={s.revealTurn}>
