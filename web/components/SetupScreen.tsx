@@ -8,7 +8,7 @@
  * inside a big hex (ShipPickerPopup) — ‹ › to browse, Select to confirm, 🎲 Random to
  * spin the same browsing motion onto a random one.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { boardFor } from "../../engine/game.js";
 import { hexKey } from "../../engine/hex.js";
 import type { Colour, Hex } from "../../engine/index.js";
@@ -95,6 +95,44 @@ export function SetupScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setup.stage, current, currentIsBot, s.needPassGate]);
 
+  // The start-player roll-off: the engine decides it instantly, in the same step as the
+  // last pickBase (see stepSetup) — there's no per-seat action to wait for. This spin is
+  // purely a reveal, over the seats' now-fully-assigned base regions (reusing the same
+  // outline highlight pickBase's own spin uses), landing on the winner before pickShip
+  // opens up. Keyed off `startSeat` itself (via a ref) so it plays exactly once per game,
+  // the instant that value first appears, and never replays on later re-renders.
+  const [rollOffPhase, setRollOffPhase] = useState<"idle" | "spinning" | "landed">("idle");
+  const [rollOffBase, setRollOffBase] = useState<Colour | null>(null);
+  const rollOffFor = useRef<number | null>(null);
+  useEffect(() => {
+    if (setup.startSeat === null) {
+      rollOffFor.current = null;
+      setRollOffPhase("idle");
+      return;
+    }
+    if (rollOffFor.current === setup.startSeat) return; // already played for this game
+    rollOffFor.current = setup.startSeat;
+    const bases = setup.bases.map((b) => b!); // every seat has one by now
+    const startIdx = setup.startSeat;
+    const ticks = bases.length * 2 + 6;
+    setRollOffPhase("spinning");
+    const tick = (k: number) => {
+      const stepsFromEnd = ticks - 1 - k;
+      const idx = ((startIdx - stepsFromEnd) % bases.length + bases.length) % bases.length;
+      setRollOffBase(bases[idx]!);
+      if (k < ticks - 1) {
+        const t = k / (ticks - 1);
+        window.setTimeout(() => tick(k + 1), 70 + t * t * 260);
+      } else {
+        setRollOffPhase("landed");
+        window.setTimeout(() => setRollOffPhase("idle"), 1100); // linger on the winner, then open pickShip
+      }
+    };
+    tick(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setup.startSeat]);
+  const rollOffActive = rollOffPhase !== "idle";
+
   function onCell(h: Hex) {
     if (!canPickNow || spinning) return;
     const k = hexKey(h);
@@ -148,13 +186,15 @@ export function SetupScreen({
     runShipSpin();
   }
 
-  // a bot's own pickShip turn spins the same wheel, automatically — see the pickBase effect
+  // a bot's own pickShip turn spins the same wheel, automatically — see the pickBase effect.
+  // Waits out the start-player roll-off first (rollOffActive) so a bot's ship pick never
+  // fires while that reveal is still playing.
   useEffect(() => {
-    if (setup.stage !== "pickShip" || !currentIsBot || s.needPassGate || shipSpinning) return;
+    if (setup.stage !== "pickShip" || !currentIsBot || s.needPassGate || shipSpinning || rollOffActive) return;
     const id = window.setTimeout(runShipSpin, 400);
     return () => window.clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setup.stage, current, currentIsBot, s.needPassGate]);
+  }, [setup.stage, current, currentIsBot, s.needPassGate, rollOffActive]);
 
   function selectShip() {
     if (!canPickShipNow || shipSpinning || !shownShip) return;
@@ -166,7 +206,11 @@ export function SetupScreen({
       ? seats.length > 1
         ? ["Please select a base", `player ${current + 1} of ${seats.length}`]
         : ["Please select", "a base"]
-      : [];
+      : rollOffPhase === "spinning"
+        ? ["Rolling for", "start player..."]
+        : rollOffPhase === "landed"
+          ? [`Player ${setup.startSeat! + 1}`, "goes first!"]
+          : [];
 
   return (
     <div className="app board-only">
@@ -210,7 +254,7 @@ export function SetupScreen({
           seats={seats}
           scores={[]}
           highlight={{ cells: highlightCells, kind: "base" }}
-          spinHighlight={spinning}
+          spinHighlight={setup.stage === "pickBase" ? spinning : rollOffActive ? rollOffBase : null}
           loadCells={[]}
           burnTargets={[]}
           driftGhost={null}
@@ -223,17 +267,19 @@ export function SetupScreen({
           onEndTurn={null}
           confirm={null}
           popup={
-            !canPickNow || setup.stage !== "pickBase"
-              ? null
-              : {
+            canPickNow && setup.stage === "pickBase"
+              ? {
                   center: { q: 0, r: 0 },
                   lines,
                   radius: 3,
                   actions: [{ label: "🎲 Random", kind: "primary", onClick: spinRandomBase }],
                 }
+              : rollOffActive
+                ? { center: { q: 0, r: 0 }, lines, radius: 3 }
+                : null
           }
           shipPicker={
-            !s.needPassGate && setup.stage === "pickShip" && shownShip
+            !s.needPassGate && setup.stage === "pickShip" && !rollOffActive && shownShip
               ? {
                   center: { q: 0, r: 0 },
                   colour: shownShip,
@@ -259,10 +305,13 @@ export function SetupScreen({
           onCellHover={() => {}}
         />
 
-        {currentIsBot && !s.needPassGate && <div className="board-toast">🤖 picking…</div>}
+        {currentIsBot && !s.needPassGate && !rollOffActive && <div className="board-toast">🤖 picking…</div>}
       </div>
 
-      {s.needPassGate && (
+      {/* the roll-off is public/spectator content, not any one seat's private turn — let it
+         play out on whoever's screen is already up before asking to pass the device on to
+         the winner for their (private) ship pick */}
+      {s.needPassGate && !rollOffActive && (
         <div className="pass setup">
           <div className="sub">pass the device to</div>
           <div className="who">player {current + 1}</div>
