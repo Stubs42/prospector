@@ -8,6 +8,7 @@ import { HexPopup } from "./HexPopup.js";
 import { ShipMarker } from "./ShipMarker.js";
 import { moveFrame, animDone, type MoveAnim } from "../anim.js";
 import type { Seat } from "../../client/index.js";
+import { clusterOutline, pointsAttr } from "./hexOutline.js";
 
 export { S } from "./geo.js";
 import { S } from "./geo.js";
@@ -26,6 +27,8 @@ export interface BoardProps {
   seats: readonly Seat[];
   scores: readonly number[];
   highlight: { cells: Hex[]; kind: "place" | "base" | null };
+  /** during a "pick a random base" spin: the one base region to trace solid (not pulsing) */
+  spinHighlight?: Colour | null;
   /** resource cells the active player can load from right now — the ore chip itself pulses */
   loadCells: readonly Hex[];
   burnTargets: { cell: Hex; cost: number }[];
@@ -62,6 +65,7 @@ export function Board({
   seats,
   scores,
   highlight,
+  spinHighlight = null,
   loadCells,
   burnTargets,
   driftGhost,
@@ -83,6 +87,17 @@ export function Board({
 }: BoardProps) {
   const board = boardFor(state);
   const cells = board.allCells();
+  // a base region is only coloured once its ship is known — base and ship are picked
+  // independently, so the six board positions carry no inherent colour of their own.
+  const baseColourOf = new Map<Colour, Colour>();
+  if (state.setup) {
+    state.setup.bases.forEach((b, seat) => {
+      const c = state.setup!.colours[seat];
+      if (b && c) baseColourOf.set(b, c);
+    });
+  } else {
+    for (const pl of state.players) baseColourOf.set(pl.homeBase, pl.colour);
+  }
   const xs = cells.map((c) => c.x * S);
   const ys = cells.map((c) => c.y * S);
   // "fit" viewBox: the whole field + a margin so nothing hugs the frame. Pan/zoom rides on top.
@@ -256,8 +271,9 @@ export function Board({
         const cy = c.y * S;
         const key = hexKey(c);
         const isHi = hi.has(key);
-        const fill = c.base
-          ? SHIP_VAR[c.base as Colour]
+        const assigned = c.base ? baseColourOf.get(c.base) : undefined;
+        const fill = assigned
+          ? SHIP_VAR[assigned]
           : c.region === "outer"
             ? "#1c2b25"
             : "#0e1b15";
@@ -265,27 +281,66 @@ export function Board({
           ? "var(--gold)"
           : isHi
             ? "var(--gold)"
-            : c.base
-              ? SHIP_VAR[c.base as Colour]
+            : assigned
+              ? SHIP_VAR[assigned]
               : "#2b4034";
-        const baseHi = isHi && highlight.kind === "base";
         const clickable = isHi || scrapSet.has(key);
         return (
           <polygon
             key={key}
             points={hexPoints(cx, cy, S * 0.94)}
             fill={fill}
-            fillOpacity={baseHi ? 1 : c.base ? 0.85 : 1}
+            fillOpacity={assigned ? 0.85 : 1}
             stroke={stroke}
-            strokeWidth={c.origin ? 2.5 : isHi ? (baseHi ? 3 : 2.5) : c.base ? 1.6 : 1}
-            strokeOpacity={c.base ? 0.9 : 1}
-            className={clickable ? (baseHi ? "cell-hit base-pick" : "cell-hit") : undefined}
+            strokeWidth={c.origin ? 2.5 : isHi ? 2.5 : assigned ? 1.6 : 1}
+            strokeOpacity={assigned ? 0.9 : 1}
+            className={clickable ? "cell-hit" : undefined}
             onClick={clickable ? () => onCell({ q: c.q, r: c.r }) : undefined}
             onMouseEnter={clickable ? () => onCellHover({ q: c.q, r: c.r }) : undefined}
             onMouseLeave={clickable ? () => onCellHover(null) : undefined}
           />
         );
       })}
+
+      {/* base regions being picked: one pulsing outline per free base (the whole region is
+         the click target, not each of its 4 cells), plus a solid outline for the one region
+         a "random base" spin is currently landing the pointer on */}
+      {highlight.kind === "base" &&
+        [...new Set(highlight.cells.map((h) => board.baseOwnerAt(h)))].map((baseId) => {
+          if (!baseId) return null;
+          const region = board.baseCells(baseId);
+          const loop = clusterOutline(region.map((h) => px(h)), S * 0.94);
+          if (loop.length === 0) return null;
+          return (
+            <polygon
+              key={`base-outline-${baseId}`}
+              points={pointsAttr(loop)}
+              fill="none"
+              stroke="var(--gold)"
+              strokeWidth={3}
+              strokeLinejoin="round"
+              className="base-pick"
+              pointerEvents="none"
+            />
+          );
+        })}
+      {spinHighlight &&
+        (() => {
+          const region = board.baseCells(spinHighlight);
+          const loop = clusterOutline(region.map((h) => px(h)), S * 0.94);
+          if (loop.length === 0) return null;
+          return (
+            <polygon
+              points={pointsAttr(loop)}
+              fill={SHIP_VAR[spinHighlight]}
+              fillOpacity={0.18}
+              stroke="var(--gold)"
+              strokeWidth={3.5}
+              strokeLinejoin="round"
+              pointerEvents="none"
+            />
+          );
+        })()}
 
       {/* resources — a loadable one pulses and is the click target itself (no separate ring) */}
       {world && Object.entries(state.board.resources).map(([k, colour]) => {

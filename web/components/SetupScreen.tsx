@@ -9,6 +9,7 @@
  * wired to the same `pickShip` action, so swapping the widget later doesn't touch
  * useSession or the engine at all.
  */
+import { useState } from "react";
 import { boardFor } from "../../engine/game.js";
 import { hexKey } from "../../engine/hex.js";
 import type { Colour, Hex } from "../../engine/index.js";
@@ -37,14 +38,46 @@ export function SetupScreen({
 
   const freeBases = colourOrder.filter((c) => !setup.bases.includes(c));
   const freeShips = colourOrder.filter((c) => !setup.colours.includes(c));
-  const highlightCells = setup.stage === "pickBase" ? freeBases.flatMap((c) => [...board.baseCells(c)]) : [];
 
   const current =
     setup.stage === "pickBase" ? setup.turnIndex : (setup.shipOrder?.[setup.turnIndex] ?? 0);
   const currentIsBot = seats[current] === "bot";
+  const canPickNow = setup.stage === "pickBase" && !currentIsBot && !s.needPassGate;
+
+  // "random base" — a lucky-wheel spin over the free bases, landing on a genuinely random
+  // one before dispatching pickBase; purely a client-side convenience (equivalent to the
+  // player clicking that base themselves), so there's nothing for the engine to know about.
+  const [spinning, setSpinning] = useState<Colour | null>(null);
+  const highlightCells =
+    setup.stage === "pickBase" && !spinning ? freeBases.flatMap((c) => [...board.baseCells(c)]) : [];
+
+  function spinRandomBase() {
+    if (!canPickNow || spinning || freeBases.length === 0) return;
+    const target = freeBases[Math.floor(Math.random() * freeBases.length)]!;
+    const startIdx = freeBases.indexOf(target);
+    const ticks = freeBases.length * 2 + 6; // a couple of laps, then a settling lap onto target
+    const seq: Colour[] = Array.from({ length: ticks }, (_, k) => {
+      const stepsFromEnd = ticks - 1 - k;
+      const idx = ((startIdx - stepsFromEnd) % freeBases.length + freeBases.length) % freeBases.length;
+      return freeBases[idx]!;
+    });
+    const tick = (k: number) => {
+      setSpinning(seq[k]!);
+      if (k < seq.length - 1) {
+        const t = k / (seq.length - 1);
+        window.setTimeout(() => tick(k + 1), 70 + t * t * 260); // ease-out: fast, then slow to a stop
+      } else {
+        window.setTimeout(() => {
+          setSpinning(null);
+          s.pickBase(target);
+        }, 450);
+      }
+    };
+    tick(0);
+  }
 
   function onCell(h: Hex) {
-    if (setup.stage !== "pickBase" || currentIsBot) return;
+    if (!canPickNow || spinning) return;
     const k = hexKey(h);
     const base = freeBases.find((c) => board.baseCells(c).some((b) => hexKey(b) === k));
     if (base) s.pickBase(base);
@@ -101,6 +134,7 @@ export function SetupScreen({
           seats={seats}
           scores={[]}
           highlight={{ cells: highlightCells, kind: "base" }}
+          spinHighlight={spinning}
           loadCells={[]}
           burnTargets={[]}
           driftGhost={null}
@@ -120,6 +154,12 @@ export function SetupScreen({
           onCell={onCell}
           onCellHover={() => {}}
         />
+
+        {canPickNow && (
+          <button className="random-base-btn" disabled={!!spinning} onClick={spinRandomBase}>
+            🎲 Random base
+          </button>
+        )}
 
         {setup.stage === "pickShip" && !s.needPassGate && !currentIsBot && (
           <div className="shippick-overlay">
