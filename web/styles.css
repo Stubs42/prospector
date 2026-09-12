@@ -184,8 +184,8 @@ button.danger { border-color: #6a3a2f; }
    gently. Buttons are exempt — they're already self-explanatory as clickable. */
 .pulse-avail { animation: avail-pulse 1.1s ease-in-out infinite; }
 @keyframes avail-pulse {
-  0%, 100% { opacity: 0.4; filter: drop-shadow(0 0 0 transparent); }
-  50% { opacity: 1; filter: drop-shadow(0 0 7px var(--gold)); }
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
 }
 
 /* log / history overlay */
