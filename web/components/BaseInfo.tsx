@@ -15,6 +15,7 @@ import type { BoardModel, BoardCell } from "../../engine/board.js";
 import { distance } from "../../engine/hex.js";
 import type { Seat } from "../../client/index.js";
 import { S } from "./geo.js";
+import { rotatePoint } from "./hexpx.js";
 import { SHIP_VAR, ORE_VAR } from "./kit.js";
 import { ASPECT_FILL, ASPECT_LABEL, ASPECT_TAG } from "./aspects.js";
 
@@ -99,11 +100,11 @@ function Tag({ x, y, text, col }: { x: number; y: number; text: string; col: str
 }
 
 /** a plain single-number stat token */
-function Token({ c, col, tag, value, ink, active, tip, onTip }: {
+function Token({ c, col, tag, value, ink, active, tip, onTip, rotation }: {
   c: BoardCell; col: string; tag: string; value: string; ink?: string; active: boolean; tip: string; onTip: TipFn;
+  rotation: number;
 }) {
-  const x = c.x * S;
-  const y = c.y * S;
+  const { x, y } = rotatePoint(c.x * S, c.y * S, rotation);
   return (
     <Hoverable tip={tip} onTip={onTip}>
       <Shell x={x} y={y} col={col} ink={ink} active={active} />
@@ -117,12 +118,11 @@ function Token({ c, col, tag, value, ink, active, tip, onTip }: {
 }
 
 /** a "have / max" token; the "have" digit is colour-graded when `gradeCur` */
-function RatioToken({ c, col, tag, cur, max, active, tip, onTip, gradeCur, warnOver }: {
+function RatioToken({ c, col, tag, cur, max, active, tip, onTip, gradeCur, warnOver, rotation }: {
   c: BoardCell; col: string; tag: string; cur: number; max: number; active: boolean;
-  tip: string; onTip: TipFn; gradeCur?: boolean; warnOver?: boolean;
+  tip: string; onTip: TipFn; gradeCur?: boolean; warnOver?: boolean; rotation: number;
 }) {
-  const x = c.x * S;
-  const y = c.y * S;
+  const { x, y } = rotatePoint(c.x * S, c.y * S, rotation);
   const curCol = warnOver && cur > max ? "#c1573c" : gradeCur ? grade(max ? cur / max : 0) : col;
   const txt = `${cur}/${max}`;
   return (
@@ -138,11 +138,10 @@ function RatioToken({ c, col, tag, cur, max, active, tip, onTip, gradeCur, warnO
   );
 }
 
-function OreHex({ c, ores, tag, tip, onTip }: {
-  c: BoardCell; ores: OreColour[]; tag: string; tip: string; onTip: TipFn;
+function OreHex({ c, ores, tag, tip, onTip, rotation }: {
+  c: BoardCell; ores: OreColour[]; tag: string; tip: string; onTip: TipFn; rotation: number;
 }) {
-  const x = c.x * S;
-  const y = c.y * S;
+  const { x, y } = rotatePoint(c.x * S, c.y * S, rotation);
   const n = Math.min(ores.length, 6);
   return (
     <Hoverable tip={`${tip}: ${ores.length ? ores.join(", ") : "none"}`} onTip={onTip}>
@@ -161,11 +160,10 @@ function OreHex({ c, ores, tag, tip, onTip }: {
   );
 }
 
-function IdentityHex({ c, name, seat, colour, active, onTip }: {
-  c: BoardCell; name: string; seat: Seat; colour: Colour; active: boolean; onTip: TipFn;
+function IdentityHex({ c, name, seat, colour, active, onTip, rotation }: {
+  c: BoardCell; name: string; seat: Seat; colour: Colour; active: boolean; onTip: TipFn; rotation: number;
 }) {
-  const x = c.x * S;
-  const y = c.y * S;
+  const { x, y } = rotatePoint(c.x * S, c.y * S, rotation);
   return (
     <Hoverable tip={`${name} — ${seat === "bot" ? "bot" : "you"}${active ? " · to move" : ""}`} onTip={onTip}>
       <polygon points={hexPts(x, y, S * 0.92)} fill={DARK}
@@ -182,8 +180,9 @@ function IdentityHex({ c, name, seat, colour, active, onTip }: {
   );
 }
 
-export function BaseInfo({ board, state, seats, scores, onTip }: {
+export function BaseInfo({ board, state, seats, scores, onTip, rotation }: {
   board: BoardModel; state: GameState; seats: readonly Seat[]; scores: readonly number[]; onTip: TipFn;
+  rotation: number;
 }) {
   const mode = state.config.modes.prospector;
 
@@ -217,42 +216,42 @@ export function BaseInfo({ board, state, seats, scores, onTip }: {
             if (stat === "fuelTanks")
               return (
                 <RatioToken key={stat} c={cell} col={col} tag="FUEL" cur={p.fuel} max={p.fuelMax}
-                  active={active} onTip={onTip} gradeCur
+                  active={active} onTip={onTip} gradeCur rotation={rotation}
                   tip={`fuel — ${p.fuel} of ${p.fuelMax}${up ? ` (tank ${total}, +${up} upgrade)` : ""}`} />
               );
             if (stat === "cargo")
               return (
                 <RatioToken key={stat} c={cell} col={col} tag="CARGO" cur={p.cargo.length} max={total}
-                  active={active} onTip={onTip}
+                  active={active} onTip={onTip} rotation={rotation}
                   tip={`cargo — ${p.cargo.length} of ${total} held${up ? ` (+${up} upgrade)` : ""}`} />
               );
             if (stat === "booster")
               return (
                 <RatioToken key={stat} c={cell} col={col} tag="CARDS" cur={p.hand.length} max={total}
-                  active={active} onTip={onTip} warnOver
+                  active={active} onTip={onTip} warnOver rotation={rotation}
                   tip={`cards — ${p.hand.length} in hand of ${total} limit${up ? ` (+${up} upgrade)` : ""}`} />
               );
             return (
-              <Token key={stat} c={cell} col={col} tag={ASPECT_TAG[stat]} value={`${total}`} active={active} onTip={onTip}
+              <Token key={stat} c={cell} col={col} tag={ASPECT_TAG[stat]} value={`${total}`} active={active} onTip={onTip} rotation={rotation}
                 tip={`${ASPECT_LABEL[stat]} — ${total}${up ? ` (${baseShip[stat]} + ${up} upgrade)` : ""}`} />
             );
           };
 
           return (
             <g key={`bi-${p.id}`}>
-              <IdentityHex c={near.cells[nm]!} name={baseShip.name} seat={seats[p.id]!} colour={p.colour} active={active} onTip={onTip} />
+              <IdentityHex c={near.cells[nm]!} name={baseShip.name} seat={seats[p.id]!} colour={p.colour} active={active} onTip={onTip} rotation={rotation} />
 
               {FREIGHT_GROUP.map((s, i) => aspect(leftBranch[i], s))}
               {DRIVE_GROUP.map((s, i) => aspect(rightBranch[i], s))}
 
               {/* far ring: PTS at the corner, an ore token on each side for symmetry —
                  FREIGHT (carried) outside the cargo cell, SAVED (delivered) opposite */}
-              {far.cells[fm - 1] && <OreHex c={far.cells[fm - 1]!} ores={p.cargo} tag="FREIGHT" tip="freight in hold" onTip={onTip} />}
+              {far.cells[fm - 1] && <OreHex c={far.cells[fm - 1]!} ores={p.cargo} tag="FREIGHT" tip="freight in hold" onTip={onTip} rotation={rotation} />}
               {far.cells[fm] && (
-                <Token c={far.cells[fm]!} col={GOLD} ink="#1a1400" tag="PTS" active={active} onTip={onTip}
+                <Token c={far.cells[fm]!} col={GOLD} ink="#1a1400" tag="PTS" active={active} onTip={onTip} rotation={rotation}
                   value={`${scoreVal}`} tip={`score — ${scoreVal}`} />
               )}
-              {far.cells[fm + 1] && <OreHex c={far.cells[fm + 1]!} ores={p.delivered} tag="SAVED" tip="delivered to base" onTip={onTip} />}
+              {far.cells[fm + 1] && <OreHex c={far.cells[fm + 1]!} ores={p.delivered} tag="SAVED" tip="delivered to base" onTip={onTip} rotation={rotation} />}
             </g>
           );
         })}
@@ -266,10 +265,21 @@ export function BaseInfo({ board, state, seats, scores, onTip }: {
           `equipment deck ${state.decks.equipment.draw.length}`,
           `supply  ${state.supply.green} / ${state.supply.yellow} / ${state.supply.red}`,
         ];
+        // this sits in a fixed empty gap on the board, not on any hex — rotate the anchor
+        // point along with everything else so it doesn't end up under rotated furniture
+        const anchor = rotatePoint(0, y0, rotation);
+        const lineOffset = rotatePoint(0, 15, rotation);
         return (
           <g>
             {rows.map((t, i) => (
-              <text key={i} x={0} y={y0 + i * 15} textAnchor="middle" fontSize={11} fill="#7c8b83">
+              <text
+                key={i}
+                x={anchor.x + lineOffset.x * i}
+                y={anchor.y + lineOffset.y * i}
+                textAnchor="middle"
+                fontSize={11}
+                fill="#7c8b83"
+              >
                 {t}
               </text>
             ))}

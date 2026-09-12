@@ -10,8 +10,27 @@ import { S } from "./geo.js";
 
 const SQRT3 = Math.sqrt(3);
 
-export function axialToPixel(h: Hex): { x: number; y: number } {
-  return { x: S * SQRT3 * (h.q + h.r / 2), y: S * 1.5 * h.r };
+/**
+ * Rotate a point by a multiple of 60° around the board's origin. This is the whole board
+ * rotation feature: a regular hex tile is unchanged by a 60° turn, so rotating every cell's
+ * *centre* this way — and nothing else — re-tiles the board correctly with every hex still
+ * drawn upright. It's a purely visual/logical relabelling: click targets are the rendered
+ * shapes themselves, so nothing downstream of "where does this hex end up on screen" needs
+ * to know rotation happened at all.
+ */
+export function rotatePoint(x: number, y: number, steps: number): { x: number; y: number } {
+  const k = ((steps % 6) + 6) % 6;
+  if (k === 0) return { x, y };
+  const theta = (k * Math.PI) / 3;
+  const cos = Math.cos(theta);
+  const sin = Math.sin(theta);
+  return { x: x * cos - y * sin, y: x * sin + y * cos };
+}
+
+export function axialToPixel(h: Hex, rotationSteps = 0): { x: number; y: number } {
+  const x = S * SQRT3 * (h.q + h.r / 2);
+  const y = S * 1.5 * h.r;
+  return rotationSteps ? rotatePoint(x, y, rotationSteps) : { x, y };
 }
 
 export function pixelToAxial(x: number, y: number): Hex {

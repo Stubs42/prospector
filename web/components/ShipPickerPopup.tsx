@@ -26,6 +26,8 @@ export interface ShipPickerProps {
   /** false during a bot's own turn: the card still shows (and spins), but there's nothing
      for the human to click on the bot's behalf, so the whole button row is hidden */
   interactive?: boolean | undefined;
+  /** the board's current logical rotation (0..5, each step 60°) — see hexpx.ts's rotatePoint */
+  rotation?: number | undefined;
   onPrev: () => void;
   onNext: () => void;
   onSelect: () => void;
@@ -59,13 +61,14 @@ export function ShipPickerPopup({
   canBrowse,
   spinning,
   interactive = true,
+  rotation = 0,
   onPrev,
   onNext,
   onSelect,
   onRandom,
 }: ShipPickerProps) {
-  const pts = hexBackgroundPoints(center, RADIUS);
-  const o = axialToPixel(center);
+  const pts = hexBackgroundPoints(center, RADIUS, rotation);
+  const o = axialToPixel(center, rotation);
 
   const titleY = o.y - 108;
   const cardTop = o.y - 96;

@@ -10,6 +10,7 @@ import { ShipPickerPopup, type ShipPickerProps } from "./ShipPickerPopup.js";
 import { moveFrame, animDone, type MoveAnim } from "../anim.js";
 import type { Seat } from "../../client/index.js";
 import { clusterOutline, pointsAttr } from "./hexOutline.js";
+import { rotatePoint } from "./hexpx.js";
 
 export { S } from "./geo.js";
 import { S } from "./geo.js";
@@ -114,6 +115,13 @@ export function Board({
   const fitCx = minx + w / 2;
   const fitCy = miny + h / 2;
 
+  // --- board rotation -----------------------------------------------------
+  // logical, not graphical: a hex tile is unchanged by a 60° turn, so this just relabels
+  // which screen position each cell's centre lands on — every tile still draws upright, so
+  // text/tooltips/popups never need to know rotation happened (see hexpx.ts's rotatePoint).
+  const [rotation, setRotation] = useState(0); // 0..5, each step = 60°
+  const rotate = (p: { x: number; y: number }) => rotatePoint(p.x, p.y, rotation);
+
   // --- board pan / zoom -------------------------------------------------
   const MIN_Z = 0.6;
   const MAX_Z = 6;
@@ -205,8 +213,8 @@ export function Board({
   const loadSet = new Set(loadCells.map(hexKey));
   const px = (hx: Hex) => {
     const c = board.cell(hx);
-    if (c) return { x: c.x * S, y: c.y * S };
-    return { x: S * Math.sqrt(3) * (hx.q + hx.r / 2), y: S * 1.5 * hx.r };
+    if (c) return rotate({ x: c.x * S, y: c.y * S });
+    return rotate({ x: S * Math.sqrt(3) * (hx.q + hx.r / 2), y: S * 1.5 * hx.r });
   };
 
   // players are empty during interactive setup's pickBase/pickShip stages — everything that
@@ -272,8 +280,7 @@ export function Board({
       }}
     >
       {cells.map((c) => {
-        const cx = c.x * S;
-        const cy = c.y * S;
+        const { x: cx, y: cy } = rotate({ x: c.x * S, y: c.y * S });
         const key = hexKey(c);
         const isHi = hi.has(key);
         // a "base" pick highlights the whole region as one outline (below), not each cell —
@@ -479,15 +486,21 @@ export function Board({
       })}
 
       {/* table furniture (ship panels, deck counts) — drawn on top so text stays legible */}
-      {world && <BaseInfo board={board} state={state} seats={seats} scores={scores} onTip={onTip} />}
+      {world && <BaseInfo board={board} state={state} seats={seats} scores={scores} onTip={onTip} rotation={rotation} />}
 
       {/* guidance popup — what to do next, anchored in board space */}
       {popup && (
-        <HexPopup center={popup.center} lines={popup.lines} actions={popup.actions} radius={popup.radius} />
+        <HexPopup
+          center={popup.center}
+          lines={popup.lines}
+          actions={popup.actions}
+          radius={popup.radius}
+          rotation={rotation}
+        />
       )}
 
       {/* pickShip stage: one big hex, browse/select/random instead of a plain grid */}
-      {shipPicker && <ShipPickerPopup {...shipPicker} />}
+      {shipPicker && <ShipPickerPopup {...shipPicker} rotation={rotation} />}
 
       {/* confirm dialog (e.g. scrap?) — dims + blocks the rest of the board until answered */}
       {confirm && (
@@ -497,6 +510,7 @@ export function Board({
             center={confirm.center}
             lines={confirm.lines}
             radius={3}
+            rotation={rotation}
             actions={[
               { label: "Cancel", kind: "primary", onClick: confirm.onCancel },
               { label: "Yes", kind: "danger", onClick: confirm.onYes },
@@ -511,6 +525,8 @@ export function Board({
         </div>
       )}
       <div className="zoomctl">
+        <button type="button" aria-label="rotate left" onClick={() => setRotation((r) => (r + 5) % 6)}>⟲</button>
+        <button type="button" aria-label="rotate right" onClick={() => setRotation((r) => (r + 1) % 6)}>⟳</button>
         <button type="button" aria-label="zoom out" onClick={() => zoomBy(1 / 1.3)}>–</button>
         <button type="button" aria-label="fit board" onClick={fit}>⤢</button>
         <button type="button" aria-label="zoom in" onClick={() => zoomBy(1.3)}>+</button>

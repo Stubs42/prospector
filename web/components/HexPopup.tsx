@@ -18,9 +18,9 @@ export interface HexPopupAction {
 /** the popup's own hex-shaped background, "radius" cells across each edge, centred on a
    board cell — shared with anything that wants the same hex silhouette (e.g. the ship
    picker) without duplicating the corner maths. */
-export function hexBackgroundPoints(center: Hex, radius: number): string {
+export function hexBackgroundPoints(center: Hex, radius: number, rotation = 0): string {
   return DIRECTIONS.map((d) => {
-    const p = axialToPixel(add(center, scale(d, radius)));
+    const p = axialToPixel(add(center, scale(d, radius)), rotation);
     return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;
   }).join(" ");
 }
@@ -47,15 +47,18 @@ export function HexPopup({
   lines,
   actions,
   radius = 2,
+  rotation = 0,
 }: {
   center: Hex;
   lines: string[];
   actions?: HexPopupAction[] | undefined;
   /** hex "radius" in cells — each edge spans this many cells. Bump it up when there are buttons to fit. */
   radius?: number | undefined;
+  /** the board's current logical rotation (0..5, each step 60°) — see hexpx.ts's rotatePoint */
+  rotation?: number | undefined;
 }) {
-  const pts = hexBackgroundPoints(center, radius);
-  const o = axialToPixel(center);
+  const pts = hexBackgroundPoints(center, radius, rotation);
+  const o = axialToPixel(center, rotation);
   const lh = 17;
   const hasActions = !!actions?.length;
   const y0 = o.y - ((lines.length - 1) * lh) / 2 - (hasActions ? 16 : 0);
