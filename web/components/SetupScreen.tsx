@@ -98,11 +98,12 @@ export function SetupScreen({
   }
 
   // "random ship" — the same lucky-wheel motion as "random base": spin through the free
-  // ships, decelerating, and land on one. It only lands the carousel there — Select still
-  // confirms it, same as browsing there by hand would.
+  // ships, decelerating, and confirm whichever one it lands on (same as "random base"
+  // dispatches pickBase directly — no separate confirm step for a random pick).
   function spinRandomShip() {
     if (!canPickShipNow || shipSpinning || freeShips.length < 2) return;
     const targetIdx = Math.floor(Math.random() * freeShips.length);
+    const target = shipAt(targetIdx)!;
     const ticks = freeShips.length * 2 + 6;
     setShipSpinning(true);
     const tick = (k: number) => {
@@ -112,7 +113,10 @@ export function SetupScreen({
         const t = k / (ticks - 1);
         window.setTimeout(() => tick(k + 1), 70 + t * t * 260);
       } else {
-        setShipSpinning(false);
+        window.setTimeout(() => {
+          setShipSpinning(false);
+          s.pickShip(target);
+        }, 450);
       }
     };
     tick(0);
