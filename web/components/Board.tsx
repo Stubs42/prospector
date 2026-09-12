@@ -189,8 +189,11 @@ export function Board({
     return { x: S * Math.sqrt(3) * (hx.q + hx.r / 2), y: S * 1.5 * hx.r };
   };
 
-  const active = state.players[state.activePlayerIndex]!;
-  const activeAt = px(active.pose.current);
+  // players are empty during interactive setup's pickBase/pickShip stages — everything that
+  // dereferences `active` below is itself gated on state only ever being non-empty there
+  // (onCoast, highlight.kind === "place")
+  const active = state.players[state.activePlayerIndex] ?? null;
+  const activeAt = active ? px(active.pose.current) : { x: 0, y: 0 };
 
   // space cancels a confirm dialog (e.g. the scrap prompt) — Cancel is the safe default
   useEffect(() => {
@@ -395,7 +398,7 @@ export function Board({
          the ship itself isn't drawn anywhere until one is picked */}
       {highlight.kind === "place" && highlight.cells.map((hx) => {
         const { x, y } = px(hx);
-        const col = SHIP_VAR[active.colour];
+        const col = SHIP_VAR[active!.colour]; // "place" only ever shows once real players exist
         return (
           <g key={`hi-${hexKey(hx)}`} className="cell-hit pulse-avail"
              onClick={clicked(() => onCell(hx))}

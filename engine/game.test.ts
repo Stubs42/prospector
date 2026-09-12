@@ -394,6 +394,22 @@ describe("interactive setup: pickBase -> (engine picks start player) -> pickShip
     expect(applyAction(s, { type: "pickBase", base }).ok).toBe(false);
   });
 
+  it("activePlayerIndex always points at whoever is up next, for a client's bot-turn check", () => {
+    let s = createGame({ seed: 4, seats: ["human", "bot", "human"] });
+    for (let i = 0; i < seats.length; i++) {
+      expect(s.activePlayerIndex).toBe(i); // pickBase goes in plain seat order
+      const acts = legalActions(s).filter((a) => a.type === "pickBase") as Extract<Action, { type: "pickBase" }>[];
+      s = run(s, acts[0]!);
+    }
+    // pickShip goes in shipOrder, starting at the winner
+    for (let i = 0; i < seats.length; i++) {
+      expect(s.activePlayerIndex).toBe(s.setup!.shipOrder![i]);
+      const acts = legalActions(s).filter((a) => a.type === "pickShip") as Extract<Action, { type: "pickShip" }>[];
+      s = run(s, acts[0]!);
+    }
+    expect(s.setup).toBeNull();
+  });
+
   it("randomBot can play an entire setup to completion without crashing", () => {
     const rng = makeRng(99);
     for (let seed = 1; seed <= 5; seed++) {

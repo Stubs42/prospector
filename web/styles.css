@@ -342,6 +342,10 @@ button.danger { border-color: #6a3a2f; }
 .pass .sub { color: var(--muted); }
 
 .pass.setup { gap: 1rem; padding: 2rem; top: 49px; } /* clear the topbar */
+.shippick-overlay {
+  position: absolute; inset: 0; z-index: 15;
+  display: flex; align-items: center; justify-content: center; padding: 1rem;
+}
 .shipgrid {
   display: grid; grid-template-columns: repeat(3, minmax(180px, 220px)); gap: 12px;
 }

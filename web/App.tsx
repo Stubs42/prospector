@@ -8,11 +8,10 @@ import { Board } from "./components/Board.js";
 import { BottomPanel, type PanelButton } from "./components/BottomPanel.js";
 import { LogOverlay } from "./components/LogOverlay.js";
 import { Settings } from "./components/Settings.js";
+import { SetupScreen } from "./components/SetupScreen.js";
 import { axialToPixel, pixelToAxial, towardOrigin } from "./components/hexpx.js";
 import { loadPrefs, motionReduced, savePrefs, type Prefs } from "./prefs.js";
 import { useSession } from "./useSession.js";
-
-const ALL_COLOURS: Colour[] = ["black", "red", "blue", "white", "green", "yellow"];
 
 /** a cell a few steps inward from a base, where that base's guidance popup sits */
 function launchAnchor(board: BoardModel, colour: Colour): Hex {
@@ -48,16 +47,21 @@ export default function App() {
   const { armed, combatSel, attackTarget } = s.staging;
   const dispatch = s.dispatch;
 
+  // interactive setup (pickBase -> pickShip) is a completely separate screen — state.players
+  // is empty until it finishes, so nothing below this can run yet
+  if (state.setup) {
+    return <SetupScreen s={s} prefs={prefs} setPrefs={setPrefs} reducedMotion={reducedMotion} />;
+  }
+
   const pc = state.pendingCombat;
   const p = state.players[state.activePlayerIndex]!;
   const board = boardFor(state);
   const mode = state.config.modes.prospector;
   const baseStats = mode.ships[p.colour];
   const sc = score(state);
-  const inSetup = s.setup.open;
   const anim = s.animLive; // a move is actively playing — hold back prompts/targets
   const suppress = anim || scrapConfirmOpen; // also true while the scrap confirm dialog is up
-  const interactive = !inSetup && !activeIsBot && !needPassGate;
+  const interactive = !activeIsBot && !needPassGate;
   const overLimit = afford.overLimit;
   // turn 1: the ship must be placed on a base cell before anything else
   const launchPhase = interactive && !pc && afford.placeCells.length > 0;
@@ -183,36 +187,20 @@ export default function App() {
   const onEndTurn = endTurnAction ? () => dispatch(endTurnAction) : null;
 
   // --- board affordances ------------------------------------------
-  const freeBaseColours = ALL_COLOURS.filter((c) => !s.setup.picks.includes(c));
-  const colourAtCell = (h: Hex): Colour | null => {
-    const k = hexKey(h);
-    return ALL_COLOURS.find((c) => board.baseCells(c).some((b) => hexKey(b) === k)) ?? null;
-  };
-
-  const highlight: { cells: Hex[]; kind: "place" | "base" | null } = inSetup
-    ? { cells: freeBaseColours.flatMap((c) => [...board.baseCells(c)]), kind: "base" }
-    : afford.placeCells.length
-      ? { cells: afford.placeCells, kind: "place" }
-      : { cells: [], kind: null };
+  const highlight: { cells: Hex[]; kind: "place" | "base" | null } = afford.placeCells.length
+    ? { cells: afford.placeCells, kind: "place" }
+    : { cells: [], kind: null };
   // loadable resources pulse the ore chip itself instead of a separate ring
   const loadCellsForBoard = boardActive ? afford.loadCells : [];
   const attackTargets = boardActive ? afford.attackTargetIds : [];
   const onAttackTarget = (id: number) => s.setAttackTarget(id);
 
   // guidance popup: where the next action is, and what it is
-  const popup: { center: Hex; lines: string[] } | null = inSetup
-    ? {
-        center: { q: 0, r: 0 },
-        lines:
-          s.humans > 1
-            ? ["Please select your base", `player ${s.setup.picks.length + 1} of ${s.humans}`]
-            : ["Please select", "your base"],
-      }
-    : launchPhase
-      ? { center: launchAnchor(board, p.homeBase), lines: ["Select your", "launch cell"] }
-      : interactive && overLimit
-        ? { center: { q: 0, r: 0 }, lines: ["Too many cards!", "Discard one to continue"] }
-        : null;
+  const popup: { center: Hex; lines: string[] } | null = launchPhase
+    ? { center: launchAnchor(board, p.homeBase), lines: ["Select your", "launch cell"] }
+    : interactive && overLimit
+      ? { center: { q: 0, r: 0 }, lines: ["Too many cards!", "Discard one to continue"] }
+      : null;
 
   // clicking your own base (off a burn target) asks to scrap — available any time during the move
   const scrapCells = interactive && !pc && attackTarget === null && !launchPhase ? board.baseCells(p.homeBase) : [];
@@ -231,11 +219,6 @@ export default function App() {
 
   const burnPreview = s.burnPreviewFor(hoverCell);
   function onCell(h: Hex) {
-    if (inSetup) {
-      const col = colourAtCell(h);
-      if (col && freeBaseColours.includes(col)) s.pickBase(col);
-      return;
-    }
     const k = hexKey(h);
     if (afford.placeCells.some((c) => hexKey(c) === k)) return dispatch({ type: "placeShip", cell: h });
     if (afford.loadCells.some((c) => hexKey(c) === k)) return dispatch({ type: "loadResource", from: h });
@@ -250,17 +233,11 @@ export default function App() {
       <div className="topbar">
         <h1>Prospector</h1>
         <span className="turn">
-          {inSetup ? (
-            "new game"
-          ) : (
-            <>
-              turn {state.turnNumber} ·{" "}
-              <span className="pill">
-                <i className="swatch" style={{ background: `var(--ship-${p.colour})` }} />
-                {activeIsBot ? `${p.colour} (bot)` : p.colour}
-              </span>
-            </>
-          )}
+          turn {state.turnNumber} ·{" "}
+          <span className="pill">
+            <i className="swatch" style={{ background: `var(--ship-${p.colour})` }} />
+            {activeIsBot ? `${p.colour} (bot)` : p.colour}
+          </span>
         </span>
         <span className="spacer" />
         <button className="ghost" onClick={() => setLogOpen(true)} title="History">
@@ -301,7 +278,7 @@ export default function App() {
           state={state}
           seats={seats}
           scores={sc.byPlayer}
-          highlight={suppress ? { cells: [], kind: null } : interactive || inSetup ? highlight : { cells: [], kind: null }}
+          highlight={suppress ? { cells: [], kind: null } : interactive ? highlight : { cells: [], kind: null }}
           loadCells={loadCellsForBoard}
           burnTargets={interactive && !suppress ? afford.burnTargets : []}
           driftGhost={interactive && !suppress ? driftGhost : null}
@@ -314,7 +291,7 @@ export default function App() {
           onEndTurn={onEndTurn}
           confirm={scrapConfirm}
           popup={suppress ? null : popup}
-          world={!inSetup}
+          world
           reducedMotion={reducedMotion}
           moveAnim={s.moveAnim}
           onMoveAnimEnd={s.endMoveAnim}
@@ -322,10 +299,8 @@ export default function App() {
           onCellHover={setHoverCell}
         />
 
-        {!inSetup && activeIsBot && <div className="board-toast">🤖 {baseStats.name} is playing…</div>}
-        {!inSetup && isWaitingOnBot && !activeIsBot && (
-          <div className="board-toast">🤖 waiting on the bot…</div>
-        )}
+        {activeIsBot && <div className="board-toast">🤖 {baseStats.name} is playing…</div>}
+        {isWaitingOnBot && !activeIsBot && <div className="board-toast">🤖 waiting on the bot…</div>}
         {state.gameOver && (
           <div className="board-toast win">
             Game over — winner: <b>{sc.winnerIds.map((i) => state.players[i]!.colour).join(", ")}</b>
@@ -351,7 +326,7 @@ export default function App() {
 
       {logOpen && <LogOverlay state={state} onClose={() => setLogOpen(false)} />}
 
-      {needPassGate && !s.setup.open && (
+      {needPassGate && (
         <div className="pass">
           <div className="sub">pass the device to</div>
           <div className="who">

@@ -240,7 +240,7 @@ function stepSetup(state: GameState, prev: GameState, board: BoardModel, action:
     if (setup.bases.includes(action.base)) return fail("that base is already taken");
     const seat = setup.turnIndex;
     setup.bases[seat] = action.base;
-    state.activePlayerIndex = seat;
+    state.activePlayerIndex = seat; // tag the log entry with whoever just picked
     log(state, "basePicked", { seat, base: action.base });
     setup.turnIndex += 1;
     if (setup.turnIndex === setup.seats.length) {
@@ -253,6 +253,9 @@ function stepSetup(state: GameState, prev: GameState, board: BoardModel, action:
       setup.stage = "pickShip";
       setup.turnIndex = 0;
       log(state, "startPlayerChosen", { seat: winner });
+      state.activePlayerIndex = setup.shipOrder[0]!; // first to pick a ship
+    } else {
+      state.activePlayerIndex = setup.turnIndex; // next seat up to pick a base
     }
     return done();
   }
@@ -262,7 +265,7 @@ function stepSetup(state: GameState, prev: GameState, board: BoardModel, action:
   if (setup.colours.includes(action.colour)) return fail("that ship is already taken");
   const seat = setup.shipOrder![setup.turnIndex]!;
   setup.colours[seat] = action.colour;
-  state.activePlayerIndex = seat;
+  state.activePlayerIndex = seat; // tag the log entry with whoever just picked
   log(state, "shipPicked", { seat, colour: action.colour });
   setup.turnIndex += 1;
   if (setup.turnIndex === setup.seats.length) {
@@ -271,10 +274,12 @@ function stepSetup(state: GameState, prev: GameState, board: BoardModel, action:
     const winner = setup.shipOrder![0]!;
     const variant = setup.variant;
     populateGame(state, board, colours, bases, variant);
-    state.activePlayerIndex = winner;
+    state.activePlayerIndex = winner; // the real game's start player
     state.players[winner]!.turn = freshTurn();
     state.turnNumber = 1;
     state.setup = null;
+  } else {
+    state.activePlayerIndex = setup.shipOrder![setup.turnIndex]!; // next seat up to pick a ship
   }
   return done();
 }

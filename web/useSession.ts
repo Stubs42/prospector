@@ -23,8 +23,6 @@ import { legalActions } from "../engine/index.js";
 import { deriveMoveAnim, coastAnim, type MoveAnim } from "./anim.js";
 import { movePhaseMs, type Prefs } from "./prefs.js";
 
-const ALL_COLOURS: Colour[] = ["black", "red", "blue", "white", "green", "yellow"];
-
 const AUTO_HIDE = new Set<Action["type"]>([
   "declineCounter",
   "discardBooster",
@@ -44,12 +42,13 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   const [humans, setHumans] = useState(1);
   const [bots, setBots] = useState(2);
   const [seats, setSeats] = useState<Seat[]>(() => mkSeats(1, 2));
+  // a fresh game always starts as an interactive setup (state.setup non-null) — pickBase and
+  // pickShip are real, logged engine actions, not client-side randomness. See stepSetup in
+  // engine/game.ts.
   const [state, setState] = useState<GameState>(() =>
-    createGame({ colours: ALL_COLOURS.slice(0, 3), seed: (Math.random() * 1e9) | 0 }),
+    createGame({ seats: mkSeats(1, 2), seed: (Math.random() * 1e9) | 0 }),
   );
   const [shownPlayer, setShownPlayer] = useState(state.activePlayerIndex);
-  const [setupOpen, setSetupOpen] = useState(true);
-  const [humanPicks, setHumanPicks] = useState<Colour[]>([]);
   const [armed, setArmed] = useState<Set<string>>(new Set());
   const [combatSel, setCombatSel] = useState<Set<string>>(new Set());
   const [attackTarget, setAttackTarget] = useState<number | null>(null);
@@ -71,9 +70,10 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     setAnimLive(false);
   }
 
-  const p = state.players[state.activePlayerIndex]!;
+  // null during interactive setup (state.players is empty until the last ship is picked)
+  const p = state.players[state.activePlayerIndex] ?? null;
 
-  const armedEngine = p.hand
+  const armedEngine = (p?.hand ?? [])
     .filter((c) => c.type === "engine" && armed.has(c.id))
     .reduce((a, c) => a + (c.value ?? 0), 0);
 
@@ -82,10 +82,11 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   const humansCount = humansIn(seats);
   const activeIsBot = activeIsBotOf(state, seats);
 
+  // state.activePlayerIndex tracks whoever is up next throughout setup too (see stepSetup),
+  // so this pass-gate and the bot-turn check below both already work during pickBase/pickShip
   const needPassGate =
     humansCount >= 2 && !state.gameOver && !activeIsBot && shownPlayer !== state.activePlayerIndex;
-  const isWaitingOnBot =
-    !setupOpen && !animLive && !state.gameOver && !needPassGate && seats[waitingOn(state)] === "bot";
+  const isWaitingOnBot = !animLive && !state.gameOver && !needPassGate && seats[waitingOn(state)] === "bot";
 
   // --- state transitions -------------------------------------------------
   const clearStaging = () => {
@@ -104,50 +105,39 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
       playAnim(anim);
       setState(r.state);
       clearStaging();
-      if (a.type === "drawBooster") {
+      if (a.type === "drawBooster" && p) {
         const before = new Set(p.hand.map((c) => c.id));
         const after = r.state.players[state.activePlayerIndex]!.hand;
         setNewCardIds(new Set(after.filter((c) => !before.has(c.id)).map((c) => c.id)));
       } else {
         setNewCardIds(new Set());
       }
+      // setup just finished (the last pickShip finalized into a real game) — start fresh
+      // on the pass-gate so the very first real turn doesn't immediately ask to "pass"
+      if (state.setup && !r.state.setup) setShownPlayer(r.state.activePlayerIndex);
     } else console.warn("rejected", a, r.error);
   }
   function dispatchBurn(burn: Extract<Action, { type: "burn" }>) {
     // reserve-fuel cards are no longer staged here — they're played (and their fuel
     // banked) the instant they're clicked, via useReserveFuel — only engine cards arm.
-    const engineBoosters = p.hand.filter((c) => c.type === "engine" && armed.has(c.id)).map((c) => c.id);
+    const engineBoosters = p!.hand.filter((c) => c.type === "engine" && armed.has(c.id)).map((c) => c.id);
     dispatch(engineBoosters.length ? { ...burn, engineBoosters } : burn);
   }
+  /** (re)start setup fresh — a new interactive game, base/ship all unpicked */
   function openSetup(h = humans, b = bots) {
     setHumans(h);
     setBots(b);
-    setSeats(mkSeats(h, b));
-    setHumanPicks([]);
-    setSetupOpen(true);
-  }
-  function startGame(colourOrder: Colour[]) {
-    const g = createGame({ colours: colourOrder, seed: (Math.random() * 1e9) | 0 });
-    setSeats(mkSeats(humans, bots));
+    const seatArr = mkSeats(h, b);
+    setSeats(seatArr);
+    const g = createGame({ seats: seatArr, seed: (Math.random() * 1e9) | 0 });
     setState(g);
     setShownPlayer(g.activePlayerIndex);
     botRng.current = makeRng((Math.random() * 1e9) | 0);
-    setHumanPicks([]);
-    setSetupOpen(false);
+    clearStaging();
+    playAnim(null);
   }
-  function pickShip(colour: Colour) {
-    const picks = [...humanPicks, colour];
-    if (picks.length < humans) {
-      setHumanPicks(picks);
-      return;
-    }
-    const remaining = ALL_COLOURS.filter((c) => !picks.includes(c));
-    for (let i = remaining.length - 1; i > 0; i--) {
-      const j = (Math.random() * (i + 1)) | 0;
-      [remaining[i], remaining[j]] = [remaining[j]!, remaining[i]!];
-    }
-    startGame([...picks, ...remaining.slice(0, bots)]);
-  }
+  const pickBase = (base: Colour) => dispatch({ type: "pickBase", base });
+  const pickShip = (colour: Colour) => dispatch({ type: "pickShip", colour });
   const revealTurn = () => setShownPlayer(state.activePlayerIndex);
   const toggle = (setter: typeof setArmed) => (id: string) =>
     setter((s) => {
@@ -189,7 +179,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   );
   const autoAction =
     prefs.autoSingle &&
-    !setupOpen &&
+    !state.setup &&
     !animLive &&
     !state.gameOver &&
     !needPassGate &&
@@ -208,15 +198,18 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   useEffect(() => {
     const qs = new URLSearchParams(location.search);
     const n = Number(qs.get("demo") ?? 0);
+    const rng = makeRng(1);
     if (qs.get("skipsetup") === "1" && !n) {
-      setSeats(Array<Seat>(state.players.length).fill("human"));
-      setShownPlayer(state.activePlayerIndex);
-      setSetupOpen(false);
+      let s = state;
+      while (s.setup) s = stepBot(s, rng); // randomly resolve pickBase/pickShip for every seat
+      setState(s);
+      setSeats(Array<Seat>(s.players.length).fill("human"));
+      setShownPlayer(s.activePlayerIndex);
       return;
     }
     if (!n) return;
-    const rng = makeRng(1);
     let s = state;
+    while (s.setup) s = stepBot(s, rng); // setup always resolves first, however small n is
     for (let i = 0; i < n && !s.gameOver; i++) s = stepBot(s, rng);
     for (const step of [{ type: "drawBooster" }, { type: "drift" }] as Action[]) {
       if (legalActions(s).some((a) => a.type === step.type)) {
@@ -266,7 +259,6 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     setState(s);
     setShownPlayer(s.activePlayerIndex);
     setSeats(Array<Seat>(s.players.length).fill("human"));
-    setSetupOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -275,7 +267,9 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     seats,
     humans,
     bots,
-    setup: { open: setupOpen, picks: humanPicks },
+    /** `data` is the engine's own SetupState — GUIs read stage/bases/colours/turnIndex/
+       startSeat/shipOrder straight off it instead of re-deriving them client-side */
+    setup: { open: state.setup !== null, data: state.setup },
     staging: { armed, combatSel, attackTarget },
     afford,
     activeIsBot,
@@ -292,8 +286,8 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     dispatch,
     dispatchBurn,
     openSetup,
+    pickBase,
     pickShip,
-    pickBase: pickShip,
     revealTurn,
     toggleArmed: toggle(setArmed),
     toggleCombatSel: toggle(setCombatSel),
