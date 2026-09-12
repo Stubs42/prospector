@@ -15,18 +15,20 @@ export interface HexPopupAction {
   onClick: () => void;
 }
 
-/** a flattened hexagon (pointed left/right ends) sized to fit a button label —
-   keeps the popup's action buttons in the same hex language as everything else */
+/** a flattened hexagon (pointed left/right ends) sized to fit a button label — vertices sit
+   at the same 60°-apart angles as every other hex in the app (just elliptically scaled to
+   bw×bh instead of a regular hexagon's equal radius), so the corners read as genuinely
+   hexagonal rather than an arbitrary 45° chamfer */
 function hexButtonPoints(bx: number, by: number, bw: number, bh: number): string {
-  const cut = bh / 2;
-  const pts: [number, number][] = [
-    [bx, by + bh / 2],
-    [bx + cut, by],
-    [bx + bw - cut, by],
-    [bx + bw, by + bh / 2],
-    [bx + bw - cut, by + bh],
-    [bx + cut, by + bh],
-  ];
+  const cx = bx + bw / 2;
+  const cy = by + bh / 2;
+  const rx = bw / 2;
+  const ry = bh / 2;
+  const pts: [number, number][] = [];
+  for (let i = 0; i < 6; i++) {
+    const a = (60 * i * Math.PI) / 180; // 0°, 60°, 120°, ... — points land left/right
+    pts.push([cx + rx * Math.cos(a), cy + ry * Math.sin(a)]);
+  }
   return pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
 }
 
