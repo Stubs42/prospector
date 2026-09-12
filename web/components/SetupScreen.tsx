@@ -3,17 +3,15 @@
  * (see engine/game.ts stepSetup) — this component just renders whichever stage
  * state.setup is at and dispatches the click.
  *
- * The base pick reuses the board (click a highlighted base region, same pattern as
- * every other board-native pick in this app). The ship pick is a plain card grid for
- * now — a placeholder for the carousel-with-art widget described in the backlog; it's
- * wired to the same `pickShip` action, so swapping the widget later doesn't touch
- * useSession or the engine at all.
+ * pickBase reuses the board (click a highlighted base region, same pattern as every
+ * other board-native pick in this app). pickShip is a one-card-at-a-time carousel
+ * inside a big hex (ShipPickerPopup) — ‹ › to browse, Select to confirm, 🎲 Random to
+ * spin the same browsing motion onto a random one.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { boardFor } from "../../engine/game.js";
 import { hexKey } from "../../engine/hex.js";
 import type { Colour, Hex } from "../../engine/index.js";
-import { ASPECT_ORDER, ASPECT_TAG } from "./aspects.js";
 import { Board } from "./Board.js";
 import { Settings } from "./Settings.js";
 import type { Prefs } from "../prefs.js";
@@ -43,6 +41,7 @@ export function SetupScreen({
     setup.stage === "pickBase" ? setup.turnIndex : (setup.shipOrder?.[setup.turnIndex] ?? 0);
   const currentIsBot = seats[current] === "bot";
   const canPickNow = setup.stage === "pickBase" && !currentIsBot && !s.needPassGate;
+  const canPickShipNow = setup.stage === "pickShip" && !currentIsBot && !s.needPassGate;
 
   // "random base" — a lucky-wheel spin over the free bases, landing on a genuinely random
   // one before dispatching pickBase; purely a client-side convenience (equivalent to the
@@ -85,14 +84,51 @@ export function SetupScreen({
     if (base) s.pickBase(base);
   }
 
+  // pickShip: one ship shown at a time, browsed with ‹ ›. Reset to the first option
+  // whenever a new seat's turn starts, so nobody inherits the previous player's spot.
+  const [shipIndex, setShipIndex] = useState(0);
+  const [shipSpinning, setShipSpinning] = useState(false);
+  useEffect(() => setShipIndex(0), [current, setup.stage]);
+  const shipAt = (i: number) => freeShips[((i % freeShips.length) + freeShips.length) % freeShips.length];
+  const shownShip = freeShips.length ? shipAt(shipIndex) : null;
+
+  function browseShip(delta: 1 | -1) {
+    if (!canPickShipNow || shipSpinning || freeShips.length < 2) return;
+    setShipIndex((i) => i + delta);
+  }
+
+  // "random ship" — the same lucky-wheel motion as "random base": spin through the free
+  // ships, decelerating, and land on one. It only lands the carousel there — Select still
+  // confirms it, same as browsing there by hand would.
+  function spinRandomShip() {
+    if (!canPickShipNow || shipSpinning || freeShips.length < 2) return;
+    const targetIdx = Math.floor(Math.random() * freeShips.length);
+    const ticks = freeShips.length * 2 + 6;
+    setShipSpinning(true);
+    const tick = (k: number) => {
+      const stepsFromEnd = ticks - 1 - k;
+      setShipIndex(targetIdx - stepsFromEnd);
+      if (k < ticks - 1) {
+        const t = k / (ticks - 1);
+        window.setTimeout(() => tick(k + 1), 70 + t * t * 260);
+      } else {
+        setShipSpinning(false);
+      }
+    };
+    tick(0);
+  }
+
+  function selectShip() {
+    if (!canPickShipNow || shipSpinning || !shownShip) return;
+    s.pickShip(shownShip);
+  }
+
   const lines =
     setup.stage === "pickBase"
       ? seats.length > 1
         ? ["Please select a base", `player ${current + 1} of ${seats.length}`]
         : ["Please select", "a base"]
-      : seats.length > 1
-        ? ["Please select a ship", `player ${current + 1} of ${seats.length}`]
-        : ["Please select", "a ship"];
+      : [];
 
   return (
     <div className="app board-only">
@@ -149,7 +185,7 @@ export function SetupScreen({
           onEndTurn={null}
           confirm={null}
           popup={
-            s.needPassGate
+            s.needPassGate || setup.stage !== "pickBase"
               ? null
               : {
                   center: { q: 0, r: 0 },
@@ -158,6 +194,22 @@ export function SetupScreen({
                   actions: canPickNow ? [{ label: "🎲 Random", kind: "primary", onClick: spinRandomBase }] : undefined,
                 }
           }
+          shipPicker={
+            !s.needPassGate && setup.stage === "pickShip" && !currentIsBot && shownShip
+              ? {
+                  center: { q: 0, r: 0 },
+                  colour: shownShip,
+                  name: mode.ships[shownShip].name,
+                  stats: mode.ships[shownShip],
+                  canBrowse: freeShips.length > 1,
+                  spinning: shipSpinning,
+                  onPrev: () => browseShip(-1),
+                  onNext: () => browseShip(1),
+                  onSelect: selectShip,
+                  onRandom: spinRandomShip,
+                }
+              : null
+          }
           world={false}
           reducedMotion={reducedMotion}
           moveAnim={null}
@@ -165,31 +217,6 @@ export function SetupScreen({
           onCell={onCell}
           onCellHover={() => {}}
         />
-
-        {setup.stage === "pickShip" && !s.needPassGate && !currentIsBot && (
-          <div className="shippick-overlay">
-            <div className="shipgrid">
-              {freeShips.map((c) => {
-                const ship = mode.ships[c];
-                return (
-                  <button key={c} className="shipcard" onClick={() => s.pickShip(c)}>
-                    <span className="pill">
-                      <i className="swatch" style={{ background: `var(--ship-${c})` }} />
-                      {ship.name}
-                    </span>
-                    <div className="shipstats">
-                      {ASPECT_ORDER.map((stat) => (
-                        <span key={stat}>
-                          {ASPECT_TAG[stat]} {ship[stat]}
-                        </span>
-                      ))}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
         {currentIsBot && !s.needPassGate && <div className="board-toast">🤖 picking…</div>}
       </div>

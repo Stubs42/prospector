@@ -15,11 +15,21 @@ export interface HexPopupAction {
   onClick: () => void;
 }
 
+/** the popup's own hex-shaped background, "radius" cells across each edge, centred on a
+   board cell — shared with anything that wants the same hex silhouette (e.g. the ship
+   picker) without duplicating the corner maths. */
+export function hexBackgroundPoints(center: Hex, radius: number): string {
+  return DIRECTIONS.map((d) => {
+    const p = axialToPixel(add(center, scale(d, radius)));
+    return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+  }).join(" ");
+}
+
 /** a flattened hexagon (pointed left/right ends) sized to fit a button label. The diagonal
    edges are inclined at 60° from horizontal — a true hexagon's edge angle — rather than a
    45° chamfer; that means a *shorter* horizontal run for the same rise (steeper, sharper
    points), not a longer one, so this must stay independent of the label-driven width. */
-function hexButtonPoints(bx: number, by: number, bw: number, bh: number): string {
+export function hexButtonPoints(bx: number, by: number, bw: number, bh: number): string {
   const cut = bh / 2 / Math.tan(Math.PI / 3); // 60° from horizontal
   const pts: [number, number][] = [
     [bx, by + bh / 2],
@@ -44,10 +54,7 @@ export function HexPopup({
   /** hex "radius" in cells — each edge spans this many cells. Bump it up when there are buttons to fit. */
   radius?: number | undefined;
 }) {
-  const pts = DIRECTIONS.map((d) => {
-    const p = axialToPixel(add(center, scale(d, radius)));
-    return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;
-  }).join(" ");
+  const pts = hexBackgroundPoints(center, radius);
   const o = axialToPixel(center);
   const lh = 17;
   const hasActions = !!actions?.length;

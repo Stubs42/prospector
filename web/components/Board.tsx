@@ -6,6 +6,7 @@ import { SHIP_VAR, ORE_VAR } from "./kit.js";
 import { BaseInfo, type TipFn } from "./BaseInfo.js";
 import { HexPopup, type HexPopupAction } from "./HexPopup.js";
 import { ShipMarker } from "./ShipMarker.js";
+import { ShipPickerPopup, type ShipPickerProps } from "./ShipPickerPopup.js";
 import { moveFrame, animDone, type MoveAnim } from "../anim.js";
 import type { Seat } from "../../client/index.js";
 import { clusterOutline, pointsAttr } from "./hexOutline.js";
@@ -47,6 +48,9 @@ export interface BoardProps {
   confirm: { center: Hex; lines: string[]; onYes: () => void; onCancel: () => void } | null;
   /** guidance popup drawn in board space; null when no action is pending */
   popup: { center: Hex; lines: string[]; actions?: HexPopupAction[] | undefined; radius?: number | undefined } | null;
+  /** the pickShip stage's whole UI (a ship card + browse/select/random) — mutually
+     exclusive with `popup` in practice, since it replaces the guidance popup for that stage */
+  shipPicker?: ShipPickerProps | null;
   /** false during base selection: draw only the empty field + highlights + popup */
   world: boolean;
   reducedMotion: boolean;
@@ -78,6 +82,7 @@ export function Board({
   onEndTurn,
   confirm,
   popup,
+  shipPicker = null,
   world,
   reducedMotion,
   moveAnim,
@@ -480,6 +485,9 @@ export function Board({
       {popup && (
         <HexPopup center={popup.center} lines={popup.lines} actions={popup.actions} radius={popup.radius} />
       )}
+
+      {/* pickShip stage: one big hex, browse/select/random instead of a plain grid */}
+      {shipPicker && <ShipPickerPopup {...shipPicker} />}
 
       {/* confirm dialog (e.g. scrap?) — dims + blocks the rest of the board until answered */}
       {confirm && (

@@ -145,6 +145,11 @@ button.danger { border-color: #6a3a2f; }
 .hexpopup-btn.primary:hover polygon,
 .hexpopup-btn.danger:hover polygon,
 .hexpopup-btn:hover polygon { stroke: var(--gold); }
+.hexpopup-btn.disabled { cursor: default; opacity: 0.4; }
+
+/* ship carousel (pickShip stage) */
+.shippicker-stat { fill: var(--muted); font-size: 12px; font-weight: 600; }
+.ship-arrow text { font-size: 16px; }
 
 /* a whole base region you can pick as your start base — one pulsing outline around the
    4-cell cluster, not a fill on each cell */
@@ -343,24 +348,6 @@ button.danger { border-color: #6a3a2f; }
 .pass .sub { color: var(--muted); }
 
 .pass.setup { gap: 1rem; padding: 2rem; top: 49px; } /* clear the topbar */
-.shippick-overlay {
-  position: absolute; inset: 0; z-index: 15;
-  display: flex; align-items: center; justify-content: center; padding: 1rem;
-}
-.shipgrid {
-  display: grid; grid-template-columns: repeat(3, minmax(180px, 220px)); gap: 12px;
-}
-.shipcard {
-  display: flex; flex-direction: column; gap: 8px; align-items: flex-start;
-  padding: 12px; text-align: left;
-  background: var(--panel-2); border: 1px solid var(--line-strong, var(--line)); border-radius: 9px;
-}
-.shipcard:hover:not(:disabled) { border-color: var(--gold); }
-.shipcard:disabled { opacity: 0.35; }
-.shipcard .shipstats {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px;
-  font-size: 0.72rem; color: var(--muted); font-variant-numeric: tabular-nums;
-}
 
 /* board bits */
 .cell-hit { cursor: pointer; }
