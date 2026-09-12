@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { createGame, applyAction, score, boardFor } from "./game.js";
-import { legalActions } from "./index.js";
-import type { Action, GameState } from "./types.js";
+import { legalActions, randomBot } from "./index.js";
+import { makeRng } from "./rng.js";
+import type { Action, GameState, SeatKind } from "./types.js";
 
 function run(state: GameState, action: Action): GameState {
   const r = applyAction(state, action);
@@ -29,6 +30,17 @@ describe("createGame", () => {
     // green supply started at 3 + perPlayer*4 = 7, minus the 5 seeded
     expect(g.supply.green).toBe(7 - 5);
     expect(g.supply.yellow).toBe(7);
+  });
+
+  it("logs each seeded tile's 3 coordinate dice, for a GUI to replay as a spin animation", () => {
+    const seeded = g.log.filter((l) => l.event === "resourceSeeded");
+    expect(seeded.length).toBeGreaterThan(0);
+    for (const entry of seeded) {
+      const dice = entry.detail!.dice as { step: number; colour: string }[];
+      expect(dice).toHaveLength(3);
+      expect(dice.map((d) => d.step).sort()).toEqual([1, 2, 3]);
+      expect(entry.detail!.cell).toBeDefined();
+    }
   });
 
   it("builds full decks", () => {
@@ -319,5 +331,81 @@ describe("scoring", () => {
     const { byPlayer, winnerIds } = score(s);
     expect(byPlayer).toEqual([6, 6]);
     expect(winnerIds).toEqual([0, 1]);
+  });
+});
+
+describe("interactive setup: pickBase -> (engine picks start player) -> pickShip", () => {
+  const seats: SeatKind[] = ["human", "human", "bot"];
+
+  it("createGame({ seats }) starts pending at pickBase, no players yet", () => {
+    const s = createGame({ seed: 1, seats });
+    expect(s.setup).not.toBeNull();
+    expect(s.setup!.stage).toBe("pickBase");
+    expect(s.players).toHaveLength(0);
+    const acts = legalActions(s);
+    expect(acts).toHaveLength(6); // all 6 base colours free
+    expect(acts.every((a) => a.type === "pickBase")).toBe(true);
+  });
+
+  it("assigns bases to seats in order; the last pick instantly settles the start player and ship order", () => {
+    let s = createGame({ seed: 7, seats });
+
+    // pickBase, seat by seat — each pick shrinks the free set for the next seat
+    for (let i = 0; i < seats.length; i++) {
+      const acts = legalActions(s).filter((a) => a.type === "pickBase") as Extract<Action, { type: "pickBase" }>[];
+      expect(acts).toHaveLength(6 - i);
+      s = run(s, acts[0]!);
+      expect(s.setup!.bases[i]).toBe(acts[0]!.base);
+    }
+    // no separate roll action — the engine already decided, in the same step as the last pickBase
+    expect(s.setup!.stage).toBe("pickShip");
+    expect(s.setup!.bases.every((b) => b !== null)).toBe(true);
+    const winner = s.setup!.startSeat!;
+    expect(winner).toBeGreaterThanOrEqual(0);
+    expect(winner).toBeLessThan(seats.length);
+    // clockwise from the winner: seat order wraps around
+    expect(s.setup!.shipOrder).toEqual(seats.map((_, i) => (winner + i) % seats.length));
+    expect(s.log.some((l) => l.event === "startPlayerChosen")).toBe(true);
+
+    // pickShip, in shipOrder — finalizes into a real game on the last pick
+    for (let i = 0; i < seats.length; i++) {
+      const acts = legalActions(s).filter((a) => a.type === "pickShip") as Extract<Action, { type: "pickShip" }>[];
+      expect(acts).toHaveLength(6 - i);
+      const seat = s.setup!.shipOrder![i]!;
+      s = run(s, acts[0]!);
+      if (i < seats.length - 1) expect(s.setup!.colours[seat]).toBe(acts[0]!.colour);
+    }
+
+    expect(s.setup).toBeNull();
+    expect(s.phase).toBe("start");
+    expect(s.turnNumber).toBe(1);
+    expect(s.activePlayerIndex).toBe(winner); // the roll-off winner goes first
+    expect(s.players).toHaveLength(seats.length);
+    for (const p of s.players) {
+      expect(p.pose.atRest).toBe(true);
+      expect(p.fuel).toBe(p.fuelMax);
+    }
+  });
+
+  it("rejects picking an already-taken base or ship", () => {
+    let s = createGame({ seed: 2, seats: ["human", "human"] });
+    const base = (legalActions(s)[0] as Extract<Action, { type: "pickBase" }>).base;
+    s = run(s, { type: "pickBase", base });
+    expect(applyAction(s, { type: "pickBase", base }).ok).toBe(false);
+  });
+
+  it("randomBot can play an entire setup to completion without crashing", () => {
+    const rng = makeRng(99);
+    for (let seed = 1; seed <= 5; seed++) {
+      let s = createGame({ seed, seats: ["human", "bot", "bot", "human"] });
+      let guard = 0;
+      while (s.setup && guard++ < 200) {
+        const r = applyAction(s, randomBot(s, rng));
+        expect(r.ok).toBe(true);
+        s = r.state;
+      }
+      expect(s.setup).toBeNull();
+      expect(s.players).toHaveLength(4);
+    }
   });
 });

@@ -7,6 +7,7 @@ import {
   statsOf,
   score,
   provideGameData,
+  setupLegalActions,
   type CreateGameOptions,
 } from "./game.js";
 import { movementInputs } from "./ship.js";
@@ -39,6 +40,7 @@ export interface LegalOpts {
 }
 
 export function legalActions(state: GameState, opts?: LegalOpts): Action[] {
+  if (state.setup) return setupLegalActions(state);
   if (state.gameOver) return [];
   const board = boardFor(state);
   const p = state.players[state.activePlayerIndex]!;

@@ -34,7 +34,7 @@ import { makeRng, type Rng } from "./rng.js";
 import { drawN, discardCards, bottomCards } from "./cards.js";
 import { drift, burn, atRestPose, straightPath, hyperspaceLand } from "./movement.js";
 import { resolveStats, movementInputs } from "./ship.js";
-import { rollCoordinateUntil, rollCombat } from "./dice.js";
+import { rollCoordinateUntil, rollCombat, type CoordinateRoll } from "./dice.js";
 import { resolveCombat, pickSpoil } from "./combat.js";
 import type {
   Action,
@@ -46,6 +46,8 @@ import type {
   OreColour,
   PlayerState,
   ProspectorConfig,
+  SeatKind,
+  SetupState,
   ShipStats,
   StepResult,
 } from "./types.js";
@@ -54,15 +56,22 @@ import type {
 
 export interface CreateGameOptions {
   seed?: number;
-  /** player ship colours (stats + visual identity), in seating order; 2..6 of them */
+  /** player ship colours (stats + visual identity), in seating order; 2..6 of them.
+     Ignored (and unnecessary) when `seats` is given instead — see below. */
   colours?: Colour[];
   /** player home-base positions, parallel to `colours`; defaults to the same array, i.e.
      the classic fixed colour-equals-base pairing. Pass a different permutation to let base
-     and ship be chosen independently. */
+     and ship be chosen independently. Ignored when `seats` is given. */
   bases?: Colour[];
+  /** interactive setup: base/ship aren't decided yet — the returned state starts with
+     `setup` populated at the "pickBase" stage, to be resolved by pickBase/pickShip actions
+     (the engine itself picks the start player the instant the last base is claimed).
+     Mutually exclusive with `colours`/`bases`/`startPlayer`. */
+  seats?: SeatKind[];
   variant?: "standard" | "short" | "long";
   config?: Config;
-  /** force the start player (seat index); default: rolled */
+  /** force the start player (seat index); default: rolled. Ignored when `seats` is given —
+     setup picks it the instant the last base is claimed. */
   startPlayer?: number;
 }
 
@@ -72,96 +81,202 @@ export function createGame(opts: CreateGameOptions = {}): GameState {
   const data = requireData();
   const config = opts.config ?? data.config;
   const board = makeBoard(data.boardJson);
-  const content = data.content;
   const mode = config.modes.prospector;
-
-  const colours = opts.colours ?? CONE_COLOURS.slice(0, 4);
-  if (colours.length < mode.players.min || colours.length > mode.players.max) {
-    throw new Error(`player count ${colours.length} out of range`);
-  }
   const seed = opts.seed ?? 1;
-  const rng = makeRng(seed);
 
-  const perColour =
-    mode.resources.perColour.base +
-    mode.resources.perColour.perPlayer * colours.length +
-    (opts.variant === "short"
-      ? mode.resources.gameLengthAdjust.short
-      : opts.variant === "long"
-        ? mode.resources.gameLengthAdjust.long
-        : 0);
-
-  // decks
-  let boosterDraw = rng.shuffle(content.decks.booster.cards);
-  let equipmentDraw = rng.shuffle(content.decks.equipment.cards);
-  const equipmentDiscard: (typeof equipmentDraw)[number][] = [];
-
-  const homeBases = opts.bases ?? colours;
-  if (homeBases.length !== colours.length) {
-    throw new Error("bases must be the same length as colours");
-  }
-  const players: PlayerState[] = colours.map((colour, i) => {
-    const homeBase = homeBases[i]!;
-    const ship = mode.ships[colour];
-    const baseCells = board.baseCells(homeBase);
-    const start = baseCells[0]!;
-    // setup equipment: draw 3, keep the first (choice not modelled at setup), bottom the rest
-    const drawn = equipmentDraw.slice(0, mode.homeBase.setupEquipmentDraw);
-    equipmentDraw = equipmentDraw.slice(mode.homeBase.setupEquipmentDraw);
-    const kept = drawn.slice(0, mode.homeBase.setupEquipmentKeep);
-    equipmentDraw = [...equipmentDraw, ...drawn.slice(mode.homeBase.setupEquipmentKeep)];
-
-    const fuelMax = ship.fuelTanks + kept.filter((c) => c.stat === "fuelTanks").reduce((a, c) => a + c.amount, 0);
-    return {
-      id: i,
-      colour,
-      homeBase,
-      eliminated: false,
-      placed: false,
-      pose: atRestPose(start),
-      fuel: fuelMax,
-      fuelMax,
-      equipment: kept,
-      hand: [],
-      cargo: [],
-      delivered: [],
-      turn: freshTurn(),
-    };
-  });
-
-  const state: GameState = {
+  const emptyState = (playerCount: number): GameState => ({
     config,
     seed,
-    rngState: rng.state(),
-    turnNumber: 1,
+    rngState: makeRng(seed).state(),
+    turnNumber: 0,
     activePlayerIndex: 0,
-    players,
+    players: [],
+    setup: null,
     board: { resources: {} },
-    supply: { green: perColour, yellow: perColour, red: perColour },
-    initialPlayerCount: colours.length,
-    decks: {
-      booster: { draw: boosterDraw, discard: [] },
-      equipment: { draw: equipmentDraw, discard: equipmentDiscard },
-    },
+    supply: { green: 0, yellow: 0, red: 0 },
+    initialPlayerCount: playerCount,
+    decks: { booster: { draw: [], discard: [] }, equipment: { draw: [], discard: [] } },
     phase: "start",
     pendingCombat: null,
     pendingEquipment: null,
     log: [],
     gameOver: false,
     winnerIds: null,
-  };
+  });
+
+  if (opts.seats) {
+    const seats = opts.seats;
+    if (seats.length < mode.players.min || seats.length > mode.players.max) {
+      throw new Error(`player count ${seats.length} out of range`);
+    }
+    const state = emptyState(seats.length);
+    state.setup = {
+      seats: [...seats],
+      variant: opts.variant,
+      stage: "pickBase",
+      bases: seats.map(() => null),
+      colours: seats.map(() => null),
+      turnIndex: 0,
+      startSeat: null,
+      shipOrder: null,
+    };
+    return state;
+  }
+
+  const colours = opts.colours ?? CONE_COLOURS.slice(0, 4);
+  if (colours.length < mode.players.min || colours.length > mode.players.max) {
+    throw new Error(`player count ${colours.length} out of range`);
+  }
+  const homeBases = opts.bases ?? colours;
+  if (homeBases.length !== colours.length) {
+    throw new Error("bases must be the same length as colours");
+  }
+
+  const state = emptyState(colours.length);
+  populateGame(state, board, colours, homeBases, opts.variant);
+
+  // pickStartPlayer always runs (even when overridden below) so the rng stream position is
+  // the same regardless of whether startPlayer is passed — keeps seeded games reproducible.
+  const rolled = pickStartPlayer(state);
+  state.activePlayerIndex = opts.startPlayer !== undefined ? opts.startPlayer % state.players.length : rolled;
+  state.players[state.activePlayerIndex]!.turn = freshTurn();
+  state.turnNumber = 1;
+  return state;
+}
+
+/**
+ * Fills in decks, players (with their setup-equipment draw) and initial resource seeding on
+ * an otherwise-empty state. Shared by createGame's instant path and the interactive setup's
+ * finalize step (see stepSetup) — the only difference is who picks the start player.
+ */
+function populateGame(
+  state: GameState,
+  board: BoardModel,
+  colours: Colour[],
+  bases: Colour[],
+  variant: CreateGameOptions["variant"],
+): void {
+  const content = requireData().content;
+  const mode = state.config.modes.prospector;
+
+  const perColour =
+    mode.resources.perColour.base +
+    mode.resources.perColour.perPlayer * colours.length +
+    (variant === "short"
+      ? mode.resources.gameLengthAdjust.short
+      : variant === "long"
+        ? mode.resources.gameLengthAdjust.long
+        : 0);
+
+  withRng(state, (rng) => {
+    let boosterDraw = rng.shuffle(content.decks.booster.cards);
+    let equipmentDraw = rng.shuffle(content.decks.equipment.cards);
+    const equipmentDiscard: EquipmentCard[] = [];
+
+    state.players = colours.map((colour, i) => {
+      const homeBase = bases[i]!;
+      const ship = mode.ships[colour];
+      const baseCells = board.baseCells(homeBase);
+      const start = baseCells[0]!;
+      // setup equipment: draw 3, keep the first (choice not modelled at setup), bottom the rest
+      const drawn = equipmentDraw.slice(0, mode.homeBase.setupEquipmentDraw);
+      equipmentDraw = equipmentDraw.slice(mode.homeBase.setupEquipmentDraw);
+      const kept = drawn.slice(0, mode.homeBase.setupEquipmentKeep);
+      equipmentDraw = [...equipmentDraw, ...drawn.slice(mode.homeBase.setupEquipmentKeep)];
+
+      const fuelMax = ship.fuelTanks + kept.filter((c) => c.stat === "fuelTanks").reduce((a, c) => a + c.amount, 0);
+      return {
+        id: i,
+        colour,
+        homeBase,
+        eliminated: false,
+        placed: false,
+        pose: atRestPose(start),
+        fuel: fuelMax,
+        fuelMax,
+        equipment: kept,
+        hand: [],
+        cargo: [],
+        delivered: [],
+        turn: freshTurn(),
+      };
+    });
+
+    state.supply = { green: perColour, yellow: perColour, red: perColour };
+    state.initialPlayerCount = colours.length;
+    state.decks = {
+      booster: { draw: boosterDraw, discard: [] },
+      equipment: { draw: equipmentDraw, discard: equipmentDiscard },
+    };
+  });
 
   // initial green seeding: players + setupExtraGreen
   withRng(state, (r) => {
     const count = colours.length + mode.resources.setupExtraGreen;
     for (let i = 0; i < count; i++) seedOne(state, board, r, "green");
   });
+}
 
-  const rolled = pickStartPlayer(state);
-  state.activePlayerIndex =
-    opts.startPlayer !== undefined ? opts.startPlayer % state.players.length : rolled;
-  state.players[state.activePlayerIndex]!.turn = freshTurn();
-  return state;
+// ---------------------------------------------------------------------------
+// interactive setup: pickBase -> (engine picks the start player) -> pickShip
+// ---------------------------------------------------------------------------
+
+export function setupLegalActions(state: GameState): Action[] {
+  const setup = state.setup!;
+  const colourOrder = state.config.core.board.colourOrder;
+  if (setup.stage === "pickBase") {
+    return colourOrder.filter((c) => !setup.bases.includes(c)).map((base) => ({ type: "pickBase", base }));
+  }
+  return colourOrder.filter((c) => !setup.colours.includes(c)).map((colour) => ({ type: "pickShip", colour }));
+}
+
+function stepSetup(state: GameState, prev: GameState, board: BoardModel, action: Action): StepResult {
+  const setup = state.setup!;
+  const fail = (error: string): StepResult => ({ state: prev, ok: false, error });
+  const done = (): StepResult => ({ state, ok: true });
+
+  if (setup.stage === "pickBase") {
+    if (action.type !== "pickBase") return fail("pick a base first");
+    if (setup.bases.includes(action.base)) return fail("that base is already taken");
+    const seat = setup.turnIndex;
+    setup.bases[seat] = action.base;
+    state.activePlayerIndex = seat;
+    log(state, "basePicked", { seat, base: action.base });
+    setup.turnIndex += 1;
+    if (setup.turnIndex === setup.seats.length) {
+      // the engine just hands back a result here — a single, immediate random pick, with no
+      // per-seat action to resolve. Any "everyone rolls, it comes down to the wire" moment is
+      // purely a GUI animation landing on this seat, not something the engine plays out.
+      const winner = withRng(state, (r) => r.int(0, setup.seats.length - 1));
+      setup.startSeat = winner;
+      setup.shipOrder = setup.seats.map((_, i) => (winner + i) % setup.seats.length);
+      setup.stage = "pickShip";
+      setup.turnIndex = 0;
+      log(state, "startPlayerChosen", { seat: winner });
+    }
+    return done();
+  }
+
+  // pickShip
+  if (action.type !== "pickShip") return fail("pick a ship");
+  if (setup.colours.includes(action.colour)) return fail("that ship is already taken");
+  const seat = setup.shipOrder![setup.turnIndex]!;
+  setup.colours[seat] = action.colour;
+  state.activePlayerIndex = seat;
+  log(state, "shipPicked", { seat, colour: action.colour });
+  setup.turnIndex += 1;
+  if (setup.turnIndex === setup.seats.length) {
+    const colours = setup.colours.map((c) => c!);
+    const bases = setup.bases.map((b) => b!);
+    const winner = setup.shipOrder![0]!;
+    const variant = setup.variant;
+    populateGame(state, board, colours, bases, variant);
+    state.activePlayerIndex = winner;
+    state.players[winner]!.turn = freshTurn();
+    state.turnNumber = 1;
+    state.setup = null;
+  }
+  return done();
 }
 
 function freshTurn(): PlayerState["turn"] {
@@ -254,7 +369,7 @@ function seedOne(state: GameState, board: BoardModel, rng: Rng, colour: OreColou
   const res = resourceKeySet(state);
   const occupiedByShip = new Set(state.players.filter((p) => !p.eliminated).map((p) => hexKey(p.pose.current)));
   try {
-    const { target } = rollCoordinateUntil(
+    const { roll, target } = rollCoordinateUntil(
       rng,
       board,
       state.config.core,
@@ -263,6 +378,10 @@ function seedOne(state: GameState, board: BoardModel, rng: Rng, colour: OreColou
     );
     state.board.resources[hexKey(target)] = colour;
     state.supply[colour] -= 1;
+    // the 3 coordinate dice that produced this cell (step 1/2/3, each a direction) — a GUI
+    // can replay them (largest step first reads best) as a "spin down to a cell" animation
+    // instead of the tile just appearing
+    log(state, "resourceSeeded", { colour, cell: target, dice: roll.dice });
     return true;
   } catch {
     return false;
@@ -416,6 +535,9 @@ export function applyAction(prev: GameState, action: Action): StepResult {
   state.config = prev.config;
   const board = boardFor(state);
   const mode = state.config.modes.prospector;
+
+  if (state.setup) return stepSetup(state, prev, board, action);
+
   const p = activePlayer(state);
 
   const fail = (error: string): StepResult => ({ state: prev, ok: false, error });
@@ -604,7 +726,8 @@ export function applyAction(prev: GameState, action: Action): StepResult {
         p.fuel -= hs.fuelCost;
       }
       withRng(state, (rng) => {
-        const { target } = rollCoordinateUntilSafeOrAny(state, board, rng);
+        const { roll, target } = rollCoordinateUntilSafeOrAny(state, board, rng);
+        log(state, "hyperspaceRoll", { player: p.id, dice: roll.dice, cell: target });
         const land = hyperspaceLand(target, board, freeFor(state, board, p.id));
         if (land.lost) {
           loseShip(state, board, p, "failed hyperspace jump");
@@ -711,7 +834,8 @@ export function applyAction(prev: GameState, action: Action): StepResult {
         defender.hand = defender.hand.filter((c) => c.id !== card.id);
         state.decks.booster = discardCards(state.decks.booster, [card]);
         withRng(state, (rng) => {
-          const { target } = rollCoordinateUntilSafeOrAny(state, board, rng);
+          const { roll, target } = rollCoordinateUntilSafeOrAny(state, board, rng);
+          log(state, "hyperspaceRoll", { player: defender.id, dice: roll.dice, cell: target });
           const land = hyperspaceLand(target, board, freeFor(state, board, defender.id));
           if (land.lost) loseShip(state, board, defender, "failed hyperspace flight");
           else defender.pose = land.pose;
@@ -839,11 +963,10 @@ function rollCoordinateUntilSafeOrAny(
   state: GameState,
   board: BoardModel,
   rng: Rng,
-): { target: Hex } {
+): { roll: CoordinateRoll; target: Hex } {
   // hyperspace: any inner cell is a candidate; landing on an occupied one loses the ship,
   // so accept the first inner roll and let hyperspaceLand judge it.
-  const { target } = rollCoordinateUntil(rng, board, state.config.core, ORIGIN, (t) => board.isInner(t));
-  return { target };
+  return rollCoordinateUntil(rng, board, state.config.core, ORIGIN, (t) => board.isInner(t));
 }
 
 export { add, straightPath, hexKey };

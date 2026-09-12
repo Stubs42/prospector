@@ -184,6 +184,36 @@ export interface PendingCombat {
 
 export type TurnPhase = "start" | "moved" | "done";
 
+export type SeatKind = "human" | "bot";
+
+/**
+ * Game start as a real, driven sequence instead of createGame resolving everything at once:
+ * every seat picks a free base; the instant the last one does, the engine picks the start
+ * player itself (one RNG draw — no per-seat action, nothing to resolve a tie for) and every
+ * seat — starting with the start player, clockwise — picks a free ship. `state.players` stays
+ * empty until the last ship is picked, at which point the engine runs the same finalize work
+ * createGame always did (decks, equipment, initial resource seeding) and clears this field.
+ *
+ * The engine only ever hands back the *result* of a random pick, never how to animate it — a
+ * GUI is free to show the start-player choice as a spinning wheel landing on `startSeat`, the
+ * pickBase->pickShip transition itself is instant either way.
+ */
+export interface SetupState {
+  /** fixed at creation; index = the eventual player id */
+  seats: SeatKind[];
+  variant?: "standard" | "short" | "long" | undefined;
+  stage: "pickBase" | "pickShip";
+  /** per seat index; null until that seat has picked */
+  bases: (Colour | null)[];
+  colours: (Colour | null)[];
+  /** whose turn it is: an index into `seats` (pickBase) or into `shipOrder` (pickShip) */
+  turnIndex: number;
+  /** the start player, decided the instant the last base is picked; null before that */
+  startSeat: number | null;
+  /** seat order for pickShip, clockwise from `startSeat`; set at the same moment */
+  shipOrder: number[] | null;
+}
+
 export interface GameState {
   config: Config;
   seed: number;
@@ -191,6 +221,8 @@ export interface GameState {
   turnNumber: number;
   activePlayerIndex: number;
   players: PlayerState[];
+  /** non-null while start-of-game picks are still in progress; see SetupState */
+  setup: SetupState | null;
   /** ore tiles on the board, by hex key */
   board: {
     resources: Record<string, OreColour>;
@@ -222,6 +254,9 @@ export interface LogEntry {
 // ---------------------------------------------------------------------------
 
 export type Action =
+  // --- setup: base -> (engine picks the start player) -> ship, before any turn begins ---
+  | { type: "pickBase"; base: Colour }
+  | { type: "pickShip"; colour: Colour }
   | { type: "placeShip"; cell: Hex }
   | { type: "scrapShip" }
   | { type: "drawBooster" }
