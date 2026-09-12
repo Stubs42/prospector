@@ -303,6 +303,37 @@ describe("burn options can turn", () => {
   });
 });
 
+describe("burn can cross outer cells on the way to an inner destination", () => {
+  it("still finds a path when the only directly-adjacent inner cell is blocked", () => {
+    // (10,0) is one ring outside the inner/outer boundary (innerRadius 9); its only
+    // inner neighbour is (9,0). Block that with a resource — (10,0) is still not
+    // stranded, since (10,0) -> (10,-1) [outer] -> (9,-1) [inner, free] is a legal
+    // 2-cell burn. Regression for a bug where a drift landing in the outer ring, with
+    // no *directly* adjacent free inner cell, wrongly scrapped the ship: legalActions'
+    // burn BFS only ever expanded through inner cells, so it could never find a path
+    // that has to detour through another outer cell first.
+    let s = createGame({ seed: 7, colours: ["red", "black"], startPlayer: 0 });
+    s.board.resources = { "9,0": "green" };
+    const R = () => s.players[0]!;
+    R().pose = { current: { q: 10, r: 0 }, previous: { q: 10, r: 0 }, atRest: true };
+    R().placed = true;
+    R().fuel = R().fuelMax;
+    s = run(s, { type: "drawBooster" });
+    while (R().hand.length > 3) s = run(s, { type: "discardBooster", cardId: R().hand[0]!.id });
+    s = run(s, { type: "drift" }); // at rest -> no-op, still at (10,0)
+
+    const burns = legalActions(s).filter((a) => a.type === "burn") as Extract<Action, { type: "burn" }>[];
+    expect(burns.some((b) => b.path.length === 1)).toBe(false); // the direct inner cell is blocked
+    const detour = burns.find((b) => b.path.length === 2 && b.path[1]!.q === 9 && b.path[1]!.r === -1);
+    expect(detour).toBeTruthy();
+    expect(detour!.path[0]).toEqual({ q: 10, r: -1 }); // the outer cell it passes through
+
+    const applied = applyAction(s, detour!);
+    expect(applied.ok).toBe(true);
+    expect(applied.state.players[0]!.pose.current).toEqual({ q: 9, r: -1 });
+  });
+});
+
 function areColinear(a: { q: number; r: number }, b: { q: number; r: number }, from: { q: number; r: number }) {
   const d1 = { q: a.q - from.q, r: a.r - from.r };
   const d2 = { q: b.q - a.q, r: b.r - a.r };
