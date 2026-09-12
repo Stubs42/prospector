@@ -7,6 +7,7 @@ import { BaseInfo, type TipFn } from "./BaseInfo.js";
 import { HexPopup, type HexPopupAction } from "./HexPopup.js";
 import { ShipMarker } from "./ShipMarker.js";
 import { ShipPickerPopup, type ShipPickerProps } from "./ShipPickerPopup.js";
+import { CombatBox, type CombatBoxProps } from "./CombatBox.js";
 import { moveFrame, animDone, type MoveAnim } from "../anim.js";
 import type { Seat } from "../../client/index.js";
 import { clusterOutline, pointsAttr } from "./hexOutline.js";
@@ -59,6 +60,8 @@ export interface BoardProps {
   /** the pickShip stage's whole UI (a ship card + browse/select/random) — mutually
      exclusive with `popup` in practice, since it replaces the guidance popup for that stage */
   shipPicker?: ShipPickerProps | null;
+  /** combat's whole board-native UI — mutually exclusive with `popup` in practice */
+  combatBox?: Omit<CombatBoxProps, "rotation"> | null;
   /** false during base selection: draw only the empty field + highlights + popup */
   world: boolean;
   reducedMotion: boolean;
@@ -93,6 +96,7 @@ export function Board({
   confirm,
   popup,
   shipPicker = null,
+  combatBox = null,
   world,
   reducedMotion,
   moveAnim,
@@ -576,6 +580,10 @@ export function Board({
 
       {/* pickShip stage: one big hex, browse/select/random instead of a plain grid */}
       {shipPicker && <ShipPickerPopup {...shipPicker} rotation={rotation} />}
+
+      {/* combat: staging lasers/shields, declaring, and the dice reveal — anchored on
+         whoever is currently deciding, mutually exclusive with the plain guidance popup */}
+      {combatBox && <CombatBox {...combatBox} rotation={rotation} />}
 
       {/* confirm dialog (e.g. scrap?) — dims + blocks the rest of the board until answered */}
       {confirm && (

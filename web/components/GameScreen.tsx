@@ -12,6 +12,7 @@ import type { BoardModel } from "../../engine/board.js";
 import type { Colour, Hex } from "../../engine/index.js";
 import { Board } from "./Board.js";
 import { BottomPanel, type PanelButton } from "./BottomPanel.js";
+import { type CombatBoxProps, type CombatCardChip } from "./CombatBox.js";
 import { LogOverlay } from "./LogOverlay.js";
 import { Settings } from "./Settings.js";
 import { StatusPanel } from "./StatusPanel.js";
@@ -25,6 +26,14 @@ function launchAnchor(board: BoardModel, colour: Colour): Hex {
   const q = cs.reduce((a, c) => a + c.q, 0) / cs.length;
   const r = cs.reduce((a, c) => a + c.r, 0) / cs.length;
   const { x, y } = axialToPixel({ q, r });
+  const pulled = towardOrigin(x, y, 150);
+  return pixelToAxial(pulled.x, pulled.y);
+}
+
+/** the combat box follows whoever is deciding, pulled a bit toward the board centre from
+   their ship so it doesn't sit right on top of the ship marker it's about */
+function nearbyAnchor(from: Hex): Hex {
+  const { x, y } = axialToPixel(from);
   const pulled = towardOrigin(x, y, 150);
   return pixelToAxial(pulled.x, pulled.y);
 }
@@ -144,6 +153,108 @@ export function GameScreen({
     ? { ...state, board: { resources: Object.fromEntries([...revealed].map((k) => [k, state.board.resources[k]!])) } }
     : state;
 
+  // --- combat: animated dice reveal ---------------------------------------------------
+  // combatResolve already rolled both dice atomically (see engine/game.ts's combatResolve)
+  // — this only stages their *reveal*, one at a time (attack settles, then defence), off
+  // the exact numbers already logged (attackSucceeded/attackFailed). Nothing about the
+  // outcome changes here; holdAdvance just stops the bot timer / auto-actions from racing
+  // past the animation once pendingCombat has already moved on (cleared, or to "counter").
+  interface CombatReveal {
+    attackerId: number;
+    defenderId: number;
+    attackDie: number;
+    defenceDie: number;
+    attackTotal: number;
+    defenceTotal: number;
+    attackerWins: boolean;
+    spoil: string | null;
+    attackFace: number;
+    attackSettled: boolean;
+    defenceFace: number;
+    defenceSettled: boolean;
+    showOutcome: boolean;
+  }
+  const [combatReveal, setCombatReveal] = useState<CombatReveal | null>(null);
+  const combatLogLen = useRef(state.log.length);
+  useEffect(() => {
+    if (state.log.length <= combatLogLen.current) {
+      combatLogLen.current = state.log.length;
+      return;
+    }
+    const entry = state.log[state.log.length - 1]!;
+    combatLogLen.current = state.log.length;
+    if (entry.event !== "attackSucceeded" && entry.event !== "attackFailed") return;
+    const d = entry.detail as {
+      attacker: number;
+      defender: number;
+      attackDie: number;
+      defenceDie: number;
+      attackTotal: number;
+      defenceTotal: number;
+      spoil?: string | null;
+    };
+    s.setHoldAdvance(true);
+    let cancelled = false;
+    setCombatReveal({
+      attackerId: d.attacker,
+      defenderId: d.defender,
+      attackDie: d.attackDie,
+      defenceDie: d.defenceDie,
+      attackTotal: d.attackTotal,
+      defenceTotal: d.defenceTotal,
+      attackerWins: entry.event === "attackSucceeded",
+      spoil: d.spoil ?? null,
+      attackFace: 1,
+      attackSettled: false,
+      defenceFace: 1,
+      defenceSettled: false,
+      showOutcome: false,
+    });
+    const sleep = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));
+    // cycles random faces, ease-out deceleration, landing on `real` on the last tick —
+    // same shape as every other lucky-wheel spin, just over 1-6 faces instead of cells
+    const spin = (real: number, apply: (face: number, settled: boolean) => void): Promise<void> =>
+      new Promise((resolve) => {
+        if (reducedMotion) {
+          apply(real, true);
+          window.setTimeout(resolve, 40);
+          return;
+        }
+        const ticks = 14;
+        const tick = (k: number) => {
+          if (cancelled) return resolve();
+          const last = k === ticks - 1;
+          apply(last ? real : 1 + Math.floor(Math.random() * 6), last);
+          if (!last) {
+            const t = k / (ticks - 1);
+            window.setTimeout(() => tick(k + 1), 40 + t * t * 160);
+          } else {
+            window.setTimeout(resolve, 400);
+          }
+        };
+        tick(0);
+      });
+    (async () => {
+      await spin(d.attackDie, (face, settled) =>
+        setCombatReveal((cr) => (cr ? { ...cr, attackFace: face, attackSettled: settled } : cr)),
+      );
+      if (cancelled) return;
+      await spin(d.defenceDie, (face, settled) =>
+        setCombatReveal((cr) => (cr ? { ...cr, defenceFace: face, defenceSettled: settled } : cr)),
+      );
+      if (cancelled) return;
+      setCombatReveal((cr) => (cr ? { ...cr, showOutcome: true } : cr));
+      await sleep(reducedMotion ? 30 : 1100);
+      if (cancelled) return;
+      setCombatReveal(null);
+      s.setHoldAdvance(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.log.length]);
+
   const anim = s.animLive; // a move is actively playing — hold back prompts/targets
   const suppress = anim || scrapConfirmOpen || placing; // also true while placing / the scrap dialog is up
   const interactive = !activeIsBot && !needPassGate;
@@ -152,15 +263,21 @@ export function GameScreen({
   const launchPhase = interactive && !pc && afford.placeCells.length > 0;
 
   // --- hand / combat card helpers -----------------------------------
-  // whoever is actually making the current decision — the attacker/mover normally, but the
-  // *defender* while combat is waiting on them (their shields, their counter-attack call)
-  const handOwner =
-    pc && (pc.awaiting === "defend" || pc.awaiting === "counter") ? state.players[pc.defenderId]! : p;
+  // whoever is actually making the current decision — the attacker/mover normally, the
+  // *defender* while combat is waiting on them (their shields, their counter-attack call),
+  // or the attacker again while the dice reveal plays out (pendingCombat may have already
+  // moved on by then, so the reveal snapshot takes priority)
+  const handOwner = combatReveal
+    ? state.players[combatReveal.attackerId]!
+    : pc && (pc.awaiting === "defend" || pc.awaiting === "counter")
+      ? state.players[pc.defenderId]!
+      : p;
   const handHidden = seats[handOwner.id] === "bot";
 
   // --- status panel: who's doing what, and a running log of their move ---------------
   const actionLabel: string =
     state.gameOver ? "Game over"
+    : combatReveal ? "Rolling for combat"
     : pc?.awaiting === "defend" ? "Defending"
     : pc?.awaiting === "resolve" ? "Rolling for combat"
     : pc?.awaiting === "counter" ? "Deciding a counter-attack"
@@ -281,6 +398,53 @@ export function GameScreen({
     });
     buttons.push({ label: "Cancel", onClick: () => s.setAttackTarget(null) });
   }
+
+  // a staged laser/shield leaves the hand row entirely and shows up here instead — clicking
+  // it here (instead of in hand) is the undo: back into combatSel-less, back into the hand row
+  const combatCards: CombatCardChip[] = combatCardType
+    ? handOwner.hand
+        .filter((c) => c.type === combatCardType && combatSel.has(c.id))
+        .map((c) => ({ id: c.id, type: combatCardType, value: c.value ?? 0, onClick: () => s.toggleCombatSel(c.id) }))
+    : [];
+
+  // the combat box replaces the plain guidance popup while a fight is staging, resolving,
+  // or being revealed — anchored near whoever is deciding (or, during the dice reveal,
+  // near the attacker, since pendingCombat may have already moved on by then)
+  const combatBox: Omit<CombatBoxProps, "rotation"> | null = combatReveal
+    ? {
+        center: nearbyAnchor(state.players[combatReveal.attackerId]!.pose.current),
+        title: `${mode.ships[state.players[combatReveal.attackerId]!.colour].name} attacks ${
+          mode.ships[state.players[combatReveal.defenderId]!.colour].name
+        }`,
+        cards: [],
+        buttons: [],
+        roll: {
+          attack: { value: combatReveal.attackFace, settled: combatReveal.attackSettled, total: combatReveal.attackTotal },
+          defence: combatReveal.attackSettled
+            ? { value: combatReveal.defenceFace, settled: combatReveal.defenceSettled, total: combatReveal.defenceTotal }
+            : null,
+          outcome: combatReveal.showOutcome
+            ? combatReveal.attackerWins
+              ? `Hit! Takes${combatReveal.spoil ? ` a ${combatReveal.spoil} resource` : " nothing (empty hold)"}`
+              : "Missed!"
+            : null,
+        },
+      }
+    : combatTitle
+      ? {
+          // whoever is actually deciding right now — handOwner already covers that for
+          // defend/counter (the defender) and plain staging (the attacker, via `p`).
+          // Mid-"resolve" nobody is deciding anything new, so anchor on the fight's
+          // actual attacker instead of falling back to handOwner's default of the turn
+          // owner — wrong ship during a counter-attack's own resolve step, since the
+          // turn owner there is still the *original* attacker, not pc.attackerId
+          center: nearbyAnchor((pc?.awaiting === "resolve" ? state.players[pc.attackerId]! : handOwner).pose.current),
+          title: combatTitle,
+          sub: combatSub,
+          cards: combatCards,
+          buttons,
+        }
+      : null;
 
   // --- board-native action targets ---------------------------------
   // Every clickable option is shown on the thing it acts on, pulsing gently, rather than as
@@ -405,6 +569,7 @@ export function GameScreen({
           onEndTurn={onEndTurn}
           confirm={scrapConfirm}
           popup={suppress ? null : popup}
+          combatBox={suppress ? null : combatBox}
           world
           reducedMotion={reducedMotion}
           moveAnim={s.moveAnim}
@@ -431,12 +596,14 @@ export function GameScreen({
         )}
 
         <BottomPanel
-          cards={showCards ? handOwner.hand : []}
+          // a staged laser/shield moved into the combat box above — it no longer shows here
+          cards={
+            showCards
+              ? handOwner.hand.filter((c) => !(combatCardType && c.type === combatCardType && combatSel.has(c.id)))
+              : []
+          }
           cardHint={cardHint}
           cardState={cardState}
-          combatTitle={combatTitle}
-          combatSub={combatSub}
-          buttons={buttons}
           equipment={
             interactive && afford.equipmentChoice
               ? afford.equipmentChoice.map((c) => ({ id: c.id, stat: c.stat, amount: c.amount, effect: c.effect }))

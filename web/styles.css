@@ -171,6 +171,13 @@ button.danger { border-color: #6a3a2f; }
 /* a placeholder frame for the card being picked — real card art comes later */
 .shippicker-card { fill: rgba(255, 255, 255, 0.03); stroke-width: 2; }
 
+/* combat box (attack/defend staging, dice reveal) */
+.combatbox-sub { fill: var(--muted); font-size: 11px; font-weight: 600; }
+.combat-chip { cursor: pointer; }
+.combat-chip rect { fill: rgba(255, 255, 255, 0.04); stroke-width: 1.8; }
+.combat-chip:hover rect { fill: rgba(255, 255, 255, 0.1); }
+.combat-chip text { pointer-events: none; }
+
 /* a whole base region you can pick as your start base — one pulsing outline around the
    4-cell cluster, not a fill on each cell */
 .base-pick { animation: base-pulse 1.6s ease-in-out infinite; }

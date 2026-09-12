@@ -2,6 +2,8 @@ import type { BoosterCard, StatKey } from "../../engine/index.js";
 import { BoosterCardFace } from "./kit.js";
 import { ASPECT_FILL, ASPECT_TAG, ASPECT_LABEL } from "./aspects.js";
 
+/** a button in a board-native hex box (combat, confirms, ...) — shared shape, not
+   BottomPanel's own; kept here since it was BottomPanel's before combat moved to CombatBox */
 export interface PanelButton {
   label: string;
   kind?: "primary" | "danger";
@@ -25,9 +27,6 @@ export interface BottomPanelProps {
     onClick?: (() => void) | undefined;
     pulse?: "urgent" | "new" | "ready" | null;
   };
-  combatTitle: string | null;
-  combatSub: string | null;
-  buttons: PanelButton[];
   /** homecoming upgrade offer — pick one */
   equipment: EquipChoice[];
   onEquip: (id: string) => void;
@@ -35,23 +34,11 @@ export interface BottomPanelProps {
   urgent?: boolean;
 }
 
-export function BottomPanel({
-  cards,
-  cardHint,
-  cardState,
-  combatTitle,
-  combatSub,
-  buttons,
-  equipment,
-  onEquip,
-  urgent,
-}: BottomPanelProps) {
-  if (!cards.length && !combatTitle && !buttons.length && !equipment.length) return null;
+export function BottomPanel({ cards, cardHint, cardState, equipment, onEquip, urgent }: BottomPanelProps) {
+  if (!cards.length && !equipment.length) return null;
   return (
     <div className={`bottompanel${urgent ? " urgent" : ""}`}>
       {equipment.length > 0 && <div className="bp-title">Delivered — choose an upgrade</div>}
-      {combatTitle && <div className="bp-title">{combatTitle}</div>}
-      {combatSub && <div className="hint">{combatSub}</div>}
       {cardHint && <div className="hint">{cardHint}</div>}
 
       {equipment.length > 0 && (
@@ -87,15 +74,6 @@ export function BottomPanel({
               />
             );
           })}
-        </div>
-      )}
-      {buttons.length > 0 && (
-        <div className="actions">
-          {buttons.map((b, i) => (
-            <button key={i} className={b.kind ?? ""} onClick={b.onClick}>
-              {b.label}
-            </button>
-          ))}
         </div>
       )}
     </div>
