@@ -34,9 +34,10 @@ export interface BoardProps {
   /** a single-cell marker for the coordinate-dice spin (initial resource seeding, hyperspace) —
      a ring "landing" on a cell, narrowing in step by step */
   spinPoint?: Hex | null;
-  /** the coordinate-dice spin's "wheel of 6" step: candidate cells (one per colour) around the
-     current center, with one cycling through them before the die's real result is known */
-  spinWheel?: { candidates: Hex[]; activeIndex: number } | null;
+  /** the "3 nested wheels" coordinate-dice spin: a dot per settled round-center, the line
+     path connecting them so far, and (while a round is still spinning) a rotating mark
+     cycling live around the last dot before it settles into the next dot */
+  spinPath?: { dots: Hex[]; live: Hex | null } | null;
   /** resource cells the active player can load from right now — the ore chip itself pulses */
   loadCells: readonly Hex[];
   burnTargets: { cell: Hex; cost: number }[];
@@ -78,7 +79,7 @@ export function Board({
   highlight,
   spinHighlight = null,
   spinPoint = null,
-  spinWheel = null,
+  spinPath = null,
   loadCells,
   burnTargets,
   driftGhost,
@@ -388,27 +389,60 @@ export function Board({
           );
         })()}
 
-      {/* the "3 nested wheels" coordinate-dice spin: 6 candidate cells around one center,
-         cycling through them before settling on the die's actual result */}
-      {spinWheel &&
-        spinWheel.candidates.map((c, i) => {
-          const { x, y } = px(c);
-          const active = i === spinWheel.activeIndex;
+      {/* the "3 nested wheels" coordinate-dice spin: one rotating mark cycling around the
+         current center (never all 6 candidates at once), a dot pinning each round's center,
+         and a line tracing the path so far — the whole path disappears once the final cell
+         is reached and the resource is actually placed */}
+      {spinPath &&
+        (() => {
+          const dotPts = spinPath.dots.map((h) => px(h));
+          const livePt = spinPath.live ? px(spinPath.live) : null;
+          const lastDot = dotPts[dotPts.length - 1];
           return (
-            <circle
-              key={`spin-wheel-${i}`}
-              cx={x}
-              cy={y}
-              r={active ? S * 0.5 : S * 0.3}
-              fill={active ? "var(--gold)" : "none"}
-              fillOpacity={active ? 0.22 : 0}
-              stroke="var(--gold)"
-              strokeWidth={active ? 2.5 : 1.5}
-              strokeOpacity={active ? 1 : 0.4}
-              pointerEvents="none"
-            />
+            <>
+              {dotPts.slice(1).map((p, i) => (
+                <line
+                  key={`spin-seg-${i}`}
+                  x1={dotPts[i]!.x}
+                  y1={dotPts[i]!.y}
+                  x2={p.x}
+                  y2={p.y}
+                  stroke="var(--gold)"
+                  strokeWidth={2}
+                  strokeOpacity={0.8}
+                  pointerEvents="none"
+                />
+              ))}
+              {livePt && lastDot && (
+                <line
+                  x1={lastDot.x}
+                  y1={lastDot.y}
+                  x2={livePt.x}
+                  y2={livePt.y}
+                  stroke="var(--gold)"
+                  strokeWidth={2}
+                  strokeOpacity={0.55}
+                  pointerEvents="none"
+                />
+              )}
+              {dotPts.map((p, i) => (
+                <circle key={`spin-dot-${i}`} cx={p.x} cy={p.y} r={S * 0.12} fill="var(--gold)" pointerEvents="none" />
+              ))}
+              {livePt && (
+                <circle
+                  cx={livePt.x}
+                  cy={livePt.y}
+                  r={S * 0.35}
+                  fill="var(--gold)"
+                  fillOpacity={0.25}
+                  stroke="var(--gold)"
+                  strokeWidth={2.5}
+                  pointerEvents="none"
+                />
+              )}
+            </>
           );
-        })}
+        })()}
 
       {/* resources — a loadable one pulses and is the click target itself (no separate ring) */}
       {world && Object.entries(state.board.resources).map(([k, colour]) => {

@@ -65,27 +65,29 @@ export function GameScreen({
   // --- initial resource placement: a one-time reveal, right when the real game opens -----
   // populateGame already placed every resource atomically; this replays each one's own
   // coordinate-dice roll (resourceSeeded log entries, see engine/game.ts) as three separate
-  // "spin a wheel of 6 candidates, land on one" widgets — a ring-3 wheel around the origin
-  // settles on a point, then a ring-2 wheel around THAT point settles, then a ring-1 wheel
-  // around THAT point lands on the final cell — before the tile actually appears. Nobody's
-  // turn — "the system" is doing this — so the normal auto-draw/bot timers are held off the
-  // whole time (see useSession's holdAdvance) and the status panel shows a placeholder identity.
+  // spins: a rotating mark cycles around the origin and settles on a point (a dot), then
+  // cycles around THAT dot and settles on a second dot, then cycles around THAT dot and
+  // settles on the final cell — never showing all 6 candidates at once, just the live mark,
+  // a line back to its round's center, and the growing dot-and-line path behind it. The
+  // whole path disappears the instant the tile is actually placed. Nobody's turn — "the
+  // system" is doing this — so the normal auto-draw/bot timers are held off the whole time
+  // (see useSession's holdAdvance) and the status panel shows a placeholder identity.
   const [seedEntries] = useState(() => state.log.filter((l) => l.event === "resourceSeeded"));
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
-  const [spinWheel, setSpinWheel] = useState<{ candidates: Hex[]; activeIndex: number } | null>(null);
+  const [spinPath, setSpinPath] = useState<{ dots: Hex[]; live: Hex | null } | null>(null);
   const [placing, setPlacing] = useState(seedEntries.length > 0);
   useEffect(() => {
     if (!placing) return;
     s.setHoldAdvance(true);
     let cancelled = false;
     const sleep = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));
-    // spins the wheel of `candidates` (one per colour, in ALL_COLOURS order) so the
-    // highlighted one cycles through a couple of laps before settling on targetIndex —
-    // same ease-out deceleration as SetupScreen's base/ship/roll-off spins.
-    const spinTo = (candidates: Hex[], targetIndex: number): Promise<void> =>
+    // spins the live mark around `dots`'s last (fixed) center through `candidates` (one per
+    // colour, in ALL_COLOURS order), a couple of laps before settling on targetIndex — same
+    // ease-out deceleration as SetupScreen's base/ship/roll-off spins.
+    const spinTo = (dots: Hex[], candidates: Hex[], targetIndex: number): Promise<void> =>
       new Promise((resolve) => {
         if (reducedMotion) {
-          setSpinWheel({ candidates, activeIndex: targetIndex });
+          setSpinPath({ dots, live: candidates[targetIndex]! });
           window.setTimeout(resolve, 40);
           return;
         }
@@ -97,7 +99,7 @@ export function GameScreen({
         });
         const tick = (k: number) => {
           if (cancelled) return resolve();
-          setSpinWheel({ candidates, activeIndex: seq[k]! });
+          setSpinPath({ dots, live: candidates[seq[k]!]! });
           if (k < seq.length - 1) {
             const t = k / (seq.length - 1);
             window.setTimeout(() => tick(k + 1), 70 + t * t * 260);
@@ -112,16 +114,20 @@ export function GameScreen({
         const d = entry.detail as { cell: Hex; dice: { step: number; colour: Colour }[] };
         const dice = [...d.dice].sort((a, b) => b.step - a.step); // coarse to fine: ring 3, 2, 1
         let pt: Hex = { q: 0, r: 0 };
+        let dots: Hex[] = [pt];
         for (const die of dice) {
           const candidates = ALL_COLOURS.map((c) => add(pt, scale(board.directionOf(c), die.step)));
           const targetIndex = ALL_COLOURS.indexOf(die.colour);
-          await spinTo(candidates, targetIndex);
+          await spinTo(dots, candidates, targetIndex);
           if (cancelled) return;
           pt = candidates[targetIndex]!;
+          dots = [...dots, pt];
+          setSpinPath({ dots, live: null });
         }
         if (cancelled) return;
+        await sleep(reducedMotion ? 20 : 250); // let the finished path linger a beat
         setRevealed((r) => new Set(r).add(hexKey(d.cell)));
-        setSpinWheel(null);
+        setSpinPath(null);
         await sleep(reducedMotion ? 20 : 200);
       }
       if (!cancelled) {
@@ -386,7 +392,7 @@ export function GameScreen({
           seats={seats}
           scores={sc.byPlayer}
           highlight={suppress ? { cells: [], kind: null } : interactive ? highlight : { cells: [], kind: null }}
-          spinWheel={spinWheel}
+          spinPath={spinPath}
           loadCells={loadCellsForBoard}
           burnTargets={interactive && !suppress ? afford.burnTargets : []}
           driftGhost={interactive && !suppress ? driftGhost : null}
