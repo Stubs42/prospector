@@ -22,7 +22,13 @@ import {
 import { legalActions } from "../engine/index.js";
 import { deriveMoveAnim, coastAnim, type MoveAnim } from "./anim.js";
 import { movePhaseMs, type Prefs } from "./prefs.js";
-import { randomNames } from "./nameGen.js";
+import { randomBotName } from "./nameGen.js";
+
+// human seats are a live sentinel (null), resolved against prefs.playerName on every render
+// so changing "your name" in Settings takes effect immediately without touching bot names;
+// bots get one random name each, generated once per game, so several stay easy to tell apart
+const rawNamesFor = (seatArr: Seat[]): (string | null)[] =>
+  seatArr.map((k) => (k === "bot" ? randomBotName() : null));
 
 const AUTO_HIDE = new Set<Action["type"]>([
   "declineCounter",
@@ -43,9 +49,9 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   const [humans, setHumans] = useState(1);
   const [bots, setBots] = useState(2);
   const [seats, setSeats] = useState<Seat[]>(() => mkSeats(1, 2));
-  // fun, easy-to-read names per seat (index = eventual player id) — assigned the moment
-  // seats are known, so they're already there for setup's "Kemu is picking a base"
-  const [names, setNames] = useState<string[]>(() => randomNames(3));
+  // per-seat display names (index = eventual player id) — see rawNamesFor above
+  const [rawNames, setRawNames] = useState<(string | null)[]>(() => rawNamesFor(mkSeats(1, 2)));
+  const names = rawNames.map((n) => n ?? (prefs.playerName.trim() || "Player"));
   // a fresh game always starts as an interactive setup (state.setup non-null) — pickBase and
   // pickShip are real, logged engine actions, not client-side randomness. See stepSetup in
   // engine/game.ts.
@@ -137,7 +143,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     setBots(b);
     const seatArr = mkSeats(h, b);
     setSeats(seatArr);
-    setNames(randomNames(seatArr.length));
+    setRawNames(rawNamesFor(seatArr));
     const g = createGame({ seats: seatArr, seed: (Math.random() * 1e9) | 0 });
     setState(g);
     setShownPlayer(g.activePlayerIndex);

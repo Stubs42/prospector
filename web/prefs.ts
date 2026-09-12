@@ -1,4 +1,8 @@
 export interface Prefs {
+  /** shown instead of "Player" for every human seat, in the status panel and pass screens.
+     Blank falls back to "Player" — there's just one name for now, ahead of real per-account
+     names with actual multiplayer. */
+  playerName: string;
   /** when only one action is legal, apply it automatically (no click) */
   autoSingle: boolean;
   /** also auto-apply "End turn" when it is the only option (goes straight to the pass screen) */
@@ -10,6 +14,7 @@ export interface Prefs {
 }
 
 export const DEFAULT_PREFS: Prefs = {
+  playerName: "",
   autoSingle: true,
   autoEndTurn: false,
   animations: "auto",

@@ -47,6 +47,21 @@ export function SetupScreen({
   const canPickNow = setup.stage === "pickBase" && !currentIsBot && !s.needPassGate;
   const canPickShipNow = setup.stage === "pickShip" && !currentIsBot && !s.needPassGate;
 
+  // a seat's "move" is its base pick immediately followed by its ship pick — log both lines
+  // before resetting for the next seat
+  const setupAction = setup.stage === "pickBase" ? "Picking a base" : "Picking a ship";
+  const [setupLog, setSetupLog] = useState<string[]>([setupAction]);
+  const setupLogSeat = useRef(current);
+  useEffect(() => {
+    if (setup.stage === "rollOff") return;
+    if (setupLogSeat.current !== current) {
+      setupLogSeat.current = current;
+      setSetupLog([setupAction]);
+    } else {
+      setSetupLog((log) => (log[log.length - 1] === setupAction ? log : [...log, setupAction]));
+    }
+  }, [current, setupAction, setup.stage]);
+
   // A lucky-wheel spin over the free bases, landing on a genuinely random one before
   // dispatching pickBase. Used for both the human's "🎲 Random" button *and* bot turns
   // (below) — a bot has no strategy to speak of here, so "spin and land on one" is exactly
@@ -319,7 +334,7 @@ export function SetupScreen({
             colour={null} // no ship yet — bases carry no colour of their own during setup
             name={s.names[current] ?? "?"}
             bot={currentIsBot}
-            action={setup.stage === "pickBase" ? "Picking a base" : "Picking a ship"}
+            log={setupLog}
           />
         )}
       </div>
