@@ -288,6 +288,9 @@ export function Board({
               ? SHIP_VAR[assigned]
               : "#2b4034";
         const clickable = isHi || scrapSet.has(key);
+        // a base-pick cell shows a tooltip, not its own hover highlight — the region
+        // outline (below) is the only visual indicator for "you can pick this"
+        const isBaseCell = isHi && highlight.kind === "base";
         return (
           <polygon
             key={key}
@@ -297,10 +300,13 @@ export function Board({
             stroke={stroke}
             strokeWidth={c.origin ? 2.5 : isCellHi ? 2.5 : assigned ? 1.6 : 1}
             strokeOpacity={assigned ? 0.9 : 1}
-            className={clickable ? "cell-hit" : undefined}
-            onClick={clickable ? () => onCell({ q: c.q, r: c.r }) : undefined}
-            onMouseEnter={clickable ? () => onCellHover({ q: c.q, r: c.r }) : undefined}
-            onMouseLeave={clickable ? () => onCellHover(null) : undefined}
+            className={clickable ? (isBaseCell ? "cell-hit-quiet" : "cell-hit") : undefined}
+            onClick={clickable ? clicked(() => onCell({ q: c.q, r: c.r })) : undefined}
+            onMouseEnter={clickable && !isBaseCell ? () => onCellHover({ q: c.q, r: c.r }) : undefined}
+            onMouseMove={isBaseCell ? (e) => onTip("Select this base", e) : undefined}
+            onMouseLeave={
+              isBaseCell ? (e) => onTip(null, e) : clickable ? () => onCellHover(null) : undefined
+            }
           />
         );
       })}
@@ -312,7 +318,7 @@ export function Board({
         [...new Set(highlight.cells.map((h) => board.baseOwnerAt(h)))].map((baseId) => {
           if (!baseId) return null;
           const region = board.baseCells(baseId);
-          const loop = clusterOutline(region.map((h) => px(h)), S * 0.94);
+          const loop = clusterOutline(region.map((h) => px(h)), S);
           if (loop.length === 0) return null;
           return (
             <polygon
@@ -330,7 +336,7 @@ export function Board({
       {spinHighlight &&
         (() => {
           const region = board.baseCells(spinHighlight);
-          const loop = clusterOutline(region.map((h) => px(h)), S * 0.94);
+          const loop = clusterOutline(region.map((h) => px(h)), S);
           if (loop.length === 0) return null;
           return (
             <polygon

@@ -51,11 +51,14 @@ export function HexPopup({
   const hasActions = !!actions?.length;
   const y0 = o.y - ((lines.length - 1) * lh) / 2 - (hasActions ? 16 : 0);
 
-  const bw = 56;
   const bh = 22;
   const gap = 10;
   const btnY = o.y + (lines.length - 1) * (lh / 2) + 26;
-  const totalW = hasActions ? actions!.length * bw + (actions!.length - 1) * gap : 0;
+  // width follows the label — a fixed width was too narrow for anything longer than
+  // "Cancel"/"Yes" (e.g. "🎲 Random"); ~7px/char at 11px bold is a safe overestimate,
+  // plus room either side of the hex's pointed ends so the text never touches them
+  const widths = (actions ?? []).map((a) => Math.max(56, a.label.length * 7 + 26));
+  const totalW = hasActions ? widths.reduce((a, b) => a + b, 0) + gap * (widths.length - 1) : 0;
 
   return (
     <g className="hexpopup">
@@ -70,7 +73,8 @@ export function HexPopup({
       {hasActions && (
         <g>
           {actions!.map((a, i) => {
-            const bx = o.x - totalW / 2 + i * (bw + gap);
+            const bw = widths[i]!;
+            const bx = o.x - totalW / 2 + widths.slice(0, i).reduce((x, w) => x + w + gap, 0);
             return (
               <g key={i} className={`hexpopup-btn ${a.kind ?? ""}`} onClick={a.onClick}>
                 <polygon points={hexButtonPoints(bx, btnY - bh / 2, bw, bh)} />

@@ -365,6 +365,9 @@ button.danger { border-color: #6a3a2f; }
 /* board bits */
 .cell-hit { cursor: pointer; }
 .cell-hit:hover { stroke: var(--gold); stroke-width: 2.5; }
+/* a base-pick cell: clickable, but the region outline is the only visual cue — a
+   tooltip stands in for the per-cell hover highlight every other cell-hit gets */
+.cell-hit-quiet { cursor: pointer; }
 /* hollow markers (fill:none) only react on their thin stroke by default — make the
    whole disc clickable so a tap anywhere inside the ring registers */
 circle.cell-hit { pointer-events: all; }
