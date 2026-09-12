@@ -34,6 +34,9 @@ export interface BoardProps {
   /** a single-cell marker for the coordinate-dice spin (initial resource seeding, hyperspace) —
      a ring "landing" on a cell, narrowing in step by step */
   spinPoint?: Hex | null;
+  /** the coordinate-dice spin's "wheel of 6" step: candidate cells (one per colour) around the
+     current center, with one cycling through them before the die's real result is known */
+  spinWheel?: { candidates: Hex[]; activeIndex: number } | null;
   /** resource cells the active player can load from right now — the ore chip itself pulses */
   loadCells: readonly Hex[];
   burnTargets: { cell: Hex; cost: number }[];
@@ -75,6 +78,7 @@ export function Board({
   highlight,
   spinHighlight = null,
   spinPoint = null,
+  spinWheel = null,
   loadCells,
   burnTargets,
   driftGhost,
@@ -383,6 +387,28 @@ export function Board({
             />
           );
         })()}
+
+      {/* the "3 nested wheels" coordinate-dice spin: 6 candidate cells around one center,
+         cycling through them before settling on the die's actual result */}
+      {spinWheel &&
+        spinWheel.candidates.map((c, i) => {
+          const { x, y } = px(c);
+          const active = i === spinWheel.activeIndex;
+          return (
+            <circle
+              key={`spin-wheel-${i}`}
+              cx={x}
+              cy={y}
+              r={active ? S * 0.5 : S * 0.3}
+              fill={active ? "var(--gold)" : "none"}
+              fillOpacity={active ? 0.22 : 0}
+              stroke="var(--gold)"
+              strokeWidth={active ? 2.5 : 1.5}
+              strokeOpacity={active ? 1 : 0.4}
+              pointerEvents="none"
+            />
+          );
+        })}
 
       {/* resources — a loadable one pulses and is the click target itself (no separate ring) */}
       {world && Object.entries(state.board.resources).map(([k, colour]) => {
