@@ -71,49 +71,67 @@ export function GameScreen({
     s.setHoldAdvance(true);
     let cancelled = false;
     const sleep = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));
-    // spins the live mark around `dots`'s last (fixed) center through `candidates` (one per
-    // colour, in ALL_COLOURS order), a couple of laps before settling on targetIndex — same
-    // ease-out deceleration as SetupScreen's base/ship/roll-off spins.
-    const spinTo = (dots: Hex[], candidates: Hex[], targetIndex: number): Promise<void> =>
+    // spins all 3 rounds (ring 3, 2, 1) for one tile as a SINGLE continuous deceleration —
+    // fast at the very first tick of round 1, slowest at the last tick of round 3 — rather
+    // than each round separately easing out and resetting to fast at the next round's
+    // start. That's what actually sells "narrowing in": the whole reveal reads as one
+    // motion settling down, not three independent spins back to back.
+    const spinAllThree = (dice: { step: number; colour: Colour }[]): Promise<void> =>
       new Promise((resolve) => {
+        // the 3 rounds' candidates/target/center are already fully determined (the dice
+        // are the real, already-decided result) — precompute them all up front so the
+        // animation is just replaying a known sequence, same as a single round always was
+        let pt: Hex = { q: 0, r: 0 };
+        let dotsSoFar: Hex[] = [pt];
+        const rounds = dice.map((die) => {
+          const candidates = ALL_COLOURS.map((c) => add(pt, scale(board.directionOf(c), die.step)));
+          const targetIndex = ALL_COLOURS.indexOf(die.colour);
+          const dotsPrefix = dotsSoFar;
+          pt = candidates[targetIndex]!;
+          dotsSoFar = [...dotsSoFar, pt];
+          return { candidates, targetIndex, dotsPrefix };
+        });
         if (reducedMotion) {
-          setSpinPath({ dots, live: candidates[targetIndex]! });
+          setSpinPath({ dots: dotsSoFar, live: null });
           window.setTimeout(resolve, 40);
           return;
         }
-        const n = candidates.length;
-        const ticks = n * 2 + 6; // a couple of laps, then a settling lap onto target
-        const seq = Array.from({ length: ticks }, (_, k) => {
-          const stepsFromEnd = ticks - 1 - k;
-          return ((targetIndex - stepsFromEnd) % n + n) % n;
-        });
-        const tick = (k: number) => {
+        const n = ALL_COLOURS.length;
+        const ticksPerRound = n * 2 + 6; // a couple of laps, then a settling lap onto target
+        const totalTicks = ticksPerRound * rounds.length;
+        let globalK = 0;
+        const runRound = (roundIdx: number) => {
           if (cancelled) return resolve();
-          setSpinPath({ dots, live: candidates[seq[k]!]! });
-          if (k < seq.length - 1) {
-            const t = k / (seq.length - 1);
-            window.setTimeout(() => tick(k + 1), 70 + t * t * 260);
-          } else {
-            window.setTimeout(resolve, 320);
-          }
+          const round = rounds[roundIdx];
+          if (!round) return resolve();
+          const { candidates, targetIndex, dotsPrefix } = round;
+          const seq = Array.from({ length: ticksPerRound }, (_, k) => {
+            const stepsFromEnd = ticksPerRound - 1 - k;
+            return ((targetIndex - stepsFromEnd) % n + n) % n;
+          });
+          const tick = (k: number) => {
+            if (cancelled) return resolve();
+            setSpinPath({ dots: dotsPrefix, live: candidates[seq[k]!]! });
+            if (k < seq.length - 1) {
+              const t = globalK / (totalTicks - 1); // progress across ALL 3 rounds
+              globalK++;
+              window.setTimeout(() => tick(k + 1), 70 + t * t * 260);
+            } else {
+              globalK++;
+              setSpinPath({ dots: [...dotsPrefix, candidates[targetIndex]!], live: null });
+              if (roundIdx + 1 < rounds.length) window.setTimeout(() => runRound(roundIdx + 1), 320);
+              else resolve();
+            }
+          };
+          tick(0);
         };
-        tick(0);
+        runRound(0);
       });
     (async () => {
       for (const entry of seedEntries) {
         const d = entry.detail as { cell: Hex; dice: { step: number; colour: Colour }[] };
         const dice = [...d.dice].sort((a, b) => b.step - a.step); // coarse to fine: ring 3, 2, 1
-        let pt: Hex = { q: 0, r: 0 };
-        let dots: Hex[] = [pt];
-        for (const die of dice) {
-          const candidates = ALL_COLOURS.map((c) => add(pt, scale(board.directionOf(c), die.step)));
-          const targetIndex = ALL_COLOURS.indexOf(die.colour);
-          await spinTo(dots, candidates, targetIndex);
-          if (cancelled) return;
-          pt = candidates[targetIndex]!;
-          dots = [...dots, pt];
-          setSpinPath({ dots, live: null });
-        }
+        await spinAllThree(dice);
         if (cancelled) return;
         await sleep(reducedMotion ? 20 : 250); // let the finished path linger a beat
         setRevealed((r) => new Set(r).add(hexKey(d.cell)));

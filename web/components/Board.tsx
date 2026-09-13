@@ -446,8 +446,8 @@ export function Board({
                   y1={dotPts[i]!.y}
                   x2={p.x}
                   y2={p.y}
-                  stroke="var(--gold)"
-                  strokeWidth={2}
+                  stroke={theme.board.spinPathColor}
+                  strokeWidth={theme.board.spinPathStrokeWidth}
                   strokeOpacity={0.8}
                   pointerEvents="none"
                 />
@@ -458,14 +458,21 @@ export function Board({
                   y1={lastDot.y}
                   x2={livePt.x}
                   y2={livePt.y}
-                  stroke="var(--gold)"
-                  strokeWidth={2}
+                  stroke={theme.board.spinPathColor}
+                  strokeWidth={theme.board.spinPathStrokeWidth}
                   strokeOpacity={0.55}
                   pointerEvents="none"
                 />
               )}
               {dotPts.map((p, i) => (
-                <circle key={`spin-dot-${i}`} cx={p.x} cy={p.y} r={S * 0.12} fill="var(--gold)" pointerEvents="none" />
+                <circle
+                  key={`spin-dot-${i}`}
+                  cx={p.x}
+                  cy={p.y}
+                  r={S * theme.board.spinPathDotRadius}
+                  fill={theme.board.spinPathColor}
+                  pointerEvents="none"
+                />
               ))}
               {livePt && (
                 <circle

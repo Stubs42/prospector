@@ -73,6 +73,12 @@ export interface Theme {
     gridShadowOffset: number;
     gridShadowBlur: number;
     gridShadowOpacity: number;
+    /** the coordinate-dice spin's settled dot-and-line path (not the live rotating mark,
+       which stays gold — this is just the "already decided" trail behind it) */
+    spinPathColor: string;
+    /** dot radius, as a fraction of a hex cell's size (S), so it scales with zoom/board size */
+    spinPathDotRadius: number;
+    spinPathStrokeWidth: number;
   };
 }
 
@@ -138,6 +144,9 @@ export const theme: Theme = {
     gridShadowOffset: 0.6,
     gridShadowBlur: 0.5,
     gridShadowOpacity: 0.45,
+    spinPathColor: "#94a89d",
+    spinPathDotRadius: 0.12,
+    spinPathStrokeWidth: 2,
   },
 };
 
