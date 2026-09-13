@@ -208,8 +208,13 @@ button.danger { border-color: #6a3a2f; }
 .actionbox-buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center; margin-top: 0.3rem; }
 
 /* every button inside an action box shares the box's own hex silhouette (see
-   ActionBox.tsx's HexButton) instead of the app's plain rounded-rect buttons */
-.hexbutton {
+   ActionBox.tsx's HexButton) instead of the app's plain rounded-rect buttons.
+   `button.hexbutton`, not `.hexbutton` — a "primary"/"danger" HexButton carries BOTH
+   classes on the same element, and the plain `button.primary`/`button.danger` rules above
+   (element + class) are more specific than a lone `.hexbutton` class, so `background: none`
+   was losing to `button.primary`'s solid rectangular background showing right through the
+   hex's cut corners. Matching that specificity (and staying later in the file) wins it back. */
+button.hexbutton {
   position: relative;
   min-width: 44px; min-height: 30px;
   /* the global `button` rule's rounded-rect background/border still painted underneath
@@ -218,6 +223,11 @@ button.danger { border-color: #6a3a2f; }
   appearance: none; -webkit-appearance: none;
   background: none; border: none; border-radius: 0; padding: 0; font: inherit; color: var(--ink);
   cursor: pointer;
+  /* the browser's own default focus ring is a plain rectangle (sized/coloured by the
+     OS/browser theme, not us) sitting around this hex-shaped control, which is exactly a
+     "rectangle behind the button" artifact waiting to happen — replaced with our own
+     hex-shaped highlight below instead of just hiding focus feedback outright */
+  outline: none;
 }
 .hexbutton-hex { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
 .hexbutton-hex polygon { fill: #17251f; stroke: var(--line-strong, #3a444e); stroke-width: 1.6; }
@@ -225,7 +235,8 @@ button.danger { border-color: #6a3a2f; }
 .hexbutton.primary .hexbutton-hex polygon { fill: #26402f; stroke: #3f6f4f; }
 .hexbutton.danger .hexbutton-hex polygon { stroke: #6a3a2f; }
 .hexbutton.danger .hexbutton-content { color: #e08a7a; }
-.hexbutton:hover:not(:disabled) .hexbutton-hex polygon { stroke: var(--gold); }
+.hexbutton:hover:not(:disabled) .hexbutton-hex polygon,
+.hexbutton:focus-visible .hexbutton-hex polygon { stroke: var(--gold); }
 .hexbutton:disabled { cursor: default; opacity: 0.4; }
 .hexbutton-content {
   position: relative;
