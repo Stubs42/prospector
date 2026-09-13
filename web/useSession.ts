@@ -72,6 +72,21 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   const botRng = useRef<Rng>(makeRng(0x5eed));
   const phaseMs = movePhaseMs(prefs);
 
+  // The single source of truth `dispatch` (and the bot timer) actually reduce against —
+  // kept in sync with `state` every render, but ALSO written synchronously the instant a
+  // dispatch resolves, so a second dispatch fired in the same tick (before React has
+  // re-rendered and hooked everyone back up to a fresh `state` closure) still reduces from
+  // the first one's result instead of a stale, already-superseded GameState. Without this,
+  // two dispatches racing in the same tick (a legitimate possibility: an auto-advance timer
+  // firing at the same moment as a manual click, react-strict-mode's double effect-invoke,
+  // or any other same-tick double dispatch) silently drops whichever applied first — e.g. a
+  // burn that visibly lands correctly, then a second, stale-state dispatch overwrites it,
+  // pose.previous reverting to what it was before that burn ever happened. That exactly
+  // matches a reported bug: frequent, never reliably reproducible (a timing race, not a
+  // deterministic engine bug — those repro 100% off the same action sequence).
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
   function playAnim(a: MoveAnim | null) {
     setMoveAnim(a);
     // a "drift" doesn't animate — it just holds the ship in place while burn targets
@@ -116,32 +131,39 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     setAttackTarget(null);
   };
   function dispatch(a: Action) {
-    const r = applyAction(state, a);
+    // always reduce against the latest known state (see stateRef above), never the `state`
+    // this render closed over — a same-tick second dispatch must build on the first one's
+    // result, not silently discard it
+    const cur = stateRef.current;
+    const r = applyAction(cur, a);
     if (r.ok) {
-      let anim = deriveMoveAnim(state, r.state, phaseMs, moveAnim);
+      let anim = deriveMoveAnim(cur, r.state, phaseMs, moveAnim);
       // coasting ends the move without a burn — slide the held drift to its target
-      if (!anim && a.type === "endMove" && moveAnim?.kind === "drift" && moveAnim.playerId === state.activePlayerIndex) {
+      if (!anim && a.type === "endMove" && moveAnim?.kind === "drift" && moveAnim.playerId === cur.activePlayerIndex) {
         anim = coastAnim(moveAnim);
       }
       playAnim(anim);
+      stateRef.current = r.state; // commit before setState, so a same-tick dispatch sees it too
       setState(r.state);
       clearStaging();
-      if (a.type === "drawBooster" && p) {
-        const before = new Set(p.hand.map((c) => c.id));
-        const after = r.state.players[state.activePlayerIndex]!.hand;
+      if (a.type === "drawBooster") {
+        const before = new Set(cur.players[cur.activePlayerIndex]?.hand.map((c) => c.id));
+        const after = r.state.players[cur.activePlayerIndex]!.hand;
         setNewCardIds(new Set(after.filter((c) => !before.has(c.id)).map((c) => c.id)));
       } else {
         setNewCardIds(new Set());
       }
       // setup just finished (the last pickShip finalized into a real game) — start fresh
       // on the pass-gate so the very first real turn doesn't immediately ask to "pass"
-      if (state.setup && !r.state.setup) setShownPlayer(r.state.activePlayerIndex);
+      if (cur.setup && !r.state.setup) setShownPlayer(r.state.activePlayerIndex);
     } else console.warn("rejected", a, r.error);
   }
   function dispatchBurn(burn: Extract<Action, { type: "burn" }>) {
     // reserve-fuel cards are no longer staged here — they're played (and their fuel
     // banked) the instant they're clicked, via useReserveFuel — only engine cards arm.
-    const engineBoosters = p!.hand.filter((c) => c.type === "engine" && armed.has(c.id)).map((c) => c.id);
+    const cur = stateRef.current;
+    const active = cur.players[cur.activePlayerIndex]!;
+    const engineBoosters = active.hand.filter((c) => c.type === "engine" && armed.has(c.id)).map((c) => c.id);
     dispatch(engineBoosters.length ? { ...burn, engineBoosters } : burn);
   }
   /** (re)start setup fresh — a new interactive game, base/ship all unpicked */
@@ -153,6 +175,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     setSeats(seatArr);
     setRawNames(rawNamesFor(seatArr));
     const g = createGame({ seats: seatArr, seed: (Math.random() * 1e9) | 0, upgradeAtStart: upgrade });
+    stateRef.current = g;
     setState(g);
     setShownPlayer(g.activePlayerIndex);
     botRng.current = makeRng((Math.random() * 1e9) | 0);
@@ -189,10 +212,12 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   useEffect(() => {
     if (!isWaitingOnBot) return;
     const id = setTimeout(() => {
-      const next = stepBot(state, botRng.current);
-      let anim = deriveMoveAnim(state, next, phaseMs, moveAnim);
+      const cur = stateRef.current; // see stateRef's note above dispatch — same race guard
+      const next = stepBot(cur, botRng.current);
+      let anim = deriveMoveAnim(cur, next, phaseMs, moveAnim);
       if (!anim && moveAnim?.kind === "drift") anim = coastAnim(moveAnim); // bot coasted out of the drift
       playAnim(anim);
+      stateRef.current = next;
       setState(next);
     }, reducedMotion ? 60 : 340);
     return () => clearTimeout(id);
@@ -227,6 +252,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     if (qs.get("skipsetup") === "1" && !n) {
       let s = state;
       while (s.setup) s = stepBot(s, rng); // randomly resolve pickBase/pickShip for every seat
+      stateRef.current = s;
       setState(s);
       setSeats(Array<Seat>(s.players.length).fill("human"));
       setShownPlayer(s.activePlayerIndex);
@@ -281,6 +307,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
         ),
       };
     }
+    stateRef.current = s;
     setState(s);
     setShownPlayer(s.activePlayerIndex);
     setSeats(Array<Seat>(s.players.length).fill("human"));
