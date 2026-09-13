@@ -120,8 +120,14 @@ export function GameScreen({
             () => cancelled,
           ).then(() => {
             if (cancelled) return resolve();
-            setSpinPath({ dots: [...dotsPrefix, candidates[targetIndex]!], live: null });
-            if (roundIdx + 1 < rounds.length) window.setTimeout(() => runRound(roundIdx + 1), theme.spin.settleMs);
+            const landed = candidates[targetIndex]!;
+            const isLastRound = roundIdx + 1 >= rounds.length;
+            // keep the live mark parked right on the spot it just landed on through the
+            // settle pause instead of clearing it to null — otherwise it visibly vanishes
+            // for a beat before the next round's spin picks back up, breaking the flow.
+            // The very last round DOES clear it, since nothing spins again after it.
+            setSpinPath({ dots: [...dotsPrefix, landed], live: isLastRound ? null : landed });
+            if (!isLastRound) window.setTimeout(() => runRound(roundIdx + 1), theme.spin.settleMs);
             else resolve();
           });
         };
