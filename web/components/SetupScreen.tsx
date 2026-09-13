@@ -221,7 +221,7 @@ export function SetupScreen({
 
   const lines =
     setup.stage === "pickBase"
-      ? ["Please select", "a base"]
+      ? ["Select Your Base"]
       : rollOffActive
         ? rollOffLanded
           ? [`Player ${setup.startSeat! + 1}`, "goes first!"]
@@ -303,7 +303,7 @@ export function SetupScreen({
         {rollOffActive && <HexPopup lines={lines} />}
         {!s.needPassGate && setup.stage === "pickShip" && shownShip && (
           <ShipPickerPopup
-            title="Select your ship"
+            title="Select Your Ship"
             colour={shownShip}
             name={mode.ships[shownShip].name}
             stats={mode.ships[shownShip]}
