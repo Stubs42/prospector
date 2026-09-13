@@ -222,7 +222,7 @@ export function BaseInfo({ board, state, seats, scores, onTip, rotation }: {
               );
             if (stat === "cargo")
               return (
-                <RatioToken key={stat} c={cell} col={col} tag="LOAD" cur={p.cargo.length} max={total}
+                <RatioToken key={stat} c={cell} col={col} tag="CARGO" cur={p.cargo.length} max={total}
                   active={active} onTip={onTip} rotation={rotation}
                   tip={`cargo — ${p.cargo.length} of ${total} held${up ? ` (+${up} upgrade)` : ""}`} />
               );

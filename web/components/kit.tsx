@@ -12,6 +12,23 @@ export const SHIP_VAR: Record<Colour, string> = {
   green: "var(--ship-green)",
   yellow: "var(--ship-yellow)",
 };
+
+/** the ship marker on the field: normal + the colour it blinks to (see theme.colors.shipBoard) */
+function shipColourMap(suffix: string): Record<Colour, string> {
+  return {
+    black: `var(--ship-black-${suffix})`,
+    red: `var(--ship-red-${suffix})`,
+    blue: `var(--ship-blue-${suffix})`,
+    white: `var(--ship-white-${suffix})`,
+    green: `var(--ship-green-${suffix})`,
+    yellow: `var(--ship-yellow-${suffix})`,
+  };
+}
+export const SHIP_BOARD_VAR = shipColourMap("board");
+export const SHIP_BOARD_HI_VAR = shipColourMap("board-hi");
+/** a home base region's own fill: normal + the colour it blinks to (theme.colors.shipBase) */
+export const SHIP_BASE_VAR = shipColourMap("base");
+export const SHIP_BASE_HI_VAR = shipColourMap("base-hi");
 export const ORE_VAR: Record<OreColour, string> = {
   green: "var(--ore-green)",
   yellow: "var(--ore-yellow)",

@@ -4,13 +4,14 @@ import {
   useReducer,
   useRef,
   useState,
+  type CSSProperties,
   type PointerEvent as RPointerEvent,
   type ReactNode,
 } from "react";
 import { boardFor } from "../../engine/game.js";
 import { hexKey } from "../../engine/hex.js";
 import type { GameState, Hex, Colour, OreColour } from "../../engine/index.js";
-import { SHIP_VAR, ORE_VAR } from "./kit.js";
+import { SHIP_BOARD_VAR, SHIP_BOARD_HI_VAR, SHIP_BASE_VAR, SHIP_BASE_HI_VAR, ORE_VAR } from "./kit.js";
 import { BaseInfo, type TipFn } from "./BaseInfo.js";
 import { ShipMarker } from "./ShipMarker.js";
 import { moveFrame, animDone, type MoveAnim } from "../anim.js";
@@ -240,13 +241,10 @@ export function Board({
     const { x: cx, y: cy } = rotate({ x: c.x * S, y: c.y * S });
     const key = hexKey(c);
     const isHi = hi.has(key);
-    // a "base" pick highlights the whole region as one outline (below), not each cell —
-    // so a cell here only gets the per-cell gold border for "place" (launch-cell) picks
-    const isCellHi = isHi && highlight.kind !== "base";
     const assigned = c.base ? baseColourOf.get(c.base) : undefined;
     // an unassigned field cell is mostly transparent — the starfield behind the board
     // shows through its interior, with only a faint tint left to tell inner from outer
-    const fill = assigned ? SHIP_VAR[assigned] : c.region === "outer" ? theme.board.outerFill : theme.board.innerFill;
+    const fill = assigned ? SHIP_BASE_VAR[assigned] : c.region === "outer" ? theme.board.outerFill : theme.board.innerFill;
     const fillOpacity = assigned
       ? 0.85
       : c.region === "outer"
@@ -256,7 +254,7 @@ export function Board({
     // a base-pick cell shows a tooltip, not its own hover highlight — the region
     // outline (below) is the only visual indicator for "you can pick this"
     const isBaseCell = isHi && highlight.kind === "base";
-    return { c, cx, cy, key, isCellHi, fill, fillOpacity, clickable, isBaseCell };
+    return { c, cx, cy, key, fill, fillOpacity, clickable, isBaseCell };
   });
 
   // players are empty during interactive setup's pickBase/pickShip stages — everything that
@@ -356,17 +354,18 @@ export function Board({
       ))}
 
       <g filter="url(#rodDepth)" pointerEvents="none">
-        {cellViews.map(({ cx, cy, key, isCellHi }) => (
+        {cellViews.map(({ cx, cy, key }) => (
           <polygon
             key={key}
             points={hexPoints(cx, cy, S)}
             fill="none"
-            // the plain grid edge reads as a metal rod (a gradient stroke, see <defs>), not
-            // a flat painted line — a highlighted cell still overrides it with gold, since
-            // that needs to stay unambiguous at a glance; a base cell no longer gets its
-            // own coloured edge here — its fill alone already says whose it is
-            stroke={isCellHi ? "var(--gold)" : "url(#rodGrad)"}
-            strokeWidth={isCellHi ? 2.5 : 1.4}
+            // the plain grid edge reads as a metal rod (a gradient stroke, see <defs>) —
+            // uniform everywhere now. Launch-cell picks used to also gold-edge each of the
+            // 4 base cells here, redundant with (and visually competing against) the
+            // pulsing ship-coloured ring already drawn on each one; a base cell doesn't
+            // get its own coloured edge either — its fill alone already says whose it is.
+            stroke="url(#rodGrad)"
+            strokeWidth={1.4}
           />
         ))}
       </g>
@@ -401,8 +400,12 @@ export function Board({
           return (
             <polygon
               points={pointsAttr(loop)}
-              fill={SHIP_VAR[spinHighlight]}
-              fillOpacity={0.18}
+              // during the roll-off reveal a base is already solid-filled with this exact
+              // colour (fillOpacity 0.85), so tinting it with more of the SAME colour used
+              // to be nearly invisible — theme.colors.shipBase's highlight is a genuinely
+              // different colour instead
+              fill={SHIP_BASE_HI_VAR[spinHighlight]}
+              fillOpacity={0.35}
               stroke="var(--gold)"
               strokeWidth={3.5}
               strokeLinejoin="round"
@@ -597,17 +600,20 @@ export function Board({
         );
       })}
 
-      {/* launch-cell markers: a pulsing ship-coloured ring on each of the 4 base cells —
+      {/* launch-cell markers: a blinking ship-coloured ring on each of the 4 base cells —
          the ship itself isn't drawn anywhere until one is picked */}
       {highlight.kind === "place" && highlight.cells.map((hx) => {
         const { x, y } = px(hx);
-        const col = SHIP_VAR[active!.colour]; // "place" only ever shows once real players exist
+        // "place" only ever shows once real players exist
+        const col = SHIP_BOARD_VAR[active!.colour];
+        const hi = SHIP_BOARD_HI_VAR[active!.colour];
         return (
-          <g key={`hi-${hexKey(hx)}`} className="cell-hit pulse-avail"
+          <g key={`hi-${hexKey(hx)}`} className="cell-hit"
              onClick={clicked(() => onCell(hx))}
              onMouseMove={(e) => onTip("Launch here", e)}
              onMouseLeave={(e) => onTip(null, e)}>
-            <circle cx={x} cy={y} r={S * 0.42} fill={col} fillOpacity={0.12} stroke={col} strokeWidth={2.4} />
+            <circle cx={x} cy={y} r={S * 0.42} fillOpacity={0.12} strokeWidth={2.4}
+              className="ship-blink" style={{ "--blink-normal": col, "--blink-hi": hi } as CSSProperties} />
           </g>
         );
       })}

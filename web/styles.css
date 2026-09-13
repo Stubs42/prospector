@@ -22,6 +22,21 @@
   --ship-green: #3f9f63;
   --ship-yellow: #d9b53c;
 
+  /* the ship marker on the field (-board) and a home base region's own fill (-base) — each
+     with its own -hi variant to blink to (see theme.ts's shipBoard/shipBase) */
+  --ship-black-board: #3b3b3b; --ship-black-board-hi: #ffffff;
+  --ship-red-board: #c8483b; --ship-red-board-hi: #ffffff;
+  --ship-blue-board: #3f74c9; --ship-blue-board-hi: #ffffff;
+  --ship-white-board: #e9e9e9; --ship-white-board-hi: #e6b03c;
+  --ship-green-board: #3f9f63; --ship-green-board-hi: #ffffff;
+  --ship-yellow-board: #d9b53c; --ship-yellow-board-hi: #ffffff;
+  --ship-black-base: #3b3b3b; --ship-black-base-hi: #ffffff;
+  --ship-red-base: #c8483b; --ship-red-base-hi: #ffffff;
+  --ship-blue-base: #3f74c9; --ship-blue-base-hi: #ffffff;
+  --ship-white-base: #e9e9e9; --ship-white-base-hi: #e6b03c;
+  --ship-green-base: #3f9f63; --ship-green-base-hi: #ffffff;
+  --ship-yellow-base: #d9b53c; --ship-yellow-base-hi: #ffffff;
+
   --aspect-engines: #c8483b;
   --aspect-engines-ink: #ffffff;
   --aspect-cargo: #3f9f63;
@@ -290,6 +305,18 @@ button.hexbutton {
   50% { opacity: 1; }
 }
 
+/* ship-coloured "you can act on this" markers (the ship marker itself, a launch cell)
+   blink between their own colour and a genuinely different highlight colour instead of
+   fading opacity — a hard on/off toggle (steps(1), no interpolation) reads as far more
+   noticeable, and doesn't rely on the surrounding fill being distinguishable at low
+   opacity. Each element sets --blink-normal/--blink-hi inline (see kit.tsx's
+   SHIP_BOARD_VAR/SHIP_BOARD_HI_VAR, theme.colors.shipBoard). */
+.ship-blink { animation: ship-blink 1s steps(1, end) infinite; }
+@keyframes ship-blink {
+  0%, 49% { fill: var(--blink-normal); stroke: var(--blink-normal); }
+  50%, 100% { fill: var(--blink-hi); stroke: var(--blink-hi); }
+}
+
 /* log / history overlay */
 .overlay-scrim {
   position: fixed; inset: 0; z-index: 45;
@@ -548,9 +575,10 @@ circle.cell-hit { pointer-events: all; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ore-chip, .base-pick, .pulse-avail { animation: none; }
+  .ore-chip, .base-pick, .pulse-avail, .ship-blink { animation: none; }
   .base-pick { stroke-opacity: 1; }
   .pulse-avail { opacity: 1; }
+  .ship-blink { fill: var(--blink-normal); stroke: var(--blink-normal); }
   .card.pulse-new, .card.pulse-urgent, .card.pulse-ready { animation: none; }
   .card.pulse-urgent { border-color: #c1573c; }
   .card.pulse-ready { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35), 0 0 0 2px currentColor; }

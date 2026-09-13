@@ -31,10 +31,10 @@ export const ASPECT_LABEL: Record<StatKey, string> = {
 /** tag printed on the board token — full words, more readable than a 3-letter abbreviation */
 export const ASPECT_TAG: Record<StatKey, string> = {
   engines: "ENGINE",
-  cargo: "LOAD",
+  cargo: "CARGO",
   lasers: "LASER",
   shields: "SHIELD",
-  fuelTanks: "FUE",
+  fuelTanks: "TANK",
   booster: "HAND",
 };
 

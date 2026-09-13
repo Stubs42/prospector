@@ -4,8 +4,9 @@
  * `shape` is deliberately a switch so the current-position glyph can change
  * later without touching the movement code.
  */
+import type { CSSProperties } from "react";
 import type { Colour } from "../../engine/index.js";
-import { SHIP_VAR } from "./kit.js";
+import { SHIP_BOARD_VAR, SHIP_BOARD_HI_VAR } from "./kit.js";
 import { S } from "./geo.js";
 import type { TipFn } from "./BaseInfo.js";
 
@@ -22,8 +23,8 @@ export interface ShipInteraction {
   onClick: () => void;
 }
 
-function CurrentShape({ shape, x, y, colour, active, pulse, interact, onTip }: {
-  shape: ShipShape; x: number; y: number; colour: string; active: boolean;
+function CurrentShape({ shape, x, y, colour, hiColour, active, pulse, interact, onTip }: {
+  shape: ShipShape; x: number; y: number; colour: string; hiColour: string; active: boolean;
   pulse?: boolean | undefined;
   interact?: ShipInteraction | null | undefined;
   onTip?: TipFn | undefined;
@@ -37,14 +38,18 @@ function CurrentShape({ shape, x, y, colour, active, pulse, interact, onTip }: {
         onMouseLeave: onTip ? (e: Parameters<TipFn>[1]) => onTip(null, e) : undefined,
       }
     : {};
+  // "you can act here" blinks between the ship's own colour and its highlight colour
+  // (theme.colors.shipBoard) instead of fading opacity — see .ship-blink in styles.css
+  const blinkStyle = pulse ? ({ "--blink-normal": colour, "--blink-hi": hiColour } as CSSProperties) : undefined;
   switch (shape) {
     case "ring":
     default:
       return (
-        <circle cx={x} cy={y} r={r} fill={colour} fillOpacity={0.12}
-          stroke={colour} strokeWidth={active ? 3.4 : 2.4}
-          className={pulse ? "pulse-avail" : undefined}
-          {...props} />
+        <circle cx={x} cy={y} r={r} fill={pulse ? undefined : colour} fillOpacity={0.12}
+          stroke={pulse ? undefined : colour} strokeWidth={active ? 3.4 : 2.4}
+          className={pulse ? "ship-blink" : undefined}
+          {...props}
+          style={{ ...props.style, ...blinkStyle }} />
       );
   }
 }
@@ -74,7 +79,8 @@ export function ShipMarker({ colour, ring, dot, tether, active, shape = "ring", 
   interact?: ShipInteraction | null;
   onTip?: TipFn;
 }) {
-  const c = SHIP_VAR[colour];
+  const c = SHIP_BOARD_VAR[colour];
+  const hi = SHIP_BOARD_HI_VAR[colour];
   const t = tether
     ? [backOff(tether[0], tether[1], DOT_R), backOff(tether[1], tether[0], RING_R)]
     : null;
@@ -85,7 +91,7 @@ export function ShipMarker({ colour, ring, dot, tether, active, shape = "ring", 
           stroke={c} strokeWidth={2} strokeLinecap="round" opacity={0.85} />
       )}
       {active && <circle cx={ring.x} cy={ring.y} r={S * 0.72} fill={c} fillOpacity={0.09} />}
-      <CurrentShape shape={shape} x={ring.x} y={ring.y} colour={c} active={active} pulse={pulse} interact={interact} onTip={onTip} />
+      <CurrentShape shape={shape} x={ring.x} y={ring.y} colour={c} hiColour={hi} active={active} pulse={pulse} interact={interact} onTip={onTip} />
       {/* previous position — a dot in the middle of its cell (centre of the ring at rest) */}
       <circle cx={dot.x} cy={dot.y} r={DOT_R} fill={c} />
     </g>

@@ -23,6 +23,17 @@ import type { Colour, OreColour, StatKey } from "../engine/index.js";
 export interface Theme {
   colors: {
     ship: Record<Colour, string>;
+    /** the ship marker out on the field (its ring/dot/tether) — decoupled from `ship` so it
+       can differ from the base fill below, and paired with a "highlight" colour a blinking
+       marker (an attack target, your own end-turn-ready ship, a launch cell) alternates
+       with. `normal` matches `ship`'s value by default, so nothing changes visually until
+       either is actually tuned. */
+    shipBoard: Record<Colour, { normal: string; highlight: string }>;
+    /** a home base region's own fill — decoupled from `ship` for the same reason. Its
+       `highlight` matters more than shipBoard's does: a base region is *already* solid-
+       filled with its own colour, so a highlight reusing that same colour (the old
+       behaviour) was nearly invisible — this needs to be a genuinely different colour. */
+    shipBase: Record<Colour, { normal: string; highlight: string }>;
     ore: Record<OreColour, string>;
     /** one aspect's colour + a readable ink colour for text/icons drawn on top of it */
     aspect: Record<StatKey, { fill: string; ink: string }>;
@@ -129,6 +140,25 @@ export const theme: Theme = {
       green: "#3f9f63",
       yellow: "#d9b53c",
     },
+    // `normal` mirrors `ship` above for every colour; `highlight` is what a blinking
+    // marker/base alternates in with. White can't blink to white, so it (and yellow, too
+    // close to gold to read as a change) get gold instead of the shared white highlight.
+    shipBoard: {
+      black: { normal: "#3b3b3b", highlight: "#ffffff" },
+      red: { normal: "#c8483b", highlight: "#ffffff" },
+      blue: { normal: "#3f74c9", highlight: "#ffffff" },
+      white: { normal: "#e9e9e9", highlight: "#e6b03c" },
+      green: { normal: "#3f9f63", highlight: "#ffffff" },
+      yellow: { normal: "#d9b53c", highlight: "#ffffff" },
+    },
+    shipBase: {
+      black: { normal: "#3b3b3b", highlight: "#ffffff" },
+      red: { normal: "#c8483b", highlight: "#ffffff" },
+      blue: { normal: "#3f74c9", highlight: "#ffffff" },
+      white: { normal: "#e9e9e9", highlight: "#e6b03c" },
+      green: { normal: "#3f9f63", highlight: "#ffffff" },
+      yellow: { normal: "#d9b53c", highlight: "#ffffff" },
+    },
     ore: {
       green: "#4faf7c",
       yellow: "#d7b13d",
@@ -187,10 +217,10 @@ export const theme: Theme = {
     statTokenRadius: 0.92,
     statTokenStrokeWidth: 1,
     statTokenActiveStrokeWidth: 2,
-    statLabelFontSize: 0.26,
-    statLabelOffsetY: -0.34,
+    statLabelFontSize: 0.325,
+    statLabelOffsetY: -0.2,
     statValueFontSize: 0.5,
-    statValueOffsetY: 0.2,
+    statValueOffsetY: 0.25,
   },
   spin: {
     startIntervalMs: 70,
@@ -209,6 +239,14 @@ export const theme: Theme = {
 export function applyTheme(t: Theme): void {
   const root = document.documentElement.style;
   for (const [k, v] of Object.entries(t.colors.ship)) root.setProperty(`--ship-${k}`, v);
+  for (const [k, v] of Object.entries(t.colors.shipBoard)) {
+    root.setProperty(`--ship-${k}-board`, v.normal);
+    root.setProperty(`--ship-${k}-board-hi`, v.highlight);
+  }
+  for (const [k, v] of Object.entries(t.colors.shipBase)) {
+    root.setProperty(`--ship-${k}-base`, v.normal);
+    root.setProperty(`--ship-${k}-base-hi`, v.highlight);
+  }
   for (const [k, v] of Object.entries(t.colors.ore)) root.setProperty(`--ore-${k}`, v);
   for (const [k, v] of Object.entries(t.colors.aspect)) {
     root.setProperty(`--aspect-${k}`, v.fill);
