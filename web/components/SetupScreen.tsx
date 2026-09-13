@@ -303,7 +303,9 @@ export function SetupScreen({
         {rollOffActive && <HexPopup lines={lines} />}
         {!s.needPassGate && setup.stage === "pickShip" && shownShip && (
           <ShipPickerPopup
-            title="Select Your Ship"
+            // this box (unlike the base-pick one) still shows during a bot's own turn —
+            // watchable, but not addressed to "you", since it isn't your decision to make
+            title={currentIsBot ? "Selecting Ship" : "Select Your Ship"}
             colour={shownShip}
             name={mode.ships[shownShip].name}
             stats={mode.ships[shownShip]}
