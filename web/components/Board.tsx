@@ -230,6 +230,19 @@ export function Board({
     return rotate({ x: S * Math.sqrt(3) * (hx.q + hx.r / 2), y: S * 1.5 * hx.r });
   };
 
+  // a message/action hexagon (guidance popup, ship picker, combat box, confirm dialog) is
+  // anchored to a board cell so it still follows its ship/base while panning, but its own
+  // size is specified in board units — without this, zooming the board in or out would
+  // inflate or shrink it right along with the cells, which reads as the box "colliding"
+  // with the zoom/pan controls. Scaling the group by 1/z around its own anchor point
+  // exactly cancels the zoom factor the surrounding viewBox applies, so the box keeps a
+  // constant screen size at any zoom level while panning still moves it correctly (it's
+  // still just translated board content, like anything else on the board).
+  const zoomLock = (center: Hex): string => {
+    const o = px(center);
+    return `translate(${o.x} ${o.y}) scale(${1 / v.z}) translate(${-o.x} ${-o.y})`;
+  };
+
   // players are empty during interactive setup's pickBase/pickShip stages — everything that
   // dereferences `active` below is itself gated on state only ever being non-empty there
   // (onCoast, highlight.kind === "place")
@@ -567,38 +580,50 @@ export function Board({
       {/* table furniture (ship panels, deck counts) — drawn on top so text stays legible */}
       {world && <BaseInfo board={board} state={state} seats={seats} scores={scores} onTip={onTip} rotation={rotation} />}
 
-      {/* guidance popup — what to do next, anchored in board space */}
+      {/* guidance popup — what to do next, anchored in board space, zoom-locked to size */}
       {popup && (
-        <HexPopup
-          center={popup.center}
-          lines={popup.lines}
-          actions={popup.actions}
-          radius={popup.radius}
-          rotation={rotation}
-        />
+        <g transform={zoomLock(popup.center)}>
+          <HexPopup
+            center={popup.center}
+            lines={popup.lines}
+            actions={popup.actions}
+            radius={popup.radius}
+            rotation={rotation}
+          />
+        </g>
       )}
 
       {/* pickShip stage: one big hex, browse/select/random instead of a plain grid */}
-      {shipPicker && <ShipPickerPopup {...shipPicker} rotation={rotation} />}
+      {shipPicker && (
+        <g transform={zoomLock(shipPicker.center)}>
+          <ShipPickerPopup {...shipPicker} rotation={rotation} />
+        </g>
+      )}
 
       {/* combat: staging lasers/shields, declaring, and the dice reveal — anchored on
          whoever is currently deciding, mutually exclusive with the plain guidance popup */}
-      {combatBox && <CombatBox {...combatBox} rotation={rotation} />}
+      {combatBox && (
+        <g transform={zoomLock(combatBox.center)}>
+          <CombatBox {...combatBox} rotation={rotation} />
+        </g>
+      )}
 
       {/* confirm dialog (e.g. scrap?) — dims + blocks the rest of the board until answered */}
       {confirm && (
         <>
           <rect x={vb.x} y={vb.y} width={vb.w} height={vb.h} fill="rgba(4,10,7,0.55)" onClick={confirm.onCancel} />
-          <HexPopup
-            center={confirm.center}
-            lines={confirm.lines}
-            radius={3}
-            rotation={rotation}
-            actions={[
-              { label: "Cancel", kind: "primary", onClick: confirm.onCancel },
-              { label: "Yes", kind: "danger", onClick: confirm.onYes },
-            ]}
-          />
+          <g transform={zoomLock(confirm.center)}>
+            <HexPopup
+              center={confirm.center}
+              lines={confirm.lines}
+              radius={3}
+              rotation={rotation}
+              actions={[
+                { label: "Cancel", kind: "primary", onClick: confirm.onCancel },
+                { label: "Yes", kind: "danger", onClick: confirm.onYes },
+              ]}
+            />
+          </g>
         </>
       )}
     </svg>
