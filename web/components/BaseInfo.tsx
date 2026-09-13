@@ -158,11 +158,12 @@ function OreHex({ c, ores, tag, tip, onTip, rotation }: {
       {ORE_ORDER.map((o, i) => (
         <text
           key={o}
-          x={x + (i - 1) * S * theme.board.oreCountSpacing}
-          y={y + TOK * theme.board.oreCountOffsetY}
+          x={x + (i - 1) * S * theme.board.statValueFontSize}
+          y={y + TOK * theme.board.statValueOffsetY}
           textAnchor="middle"
+          dominantBaseline="central"
           fontWeight={800}
-          fontSize={S * theme.board.oreCountFontSize}
+          fontSize={S * theme.board.statValueFontSize}
           fill={counts[o] > 0 ? ORE_VAR[o] : "#4b574f"}
         >
           {counts[o]}
