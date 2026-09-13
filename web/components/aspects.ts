@@ -28,14 +28,14 @@ export const ASPECT_LABEL: Record<StatKey, string> = {
   booster: "cards",
 };
 
-/** 3-letter tag printed on the board token */
+/** tag printed on the board token — full words, more readable than a 3-letter abbreviation */
 export const ASPECT_TAG: Record<StatKey, string> = {
-  engines: "ENG",
-  cargo: "FRT",
-  lasers: "LAS",
-  shields: "SHD",
+  engines: "ENGINE",
+  cargo: "LOAD",
+  lasers: "LASER",
+  shields: "SHIELD",
   fuelTanks: "FUE",
-  booster: "CRD",
+  booster: "HAND",
 };
 
 /** left-to-right order of the six stat cells around a base */

@@ -79,6 +79,14 @@ export interface Theme {
     /** dot radius, as a fraction of a hex cell's size (S), so it scales with zoom/board size */
     spinPathDotRadius: number;
     spinPathStrokeWidth: number;
+    /** the coloured hex frame around each base-info status cell (the six aspect tokens,
+       fuel/cargo/hand ratios, freight/saved ore, score) — as a fraction of a hex cell's
+       size (S), so a bigger value means less padding to the cell's own border */
+    statTokenRadius: number;
+    statTokenStrokeWidth: number;
+    /** stroke width for the status cell that's the active player's own (a bit heavier, to
+       stand out) */
+    statTokenActiveStrokeWidth: number;
   };
   /** timing shared by every "lucky wheel" spin (base pick, ship pick, the start-player
      roll-off, each coordinate-dice round) — see spin.ts's buildSpinSchedule */
@@ -167,6 +175,9 @@ export const theme: Theme = {
     spinPathColor: "#94a89d",
     spinPathDotRadius: 0.12,
     spinPathStrokeWidth: 2,
+    statTokenRadius: 0.92,
+    statTokenStrokeWidth: 1,
+    statTokenActiveStrokeWidth: 2,
   },
   spin: {
     startIntervalMs: 70,

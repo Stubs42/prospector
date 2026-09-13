@@ -18,6 +18,7 @@ import { S } from "./geo.js";
 import { rotatePoint } from "./hexpx.js";
 import { SHIP_VAR, ORE_VAR } from "./kit.js";
 import { ASPECT_FILL, ASPECT_LABEL, ASPECT_TAG } from "./aspects.js";
+import { theme } from "../theme.js";
 
 const GOLD = "#e6b03c";
 const norm = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -56,7 +57,7 @@ function outerArcs(board: BoardModel, baseId: Colour) {
   return { near: arc(board.innerRadius + 1), far: arc(board.radius) };
 }
 
-const TOK = S * 0.72; // token hexagon radius — sits inside its board cell with a gap
+const TOK = S * theme.board.statTokenRadius; // token hexagon radius — sits inside its board cell
 const DARK = "#0a120e";
 
 export type TipFn = (text: string | null, e: RMouseEvent) => void;
@@ -85,7 +86,8 @@ function Shell({ x, y, col, ink, active }: {
   return (
     <>
       <polygon points={hexPts(x, y, TOK + 2.5)} fill={DARK} />
-      <polygon points={hexPts(x, y, TOK)} fill={ink ? col : DARK} stroke={col} strokeWidth={active ? 2.6 : 1.4} />
+      <polygon points={hexPts(x, y, TOK)} fill={ink ? col : DARK} stroke={col}
+        strokeWidth={active ? theme.board.statTokenActiveStrokeWidth : theme.board.statTokenStrokeWidth} />
     </>
   );
 }
@@ -146,7 +148,7 @@ function OreHex({ c, ores, tag, tip, onTip, rotation }: {
   return (
     <Hoverable tip={`${tip}: ${ores.length ? ores.join(", ") : "none"}`} onTip={onTip}>
       <polygon points={hexPts(x, y, TOK + 2.5)} fill={DARK} />
-      <polygon points={hexPts(x, y, TOK)} fill={DARK} stroke="#3a4a41" strokeWidth={1.3} />
+      <polygon points={hexPts(x, y, TOK)} fill={DARK} stroke="#3a4a41" strokeWidth={theme.board.statTokenStrokeWidth} />
       <Tag x={x} y={y} text={tag} col="#8b9a91" />
       {n === 0 ? (
         <text x={x} y={y + TOK * 0.2} textAnchor="middle" fill="#4b574f" fontSize={S * 0.34}>–</text>
@@ -221,13 +223,13 @@ export function BaseInfo({ board, state, seats, scores, onTip, rotation }: {
               );
             if (stat === "cargo")
               return (
-                <RatioToken key={stat} c={cell} col={col} tag="CARGO" cur={p.cargo.length} max={total}
+                <RatioToken key={stat} c={cell} col={col} tag="LOAD" cur={p.cargo.length} max={total}
                   active={active} onTip={onTip} rotation={rotation}
                   tip={`cargo — ${p.cargo.length} of ${total} held${up ? ` (+${up} upgrade)` : ""}`} />
               );
             if (stat === "booster")
               return (
-                <RatioToken key={stat} c={cell} col={col} tag="CARDS" cur={p.hand.length} max={total}
+                <RatioToken key={stat} c={cell} col={col} tag="HAND" cur={p.hand.length} max={total}
                   active={active} onTip={onTip} warnOver rotation={rotation}
                   tip={`cards — ${p.hand.length} in hand of ${total} limit${up ? ` (+${up} upgrade)` : ""}`} />
               );
@@ -246,7 +248,7 @@ export function BaseInfo({ board, state, seats, scores, onTip, rotation }: {
 
               {/* far ring: PTS at the corner, an ore token on each side for symmetry —
                  FREIGHT (carried) outside the cargo cell, SAVED (delivered) opposite */}
-              {far.cells[fm - 1] && <OreHex c={far.cells[fm - 1]!} ores={p.cargo} tag="FREIGHT" tip="freight in hold" onTip={onTip} rotation={rotation} />}
+              {far.cells[fm - 1] && <OreHex c={far.cells[fm - 1]!} ores={p.cargo} tag="LOAD" tip="freight in hold" onTip={onTip} rotation={rotation} />}
               {far.cells[fm] && (
                 <Token c={far.cells[fm]!} col={GOLD} ink="#1a1400" tag="PTS" active={active} onTip={onTip} rotation={rotation}
                   value={`${scoreVal}`} tip={`score — ${scoreVal}`} />
