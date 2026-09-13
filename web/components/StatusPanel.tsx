@@ -14,6 +14,7 @@ export function StatusPanel({
   name,
   bot,
   log,
+  system = false,
 }: {
   /** null before a ship is chosen (setup's pickBase stage) — bases carry no colour yet */
   colour: Colour | null;
@@ -21,11 +22,14 @@ export function StatusPanel({
   bot: boolean;
   /** oldest first; the last entry is "right now" */
   log: string[];
+  /** "the system" is placing resources, not any player — its own gear glyph (in `name`)
+     replaces the identity dot instead of showing an empty/hollow one */
+  system?: boolean;
 }) {
   return (
     <div className="status-panel">
       <div className="status-id">
-        <i className="status-dot" style={colour ? { background: `var(--ship-${colour})` } : undefined} />
+        {!system && <i className="status-dot" style={colour ? { background: `var(--ship-${colour})` } : undefined} />}
         {name}
         {bot ? " 🤖" : ""}
       </div>

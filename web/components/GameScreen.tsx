@@ -579,7 +579,7 @@ export function GameScreen({
         )}
 
         {placing ? (
-          <StatusPanel colour={null} name="⚙ System" bot={false} log={["Placing resources"]} />
+          <StatusPanel colour={null} name="⚙ System" bot={false} log={["Placing resources"]} system />
         ) : (
           <StatusPanel
             colour={handOwner.colour}
