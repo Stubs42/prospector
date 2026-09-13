@@ -12,6 +12,7 @@ import type { Colour, Hex } from "../../engine/index.js";
 import { Board } from "./Board.js";
 import { BottomPanel, type PanelButton } from "./BottomPanel.js";
 import { CombatBox, type CombatBoxProps, type CombatCardChip } from "./CombatBox.js";
+import { EquipmentPopup } from "./EquipmentPopup.js";
 import { HexPopup } from "./HexPopup.js";
 import { LogOverlay } from "./LogOverlay.js";
 import { Settings } from "./Settings.js";
@@ -264,6 +265,52 @@ export function GameScreen({
   // turn 1: the ship must be placed on a base cell before anything else
   const launchPhase = interactive && !pc && afford.placeCells.length > 0;
 
+  // --- start-of-game "random" upgrade: auto-spin, then dispatch chooseEquipment ---------
+  // Same "already decided, just cosmetic suspense" lucky-wheel as SetupScreen's own "Random"
+  // base/ship picks: cycles the highlight through the 3 candidates, decelerating, and lands
+  // on whichever one it's about to dispatch itself — a bot's own "random" (or "select") draw
+  // never reaches here at all, it resolves invisibly via the existing stepBot policy, same as
+  // any homecoming choice a bot makes today.
+  const [equipSpinId, setEquipSpinId] = useState<string | null>(null);
+  const equipSpinStarted = useRef(false);
+  useEffect(() => {
+    const pe = state.pendingEquipment;
+    if (!pe || pe.reason !== "start" || pe.mode !== "random" || !interactive) {
+      equipSpinStarted.current = false;
+      return;
+    }
+    if (equipSpinStarted.current) return;
+    equipSpinStarted.current = true;
+    s.setHoldAdvance(true);
+    let cancelled = false;
+    const gate = new SkipGate();
+    skipGateRef.current = gate;
+    (async () => {
+      const cards = pe.cards;
+      const targetIdx = Math.floor(Math.random() * cards.length);
+      const ticks = cards.length * 2 + 6; // a couple of laps, then a settling lap onto target
+      for (let k = 0; k < ticks; k++) {
+        if (cancelled) return;
+        const stepsFromEnd = ticks - 1 - k;
+        const idx = ((targetIdx - stepsFromEnd) % cards.length + cards.length) % cards.length;
+        setEquipSpinId(cards[idx]!.id);
+        const last = k === ticks - 1;
+        const t = k / (ticks - 1);
+        await gate.wait(last ? 450 : 70 + t * t * 260); // ease-out: fast, then slow to a stop
+      }
+      if (cancelled) return;
+      if (skipGateRef.current === gate) skipGateRef.current = null;
+      setEquipSpinId(null);
+      dispatch({ type: "chooseEquipment", cardId: cards[targetIdx]!.id });
+      s.setHoldAdvance(false);
+    })();
+    return () => {
+      cancelled = true;
+      if (skipGateRef.current === gate) skipGateRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.pendingEquipment, interactive]);
+
   // --- hand / combat card helpers -----------------------------------
   // whoever is actually making the current decision — the attacker/mover normally, the
   // *defender* while combat is waiting on them (their shields, their counter-attack call),
@@ -439,6 +486,28 @@ export function GameScreen({
         }
       : null;
 
+  // the equipment popup replaces the plain guidance popup while a choice (homecoming, or the
+  // start-of-game upgrade) is pending for the deciding human — a bot's own pending choice of
+  // either kind never reaches here, it resolves invisibly via stepBot's greedy policy
+  const equipBox =
+    interactive && afford.equipmentChoice
+      ? {
+          title:
+            afford.equipmentChoice.reason === "homecoming"
+              ? "Delivered — choose an upgrade"
+              : afford.equipmentChoice.mode === "random"
+                ? "Rolling for a starting upgrade…"
+                : "Choose a starting upgrade",
+          options: afford.equipmentChoice.cards.map((c) => ({ id: c.id, stat: c.stat, amount: c.amount, effect: c.effect })),
+          spinningId: equipSpinId,
+          // no onChoose while the random spin is animating — it's not clickable, just a reveal
+          onChoose:
+            afford.equipmentChoice.reason === "start" && afford.equipmentChoice.mode === "random"
+              ? undefined
+              : (id: string) => dispatch({ type: "chooseEquipment", cardId: id }),
+        }
+      : null;
+
   // --- board-native action targets ---------------------------------
   // Every clickable option is shown on the thing it acts on, pulsing gently, rather than as
   // a separate button: a resource pulses when loadable, an enemy ship pulses when attackable,
@@ -552,6 +621,17 @@ export function GameScreen({
             ))}
           </select>
         </label>
+        <label className="turn">
+          upgrade at start{" "}
+          <select
+            value={s.upgradeAtStart}
+            onChange={(e) => s.openSetup(s.humans, s.bots, e.target.value as "none" | "random" | "select")}
+          >
+            <option value="none">NONE</option>
+            <option value="random">RANDOM</option>
+            <option value="select">SELECT</option>
+          </select>
+        </label>
         <Settings prefs={prefs} onChange={setPrefs} />
         <button onClick={() => s.openSetup()}>New game</button>
       </div>
@@ -579,13 +659,14 @@ export function GameScreen({
           onMoveAnimEnd={s.endMoveAnim}
           onCell={onCell}
           onCellHover={setHoverCell}
-          onSkipAnimation={placing || combatReveal ? onSkipAnimation : null}
+          onSkipAnimation={placing || combatReveal || equipSpinId ? onSkipAnimation : null}
         />
 
         {/* guidance popup / combat box: fixed overlays, like the zoom controls or the status
            panel — outside the board's own pan/zoom transform, so they never collide with it */}
         {!suppress && popup && <HexPopup lines={popup.lines} />}
         {!suppress && combatBox && <CombatBox {...combatBox} />}
+        {!suppress && !combatBox && equipBox && <EquipmentPopup {...equipBox} />}
         {scrapConfirm && (
           <div className="board-scrim" onClick={scrapConfirm.onCancel}>
             <div onClick={(e) => e.stopPropagation()}>
@@ -626,12 +707,6 @@ export function GameScreen({
           }
           cardHint={cardHint}
           cardState={cardState}
-          equipment={
-            interactive && afford.equipmentChoice
-              ? afford.equipmentChoice.map((c) => ({ id: c.id, stat: c.stat, amount: c.amount, effect: c.effect }))
-              : []
-          }
-          onEquip={(id) => dispatch({ type: "chooseEquipment", cardId: id })}
           urgent={overLimit}
         />
       </div>

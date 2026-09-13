@@ -173,16 +173,13 @@ button.danger { border-color: #6a3a2f; }
 .bottompanel.urgent { border-color: #c1573c; }
 
 .equip-choice { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
-.equip-card {
-  width: 96px; min-height: 92px; padding: 8px 6px;
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-  background: #121b17; border: 2px solid var(--line); border-radius: 9px;
-  cursor: pointer; text-align: center;
-}
-.equip-card:hover { background: #17231d; filter: brightness(1.15); }
+/* one card in EquipmentPopup — a HexButton, sized/laid out like the old plain-rect
+   .equip-card it replaced (see BottomPanel's now-removed equip-choice) */
+.hexbutton.equip-card { width: 108px; min-height: 96px; }
+.hexbutton.equip-card .hexbutton-content { flex-direction: column; gap: 3px; }
 .equip-card .et { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em; }
-.equip-card .ev { font-size: 1.5rem; font-weight: 800; line-height: 1; }
-.equip-card .ee { font-size: 0.58rem; color: var(--muted); line-height: 1.25; margin-top: auto; }
+.equip-card .ev { font-size: 1.4rem; font-weight: 800; line-height: 1; }
+.equip-card .ee { font-size: 0.56rem; color: var(--muted); line-height: 1.25; margin-top: auto; }
 
 /* the "action box" family (guidance popup, ship picker, combat box, confirm dialog): a
    fixed overlay, like the zoom controls or the status panel — NOT board content, so

@@ -269,6 +269,17 @@ export function SetupScreen({
             ))}
           </select>
         </label>
+        <label className="turn">
+          upgrade at start{" "}
+          <select
+            value={s.upgradeAtStart}
+            onChange={(e) => s.openSetup(s.humans, s.bots, e.target.value as "none" | "random" | "select")}
+          >
+            <option value="none">NONE</option>
+            <option value="random">RANDOM</option>
+            <option value="select">SELECT</option>
+          </select>
+        </label>
         <Settings prefs={prefs} onChange={setPrefs} />
         <button onClick={() => s.openSetup()}>New game</button>
       </div>

@@ -5,7 +5,7 @@
  */
 import { legalActions, statsOf } from "../engine/index.js";
 import { hexKey } from "../engine/hex.js";
-import type { Action, EquipmentCard, GameState, Hex } from "../engine/index.js";
+import type { Action, GameState, Hex, PendingEquipment } from "../engine/index.js";
 import { burnCost } from "./preview.js";
 
 /** actions rendered as ordinary buttons (not board clicks, not the combat panel, not discard) */
@@ -46,8 +46,10 @@ export interface Affordances {
   /** the counter-attack option offered to a victorious defender */
   counterAttack: Extract<Action, { type: "attack" }> | null;
   combat: CombatView | null;
-  /** homecoming: pick one of these equipment upgrades */
-  equipmentChoice: EquipmentCard[] | null;
+  /** a pending equipment choice — either a homecoming reward or the one-time start-of-game
+     upgrade (whose `mode` tells a GUI whether to auto-spin to a random pick or let the
+     player choose); null when nothing is pending */
+  equipmentChoice: PendingEquipment | null;
 }
 
 export interface AffordanceOpts {
@@ -97,6 +99,6 @@ export function affordances(state: GameState, opts: AffordanceOpts = {}): Afford
         ? ((legal.find((a) => a.type === "attack") as Extract<Action, { type: "attack" }>) ?? null)
         : null,
     combat,
-    equipmentChoice: state.pendingEquipment?.cards ?? null,
+    equipmentChoice: state.pendingEquipment ?? null,
   };
 }

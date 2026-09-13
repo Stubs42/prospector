@@ -48,6 +48,9 @@ const NEW_CARD_PULSE_MS = 3000;
 export function useSession(prefs: Prefs, reducedMotion: boolean) {
   const [humans, setHumans] = useState(1);
   const [bots, setBots] = useState(2);
+  // "select" is the default (see engine's CreateGameOptions.upgradeAtStart) — carried across
+  // "New game" until the player changes it in the setup topbar
+  const [upgradeAtStart, setUpgradeAtStart] = useState<"none" | "random" | "select">("select");
   const [seats, setSeats] = useState<Seat[]>(() => mkSeats(1, 2));
   // per-seat display names (index = eventual player id) — see rawNamesFor above
   const [rawNames, setRawNames] = useState<(string | null)[]>(() => rawNamesFor(mkSeats(1, 2)));
@@ -56,7 +59,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   // pickShip are real, logged engine actions, not client-side randomness. See stepSetup in
   // engine/game.ts.
   const [state, setState] = useState<GameState>(() =>
-    createGame({ seats: mkSeats(1, 2), seed: (Math.random() * 1e9) | 0 }),
+    createGame({ seats: mkSeats(1, 2), seed: (Math.random() * 1e9) | 0, upgradeAtStart: "select" }),
   );
   const [shownPlayer, setShownPlayer] = useState(state.activePlayerIndex);
   const [armed, setArmed] = useState<Set<string>>(new Set());
@@ -142,13 +145,14 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     dispatch(engineBoosters.length ? { ...burn, engineBoosters } : burn);
   }
   /** (re)start setup fresh — a new interactive game, base/ship all unpicked */
-  function openSetup(h = humans, b = bots) {
+  function openSetup(h = humans, b = bots, upgrade = upgradeAtStart) {
     setHumans(h);
     setBots(b);
+    setUpgradeAtStart(upgrade);
     const seatArr = mkSeats(h, b);
     setSeats(seatArr);
     setRawNames(rawNamesFor(seatArr));
-    const g = createGame({ seats: seatArr, seed: (Math.random() * 1e9) | 0 });
+    const g = createGame({ seats: seatArr, seed: (Math.random() * 1e9) | 0, upgradeAtStart: upgrade });
     setState(g);
     setShownPlayer(g.activePlayerIndex);
     botRng.current = makeRng((Math.random() * 1e9) | 0);
@@ -289,6 +293,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     names,
     humans,
     bots,
+    upgradeAtStart,
     /** `data` is the engine's own SetupState — GUIs read stage/bases/colours/turnIndex/
        startSeat straight off it instead of re-deriving them client-side */
     setup: { open: state.setup !== null, data: state.setup },
