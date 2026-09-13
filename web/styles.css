@@ -143,40 +143,56 @@ button.danger { border-color: #6a3a2f; }
 .equip-card .ev { font-size: 1.5rem; font-weight: 800; line-height: 1; }
 .equip-card .ee { font-size: 0.58rem; color: var(--muted); line-height: 1.25; margin-top: auto; }
 
-/* hex-shaped guidance popup, drawn in board space */
-.hexpopup polygon {
-  fill: rgba(12, 20, 16, 0.97);
-  stroke: var(--gold);
-  stroke-width: 2;
-  stroke-linejoin: round;
-  filter: drop-shadow(0 10px 26px rgba(0, 0, 0, 0.55));
+/* the "action box" family (guidance popup, ship picker, combat box, confirm dialog): a
+   fixed overlay, like the zoom controls or the status panel — NOT board content, so
+   panning/zooming the board never touches it (see HexPopup.tsx's note on why this moved
+   out of board space). Centred a little above true middle so it clears the bottom panel. */
+.actionbox {
+  position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%);
+  z-index: 22;
+  max-width: min(440px, 88vw);
+  background: rgba(12, 20, 16, 0.97);
+  border: 1px solid var(--gold);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+  padding: 0.9rem 1.15rem;
+  display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+  text-align: center; font-size: 0.85rem;
 }
-.hexpopup text { fill: var(--ink); font-size: 13px; font-weight: 600; letter-spacing: 0.01em; }
-.hexpopup-btn { cursor: pointer; }
-.hexpopup-btn polygon { fill: #17251f; stroke: var(--line-strong, #3a444e); stroke-width: 1.6; }
-.hexpopup-btn text { fill: var(--ink); font-size: 11px; font-weight: 700; pointer-events: none; }
-/* "primary" = the safe default (e.g. Cancel) — a little emphasis at rest, same as elsewhere */
-.hexpopup-btn.primary polygon { fill: #26402f; stroke: #3f6f4f; }
-.hexpopup-btn.danger polygon { stroke: #6a3a2f; }
-.hexpopup-btn.danger text { fill: #e08a7a; }
-/* hover must win over the kind-specific rest colours, and read the same on every button */
-.hexpopup-btn.primary:hover polygon,
-.hexpopup-btn.danger:hover polygon,
-.hexpopup-btn:hover polygon { stroke: var(--gold); }
-.hexpopup-btn.disabled { cursor: default; opacity: 0.4; }
+.actionbox-line { font-weight: 700; font-size: 0.95rem; }
+.actionbox-title { font-weight: 700; font-size: 0.95rem; }
+.actionbox-sub { color: var(--muted); font-size: 0.78rem; }
+.actionbox-outcome { font-weight: 700; margin-top: 0.15rem; }
+.actionbox-buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center; margin-top: 0.3rem; }
+
+/* confirm dialog: dims the board behind it; the actionbox re-centres itself on top */
+.board-scrim { position: absolute; inset: 0; z-index: 21; background: rgba(4, 10, 7, 0.55); }
 
 /* ship carousel (pickShip stage) */
-.shippicker-stat { fill: var(--muted); font-size: 12px; font-weight: 600; }
-.ship-arrow text { font-size: 16px; }
+.shippicker-row { display: flex; align-items: center; gap: 0.6rem; }
+.ship-arrow { font-size: 1.1rem; padding: 0.2rem 0.6rem; }
 /* a placeholder frame for the card being picked — real card art comes later */
-.shippicker-card { fill: rgba(255, 255, 255, 0.03); stroke-width: 2; }
+.shippicker-card {
+  background: rgba(255, 255, 255, 0.03); border: 2px solid; border-radius: 10px;
+  padding: 0.6rem 1.1rem; min-width: 190px;
+  display: flex; flex-direction: column; gap: 0.4rem;
+}
+.shippicker-name { display: flex; align-items: center; gap: 0.4rem; font-weight: 700; }
+.shippicker-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 0.15rem 0.8rem; }
+.shippicker-stat { color: var(--muted); font-size: 0.78rem; font-weight: 600; text-align: left; }
 
 /* combat box (attack/defend staging, dice reveal) */
-.combatbox-sub { fill: var(--muted); font-size: 11px; font-weight: 600; }
-.combat-chip { cursor: pointer; }
-.combat-chip rect { fill: rgba(255, 255, 255, 0.04); stroke-width: 1.8; }
-.combat-chip:hover rect { fill: rgba(255, 255, 255, 0.1); }
-.combat-chip text { pointer-events: none; }
+.combat-chips { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: center; }
+.combat-chip {
+  display: flex; flex-direction: column; align-items: center; gap: 0.15rem;
+  background: rgba(255, 255, 255, 0.04); border: 1.8px solid; border-radius: 6px;
+  padding: 0.3rem 0.5rem; min-width: 34px;
+}
+.combat-chip:hover { background: rgba(255, 255, 255, 0.1); }
+.combat-chip .cc-tag { font-size: 0.62rem; font-weight: 700; }
+.combat-chip .cc-val { font-size: 0.95rem; font-weight: 700; }
+.combat-roll { display: flex; align-items: center; gap: 1.2rem; margin-top: 0.2rem; }
+.combat-die { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; font-size: 0.72rem; }
 
 /* a whole base region you can pick as your start base — one pulsing outline around the
    4-cell cluster, not a fill on each cell */

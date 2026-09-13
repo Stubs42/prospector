@@ -4,10 +4,7 @@ import { hexKey } from "../../engine/hex.js";
 import type { GameState, Hex, Colour, OreColour } from "../../engine/index.js";
 import { SHIP_VAR, ORE_VAR } from "./kit.js";
 import { BaseInfo, type TipFn } from "./BaseInfo.js";
-import { HexPopup, type HexPopupAction } from "./HexPopup.js";
 import { ShipMarker } from "./ShipMarker.js";
-import { ShipPickerPopup, type ShipPickerProps } from "./ShipPickerPopup.js";
-import { CombatBox, type CombatBoxProps } from "./CombatBox.js";
 import { moveFrame, animDone, type MoveAnim } from "../anim.js";
 import type { Seat } from "../../client/index.js";
 import { clusterOutline, pointsAttr } from "./hexOutline.js";
@@ -53,16 +50,7 @@ export interface BoardProps {
   /** the active player's own ship can be clicked to end the turn (post-move, nothing else pending) */
   endTurnReady: boolean;
   onEndTurn: (() => void) | null;
-  /** a confirm dialog (e.g. "scrap your ship?") drawn centred, dimming the rest of the board */
-  confirm: { center: Hex; lines: string[]; onYes: () => void; onCancel: () => void } | null;
-  /** guidance popup drawn in board space; null when no action is pending */
-  popup: { center: Hex; lines: string[]; actions?: HexPopupAction[] | undefined; radius?: number | undefined } | null;
-  /** the pickShip stage's whole UI (a ship card + browse/select/random) — mutually
-     exclusive with `popup` in practice, since it replaces the guidance popup for that stage */
-  shipPicker?: ShipPickerProps | null;
-  /** combat's whole board-native UI — mutually exclusive with `popup` in practice */
-  combatBox?: Omit<CombatBoxProps, "rotation"> | null;
-  /** false during base selection: draw only the empty field + highlights + popup */
+  /** false during base selection: draw only the empty field + highlights */
   world: boolean;
   reducedMotion: boolean;
   /** an in-flight move to play out; null when the board is settled */
@@ -93,10 +81,6 @@ export function Board({
   onAttackTarget,
   endTurnReady,
   onEndTurn,
-  confirm,
-  popup,
-  shipPicker = null,
-  combatBox = null,
   world,
   reducedMotion,
   moveAnim,
@@ -230,37 +214,11 @@ export function Board({
     return rotate({ x: S * Math.sqrt(3) * (hx.q + hx.r / 2), y: S * 1.5 * hx.r });
   };
 
-  // a message/action hexagon (guidance popup, ship picker, combat box, confirm dialog) is
-  // anchored to a board cell so it still follows its ship/base while panning, but its own
-  // size is specified in board units — without this, zooming the board in or out would
-  // inflate or shrink it right along with the cells, which reads as the box "colliding"
-  // with the zoom/pan controls. Scaling the group by 1/z around its own anchor point
-  // exactly cancels the zoom factor the surrounding viewBox applies, so the box keeps a
-  // constant screen size at any zoom level while panning still moves it correctly (it's
-  // still just translated board content, like anything else on the board).
-  const zoomLock = (center: Hex): string => {
-    const o = px(center);
-    return `translate(${o.x} ${o.y}) scale(${1 / v.z}) translate(${-o.x} ${-o.y})`;
-  };
-
   // players are empty during interactive setup's pickBase/pickShip stages — everything that
   // dereferences `active` below is itself gated on state only ever being non-empty there
   // (onCoast, highlight.kind === "place")
   const active = state.players[state.activePlayerIndex] ?? null;
   const activeAt = active ? px(active.pose.current) : { x: 0, y: 0 };
-
-  // space cancels a confirm dialog (e.g. the scrap prompt) — Cancel is the safe default
-  useEffect(() => {
-    if (!confirm) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.code === "Space" || e.key === " ") {
-        e.preventDefault();
-        confirm.onCancel();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [confirm]);
 
   // drive the slide animation with rAF; end it (and let the timers resume) when done.
   // a held "drift" has no motion — it just sits there, so it needs no loop.
@@ -580,52 +538,6 @@ export function Board({
       {/* table furniture (ship panels, deck counts) — drawn on top so text stays legible */}
       {world && <BaseInfo board={board} state={state} seats={seats} scores={scores} onTip={onTip} rotation={rotation} />}
 
-      {/* guidance popup — what to do next, anchored in board space, zoom-locked to size */}
-      {popup && (
-        <g transform={zoomLock(popup.center)}>
-          <HexPopup
-            center={popup.center}
-            lines={popup.lines}
-            actions={popup.actions}
-            radius={popup.radius}
-            rotation={rotation}
-          />
-        </g>
-      )}
-
-      {/* pickShip stage: one big hex, browse/select/random instead of a plain grid */}
-      {shipPicker && (
-        <g transform={zoomLock(shipPicker.center)}>
-          <ShipPickerPopup {...shipPicker} rotation={rotation} />
-        </g>
-      )}
-
-      {/* combat: staging lasers/shields, declaring, and the dice reveal — anchored on
-         whoever is currently deciding, mutually exclusive with the plain guidance popup */}
-      {combatBox && (
-        <g transform={zoomLock(combatBox.center)}>
-          <CombatBox {...combatBox} rotation={rotation} />
-        </g>
-      )}
-
-      {/* confirm dialog (e.g. scrap?) — dims + blocks the rest of the board until answered */}
-      {confirm && (
-        <>
-          <rect x={vb.x} y={vb.y} width={vb.w} height={vb.h} fill="rgba(4,10,7,0.55)" onClick={confirm.onCancel} />
-          <g transform={zoomLock(confirm.center)}>
-            <HexPopup
-              center={confirm.center}
-              lines={confirm.lines}
-              radius={3}
-              rotation={rotation}
-              actions={[
-                { label: "Cancel", kind: "primary", onClick: confirm.onCancel },
-                { label: "Yes", kind: "danger", onClick: confirm.onYes },
-              ]}
-            />
-          </g>
-        </>
-      )}
     </svg>
       {tip && (
         <div className="board-tip" style={{ left: tip.x, top: tip.y }}>

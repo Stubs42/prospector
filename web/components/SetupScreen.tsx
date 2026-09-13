@@ -15,7 +15,9 @@ import { boardFor } from "../../engine/game.js";
 import { hexKey } from "../../engine/hex.js";
 import type { Colour, Hex } from "../../engine/index.js";
 import { Board } from "./Board.js";
+import { HexPopup } from "./HexPopup.js";
 import { Settings } from "./Settings.js";
+import { ShipPickerPopup } from "./ShipPickerPopup.js";
 import { StatusPanel } from "./StatusPanel.js";
 import type { Prefs } from "../prefs.js";
 import type { Session } from "../useSession.js";
@@ -287,40 +289,6 @@ export function SetupScreen({
           onAttackTarget={() => {}}
           endTurnReady={false}
           onEndTurn={null}
-          confirm={null}
-          popup={
-            canPickNow && setup.stage === "pickBase"
-              ? {
-                  center: { q: 0, r: 0 },
-                  lines,
-                  radius: 3,
-                  actions: [{ label: "🎲 Random", kind: "primary", onClick: spinRandomBase }],
-                }
-              : rollOffActive
-                ? { center: { q: 0, r: 0 }, lines, radius: 3 }
-                : null
-          }
-          shipPicker={
-            !s.needPassGate && setup.stage === "pickShip" && shownShip
-              ? {
-                  center: { q: 0, r: 0 },
-                  title:
-                    seats.length > 1 ? `Select your ship — player ${current + 1} of ${seats.length}` : "Select your ship",
-                  colour: shownShip,
-                  name: mode.ships[shownShip].name,
-                  stats: mode.ships[shownShip],
-                  canBrowse: freeShips.length > 1,
-                  spinning: shipSpinning,
-                  // a bot's own turn is watch-only — the card still spins, but there's
-                  // nothing for the human to click on the bot's behalf
-                  interactive: !currentIsBot,
-                  onPrev: () => browseShip(-1),
-                  onNext: () => browseShip(1),
-                  onSelect: selectShip,
-                  onRandom: spinRandomShip,
-                }
-              : null
-          }
           world={false}
           reducedMotion={reducedMotion}
           moveAnim={null}
@@ -328,6 +296,30 @@ export function SetupScreen({
           onCell={onCell}
           onCellHover={() => {}}
         />
+
+        {/* guidance popup / ship picker: fixed overlays, like the zoom controls or the
+           status panel — not board content, so pan/zoom never touches them */}
+        {canPickNow && setup.stage === "pickBase" && (
+          <HexPopup lines={lines} actions={[{ label: "🎲 Random", kind: "primary", onClick: spinRandomBase }]} />
+        )}
+        {rollOffActive && <HexPopup lines={lines} />}
+        {!s.needPassGate && setup.stage === "pickShip" && shownShip && (
+          <ShipPickerPopup
+            title={seats.length > 1 ? `Select your ship — player ${current + 1} of ${seats.length}` : "Select your ship"}
+            colour={shownShip}
+            name={mode.ships[shownShip].name}
+            stats={mode.ships[shownShip]}
+            canBrowse={freeShips.length > 1}
+            spinning={shipSpinning}
+            // a bot's own turn is watch-only — the card still spins, but there's
+            // nothing for the human to click on the bot's behalf
+            interactive={!currentIsBot}
+            onPrev={() => browseShip(-1)}
+            onNext={() => browseShip(1)}
+            onSelect={selectShip}
+            onRandom={spinRandomShip}
+          />
+        )}
 
         {!s.needPassGate && !rollOffActive && (
           <StatusPanel

@@ -8,35 +8,16 @@ import { useEffect, useRef, useState } from "react";
 import { score } from "../../engine/index.js";
 import { boardFor } from "../../engine/game.js";
 import { add, hexKey, scale } from "../../engine/hex.js";
-import type { BoardModel } from "../../engine/board.js";
 import type { Colour, Hex } from "../../engine/index.js";
 import { Board } from "./Board.js";
 import { BottomPanel, type PanelButton } from "./BottomPanel.js";
-import { type CombatBoxProps, type CombatCardChip } from "./CombatBox.js";
+import { CombatBox, type CombatBoxProps, type CombatCardChip } from "./CombatBox.js";
+import { HexPopup } from "./HexPopup.js";
 import { LogOverlay } from "./LogOverlay.js";
 import { Settings } from "./Settings.js";
 import { StatusPanel } from "./StatusPanel.js";
-import { axialToPixel, pixelToAxial, towardOrigin } from "./hexpx.js";
 import type { Prefs } from "../prefs.js";
 import type { Session } from "../useSession.js";
-
-/** a cell a few steps inward from a base, where that base's guidance popup sits */
-function launchAnchor(board: BoardModel, colour: Colour): Hex {
-  const cs = board.baseCells(colour);
-  const q = cs.reduce((a, c) => a + c.q, 0) / cs.length;
-  const r = cs.reduce((a, c) => a + c.r, 0) / cs.length;
-  const { x, y } = axialToPixel({ q, r });
-  const pulled = towardOrigin(x, y, 150);
-  return pixelToAxial(pulled.x, pulled.y);
-}
-
-/** the combat box follows whoever is deciding, pulled a bit toward the board centre from
-   their ship so it doesn't sit right on top of the ship marker it's about */
-function nearbyAnchor(from: Hex): Hex {
-  const { x, y } = axialToPixel(from);
-  const pulled = towardOrigin(x, y, 150);
-  return pixelToAxial(pulled.x, pulled.y);
-}
 
 /** how many lines of "what happened this move" the status panel keeps before trimming */
 const MOVE_LOG_CAP = 10;
@@ -408,11 +389,9 @@ export function GameScreen({
     : [];
 
   // the combat box replaces the plain guidance popup while a fight is staging, resolving,
-  // or being revealed — anchored near whoever is deciding (or, during the dice reveal,
-  // near the attacker, since pendingCombat may have already moved on by then)
-  const combatBox: Omit<CombatBoxProps, "rotation"> | null = combatReveal
+  // or being revealed — a fixed overlay (see HexPopup's note), not anchored to any ship
+  const combatBox: CombatBoxProps | null = combatReveal
     ? {
-        center: nearbyAnchor(state.players[combatReveal.attackerId]!.pose.current),
         title: `${mode.ships[state.players[combatReveal.attackerId]!.colour].name} attacks ${
           mode.ships[state.players[combatReveal.defenderId]!.colour].name
         }`,
@@ -432,13 +411,6 @@ export function GameScreen({
       }
     : combatTitle
       ? {
-          // whoever is actually deciding right now — handOwner already covers that for
-          // defend/counter (the defender) and plain staging (the attacker, via `p`).
-          // Mid-"resolve" nobody is deciding anything new, so anchor on the fight's
-          // actual attacker instead of falling back to handOwner's default of the turn
-          // owner — wrong ship during a counter-attack's own resolve step, since the
-          // turn owner there is still the *original* attacker, not pc.attackerId
-          center: nearbyAnchor((pc?.awaiting === "resolve" ? state.players[pc.attackerId]! : handOwner).pose.current),
           title: combatTitle,
           sub: combatSub,
           cards: combatCards,
@@ -478,11 +450,12 @@ export function GameScreen({
   const attackTargets = boardActive ? afford.attackTargetIds : [];
   const onAttackTarget = (id: number) => s.setAttackTarget(id);
 
-  // guidance popup: where the next action is, and what it is
-  const popup: { center: Hex; lines: string[] } | null = launchPhase
-    ? { center: launchAnchor(board, p.homeBase), lines: ["Select your", "launch cell"] }
+  // guidance popup: where the next action is, and what it is — a fixed overlay (see
+  // HexPopup's note), not anchored to any board cell any more
+  const popup: { lines: string[] } | null = launchPhase
+    ? { lines: ["Select your", "launch cell"] }
     : interactive && overLimit
-      ? { center: { q: 0, r: 0 }, lines: ["Too many cards!", "Discard one to continue"] }
+      ? { lines: ["Too many cards!", "Discard one to continue"] }
       : null;
 
   // clicking your own base (off a burn target) asks to scrap — available any time during the move
@@ -490,7 +463,6 @@ export function GameScreen({
   const scrapConfirm =
     scrapConfirmOpen && scrapCells.length
       ? {
-          center: { q: 0, r: 0 } as Hex,
           lines: ["So you really want to", "scrap your ship?"],
           onYes: () => {
             dispatch({ type: "scrapShip" });
@@ -499,6 +471,19 @@ export function GameScreen({
           onCancel: () => setScrapConfirmOpen(false),
         }
       : null;
+
+  // space cancels the scrap confirm — Cancel is the safe default
+  useEffect(() => {
+    if (!scrapConfirm) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code === "Space" || e.key === " ") {
+        e.preventDefault();
+        scrapConfirm.onCancel();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [scrapConfirm]);
 
   const burnPreview = s.burnPreviewFor(hoverCell);
   function onCell(h: Hex) {
@@ -567,9 +552,6 @@ export function GameScreen({
           onAttackTarget={onAttackTarget}
           endTurnReady={endTurnReady}
           onEndTurn={onEndTurn}
-          confirm={scrapConfirm}
-          popup={suppress ? null : popup}
-          combatBox={suppress ? null : combatBox}
           world
           reducedMotion={reducedMotion}
           moveAnim={s.moveAnim}
@@ -577,6 +559,24 @@ export function GameScreen({
           onCell={onCell}
           onCellHover={setHoverCell}
         />
+
+        {/* guidance popup / combat box: fixed overlays, like the zoom controls or the status
+           panel — outside the board's own pan/zoom transform, so they never collide with it */}
+        {!suppress && popup && <HexPopup lines={popup.lines} />}
+        {!suppress && combatBox && <CombatBox {...combatBox} />}
+        {scrapConfirm && (
+          <div className="board-scrim" onClick={scrapConfirm.onCancel}>
+            <div onClick={(e) => e.stopPropagation()}>
+              <HexPopup
+                lines={scrapConfirm.lines}
+                actions={[
+                  { label: "Cancel", kind: "primary", onClick: scrapConfirm.onCancel },
+                  { label: "Yes", kind: "danger", onClick: scrapConfirm.onYes },
+                ]}
+              />
+            </div>
+          </div>
+        )}
 
         {placing ? (
           <StatusPanel colour={null} name="⚙ System" bot={false} log={["Placing resources"]} />
