@@ -8,7 +8,7 @@
  * Not board content — a fixed screen overlay, like the zoom controls or the status panel
  * (see this file's note history / HexPopup.tsx for why these moved out of board space).
  */
-import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 
 /** corner points of a `w`×`h` hexagon, pointed left/right, cut at 60° from horizontal —
    same formula the old hexButtonPoints used, just driven by the element's real pixel size.
@@ -86,9 +86,32 @@ export interface HexButtonProps {
 }
 
 /** every button inside an action box — same hex silhouette as the box itself, just sized
-   to its own (usually much smaller) content instead of measuring separately per caller */
+   to its own (usually much smaller) content instead of measuring separately per caller.
+   Keyboard model: the "primary" button (if any) is the box's default action — Space/Enter
+   always fires it, no matter what (if anything) currently has focus, like a form's submit
+   button. Every other button is mouse/touch-only: it never takes focus at all, so its own
+   highlight only ever reflects the mouse actually being over it right now, and it can't be
+   left "armed" for a stray Space/Enter later. */
 export function HexButton({ children, onClick, disabled, kind, className, accent, ...aria }: HexButtonProps) {
   const { ref, size, padX } = useHexFrame<HTMLButtonElement>(10);
+  const isPrimary = kind === "primary";
+
+  useEffect(() => {
+    if (!isPrimary || disabled) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      // already focused: the browser's own native activation handles this keypress —
+      // firing onClick ourselves too would run it twice
+      if (document.activeElement === ref.current) return;
+      const tag = (document.activeElement as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return; // never hijack real text entry
+      e.preventDefault();
+      onClick?.();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isPrimary, disabled, onClick, ref]);
+
   return (
     <button
       ref={ref}
@@ -96,6 +119,11 @@ export function HexButton({ children, onClick, disabled, kind, className, accent
       className={`hexbutton${kind ? ` ${kind}` : ""}${className ? ` ${className}` : ""}`}
       onClick={onClick}
       disabled={disabled}
+      // a non-primary button is mouse/touch-only: never let a click hand it keyboard
+      // focus (that's what let a stray Space/Enter re-fire whatever arrow was clicked
+      // last), and drop it from the Tab order entirely
+      tabIndex={isPrimary ? undefined : -1}
+      onMouseDown={isPrimary ? undefined : (e) => e.preventDefault()}
       {...aria}
     >
       {size && (
