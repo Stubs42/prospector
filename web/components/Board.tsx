@@ -215,6 +215,31 @@ export function Board({
     return rotate({ x: S * Math.sqrt(3) * (hx.q + hx.r / 2), y: S * 1.5 * hx.r });
   };
 
+  // per-cell values shared by the fill layer and the grid layer below — computed once so
+  // the two rendering passes agree on exactly which cells are highlighted/clickable/etc.
+  const cellViews = cells.map((c) => {
+    const { x: cx, y: cy } = rotate({ x: c.x * S, y: c.y * S });
+    const key = hexKey(c);
+    const isHi = hi.has(key);
+    // a "base" pick highlights the whole region as one outline (below), not each cell —
+    // so a cell here only gets the per-cell gold border for "place" (launch-cell) picks
+    const isCellHi = isHi && highlight.kind !== "base";
+    const assigned = c.base ? baseColourOf.get(c.base) : undefined;
+    // an unassigned field cell is mostly transparent — the starfield behind the board
+    // shows through its interior, with only a faint tint left to tell inner from outer
+    const fill = assigned ? SHIP_VAR[assigned] : c.region === "outer" ? theme.board.outerFill : theme.board.innerFill;
+    const fillOpacity = assigned
+      ? 0.85
+      : c.region === "outer"
+        ? theme.board.outerCellFillOpacity
+        : theme.board.innerCellFillOpacity;
+    const clickable = isHi || scrapSet.has(key);
+    // a base-pick cell shows a tooltip, not its own hover highlight — the region
+    // outline (below) is the only visual indicator for "you can pick this"
+    const isBaseCell = isHi && highlight.kind === "base";
+    return { c, cx, cy, key, isCellHi, fill, fillOpacity, clickable, isBaseCell };
+  });
+
   // players are empty during interactive setup's pickBase/pickShip stages — everything that
   // dereferences `active` below is itself gated on state only ever being non-empty there
   // (onCoast, highlight.kind === "place")
@@ -284,53 +309,47 @@ export function Board({
           />
         </filter>
       </defs>
-      <g filter="url(#rodDepth)">
-      {cells.map((c) => {
-        const { x: cx, y: cy } = rotate({ x: c.x * S, y: c.y * S });
-        const key = hexKey(c);
-        const isHi = hi.has(key);
-        // a "base" pick highlights the whole region as one outline (below), not each cell —
-        // so a cell here only gets the per-cell gold border for "place" (launch-cell) picks
-        const isCellHi = isHi && highlight.kind !== "base";
-        const assigned = c.base ? baseColourOf.get(c.base) : undefined;
-        // an unassigned field cell is mostly transparent — the starfield behind the board
-        // shows through its interior, with only a faint tint left to tell inner from outer
-        const fill = assigned ? SHIP_VAR[assigned] : c.region === "outer" ? theme.board.outerFill : theme.board.innerFill;
-        // the plain grid edge reads as a metal rod (a gradient stroke, see <defs>), not a
-        // flat painted line — a highlighted or base-owned cell still overrides it with a
-        // plain functional colour, since those need to stay unambiguous at a glance
-        const stroke = isCellHi ? "var(--gold)" : assigned ? SHIP_VAR[assigned] : "url(#rodGrad)";
-        const clickable = isHi || scrapSet.has(key);
-        // a base-pick cell shows a tooltip, not its own hover highlight — the region
-        // outline (below) is the only visual indicator for "you can pick this"
-        const isBaseCell = isHi && highlight.kind === "base";
-        return (
+      {/* two layers, deliberately not one polygon with both fill and stroke: the grid
+         (metal rods) must read as one uniform mesh sitting *on top of* every cell alike,
+         including a coloured base region — drawing fill+stroke together per cell let a
+         base's own colour override (and visually blend into) its share of the grid. */}
+      {cellViews.map(({ c, cx, cy, key, fill, fillOpacity, clickable, isBaseCell }) => (
+        <polygon
+          key={key}
+          // full size (no gap) — every edge is shared with its neighbour, one continuous
+          // hex grid rather than separated tiles floating with a gap between them
+          points={hexPoints(cx, cy, S)}
+          fill={fill}
+          fillOpacity={fillOpacity}
+          stroke="none"
+          // a click target must stay clickable even though its fill is almost fully
+          // transparent now (the starfield shows through) — visiblePainted (the SVG
+          // default) can miss a very low fillOpacity in some browsers
+          pointerEvents={clickable ? "all" : undefined}
+          className={clickable ? (isBaseCell ? "cell-hit-quiet" : "cell-hit") : undefined}
+          onClick={clickable ? clicked(() => onCell({ q: c.q, r: c.r })) : undefined}
+          onMouseEnter={clickable && !isBaseCell ? () => onCellHover({ q: c.q, r: c.r }) : undefined}
+          onMouseMove={isBaseCell ? (e) => onTip("Select this base", e) : undefined}
+          onMouseLeave={
+            isBaseCell ? (e) => onTip(null, e) : clickable ? () => onCellHover(null) : undefined
+          }
+        />
+      ))}
+
+      <g filter="url(#rodDepth)" pointerEvents="none">
+        {cellViews.map(({ cx, cy, key, isCellHi }) => (
           <polygon
             key={key}
-            // full size (no gap) — every edge is shared with its neighbour, one continuous
-            // hex grid rather than separated tiles floating with a gap between them
             points={hexPoints(cx, cy, S)}
-            fill={fill}
-            fillOpacity={
-              assigned ? 0.85 : c.region === "outer" ? theme.board.outerCellFillOpacity : theme.board.innerCellFillOpacity
-            }
-            stroke={stroke}
-            strokeWidth={isCellHi ? 2.5 : assigned ? 1.6 : 1.4}
-            strokeOpacity={assigned ? 0.9 : 1}
-            // a click target must stay clickable even though its fill is almost fully
-            // transparent now (the starfield shows through) — visiblePainted (the SVG
-            // default) can miss a very low fillOpacity in some browsers
-            pointerEvents={clickable ? "all" : undefined}
-            className={clickable ? (isBaseCell ? "cell-hit-quiet" : "cell-hit") : undefined}
-            onClick={clickable ? clicked(() => onCell({ q: c.q, r: c.r })) : undefined}
-            onMouseEnter={clickable && !isBaseCell ? () => onCellHover({ q: c.q, r: c.r }) : undefined}
-            onMouseMove={isBaseCell ? (e) => onTip("Select this base", e) : undefined}
-            onMouseLeave={
-              isBaseCell ? (e) => onTip(null, e) : clickable ? () => onCellHover(null) : undefined
-            }
+            fill="none"
+            // the plain grid edge reads as a metal rod (a gradient stroke, see <defs>), not
+            // a flat painted line — a highlighted cell still overrides it with gold, since
+            // that needs to stay unambiguous at a glance; a base cell no longer gets its
+            // own coloured edge here — its fill alone already says whose it is
+            stroke={isCellHi ? "var(--gold)" : "url(#rodGrad)"}
+            strokeWidth={isCellHi ? 2.5 : 1.4}
           />
-        );
-      })}
+        ))}
       </g>
 
       {/* base regions being picked: one pulsing outline per free base (the whole region is
