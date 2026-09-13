@@ -311,7 +311,9 @@ export function Board({
             // hex grid rather than separated tiles floating with a gap between them
             points={hexPoints(cx, cy, S)}
             fill={fill}
-            fillOpacity={assigned ? 0.85 : theme.board.cellFillOpacity}
+            fillOpacity={
+              assigned ? 0.85 : c.region === "outer" ? theme.board.outerCellFillOpacity : theme.board.innerCellFillOpacity
+            }
             stroke={stroke}
             strokeWidth={isCellHi ? 2.5 : assigned ? 1.6 : 1.4}
             strokeOpacity={assigned ? 0.9 : 1}

@@ -62,8 +62,10 @@ export interface Theme {
   };
   board: {
     /** unassigned field cells: how much of their fill colour shows through, so the
-       starfield reads through the board's interior instead of a solid dark tile */
-    cellFillOpacity: number;
+       starfield reads through the board's interior instead of a solid dark tile —
+       set separately since inner/outer may want a different amount of tint */
+    innerCellFillOpacity: number;
+    outerCellFillOpacity: number;
     innerFill: string;
     outerFill: string;
     /** the plain grid edge's "metal rod" gradient, light to dark */
@@ -128,7 +130,8 @@ export const theme: Theme = {
     bgOuter: "#030705",
   },
   board: {
-    cellFillOpacity: 0.14,
+    innerCellFillOpacity: 0.14,
+    outerCellFillOpacity: 0.14,
     innerFill: "#0e1b15",
     outerFill: "#1c2b25",
     gridGradient: ["#7c8f85", "#3c4f45", "#1a2620"],
