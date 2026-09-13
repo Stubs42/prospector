@@ -61,22 +61,36 @@ export function GameScreen({
   const skipGateRef = useRef<SkipGate | null>(null);
   const onSkipAnimation = () => skipGateRef.current?.skip();
 
-  // --- initial resource placement: a one-time reveal, right when the real game opens -----
-  // populateGame already placed every resource atomically; this replays each one's own
-  // coordinate-dice roll (resourceSeeded log entries, see engine/game.ts) as three separate
-  // spins: a rotating mark cycles around the origin and settles on a point (a dot), then
-  // cycles around THAT dot and settles on a second dot, then cycles around THAT dot and
-  // settles on the final cell — never showing all 6 candidates at once, just the live mark,
-  // a line back to its round's center, and the growing dot-and-line path behind it. The
-  // whole path disappears the instant the tile is actually placed. Nobody's turn — "the
-  // system" is doing this — so the normal auto-draw/bot timers are held off the whole time
-  // (see useSession's holdAdvance) and the status panel shows a placeholder identity.
-  const [seedEntries] = useState(() => state.log.filter((l) => l.event === "resourceSeeded"));
-  const [revealed, setRevealed] = useState<Set<string>>(new Set());
+  // --- resource placement reveal: initial game-open seeding AND every later re-seed -------
+  // (a homecoming delivery seeds one new tile per resource delivered — see arriveHomeBaseIfAny
+  // in engine/game.ts) share the exact same "system is placing a tile" animation. The engine
+  // already placed each tile atomically the instant it happened; this only replays its own
+  // coordinate-dice roll (resourceSeeded log entries) as three separate spins: a rotating
+  // mark cycles around the origin and settles on a point (a dot), then cycles around THAT dot
+  // and settles on a second dot, then cycles around THAT dot and settles on the final cell —
+  // never showing all 6 candidates at once, just the live mark, a line back to its round's
+  // center, and the growing dot-and-line path behind it. The whole path disappears the
+  // instant the tile is actually placed. Detected by watching state.log.length grow (like the
+  // combat-dice reveal below), not just once at mount, so it also fires for a mid-game
+  // re-seed — nobody's turn while it plays — "the system" is doing this — so the normal
+  // auto-draw/bot timers are held off the whole time (see useSession's holdAdvance) and the
+  // status panel shows a placeholder identity.
+  const seedLogLen = useRef(0);
+  // cells that are ALREADY placed in real engine state but not yet revealed on screen —
+  // hidden from `displayState` below until their own spin lands (initial seeding hides
+  // every starting tile at once; a homecoming re-seed only ever hides the 1-2 new ones,
+  // every pre-existing tile on the board stays visible the whole time)
+  const [hiddenSeeds, setHiddenSeeds] = useState<Set<string>>(new Set());
   const [spinPath, setSpinPath] = useState<{ dots: Hex[]; live: Hex | null } | null>(null);
-  const [placing, setPlacing] = useState(seedEntries.length > 0);
+  const [placing, setPlacing] = useState(() => state.log.some((l) => l.event === "resourceSeeded"));
   useEffect(() => {
-    if (!placing) return;
+    const newEntries = state.log.slice(seedLogLen.current).filter((l) => l.event === "resourceSeeded");
+    seedLogLen.current = state.log.length;
+    if (newEntries.length === 0) return;
+    setHiddenSeeds(
+      new Set(newEntries.map((e) => hexKey((e.detail as { cell: Hex }).cell))),
+    );
+    setPlacing(true);
     s.setHoldAdvance(true);
     let cancelled = false;
     const gate = new SkipGate();
@@ -132,13 +146,17 @@ export function GameScreen({
       }
     };
     (async () => {
-      for (const entry of seedEntries) {
+      for (const entry of newEntries) {
         const d = entry.detail as { cell: Hex; dice: { step: number; colour: Colour }[] };
         const dice = [...d.dice].sort((a, b) => b.step - a.step); // coarse to fine: ring 3, 2, 1
         await spinAllThree(dice);
         if (cancelled) return;
         await gate.wait(reducedMotion ? 20 : 250); // let the finished path linger a beat
-        setRevealed((r) => new Set(r).add(hexKey(d.cell)));
+        setHiddenSeeds((h) => {
+          const n = new Set(h);
+          n.delete(hexKey(d.cell));
+          return n;
+        });
         setSpinPath(null);
         await gate.wait(reducedMotion ? 20 : 200);
       }
@@ -152,9 +170,14 @@ export function GameScreen({
       if (skipGateRef.current === gate) skipGateRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const displayState = placing
-    ? { ...state, board: { resources: Object.fromEntries([...revealed].map((k) => [k, state.board.resources[k]!])) } }
+  }, [state.log.length]);
+  const displayState = hiddenSeeds.size
+    ? {
+        ...state,
+        board: {
+          resources: Object.fromEntries(Object.entries(state.board.resources).filter(([k]) => !hiddenSeeds.has(k))),
+        },
+      }
     : state;
 
   // --- combat: animated dice reveal ---------------------------------------------------

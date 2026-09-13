@@ -139,24 +139,35 @@ function RatioToken({ c, col, tag, cur, max, active, tip, onTip, gradeCur, warnO
   );
 }
 
+/** the fixed left-to-right order for the 3 per-colour counts below — cheapest to priciest */
+const ORE_ORDER: OreColour[] = ["green", "yellow", "red"];
+
 function OreHex({ c, ores, tag, tip, onTip, rotation }: {
   c: BoardCell; ores: OreColour[]; tag: string; tip: string; onTip: TipFn; rotation: number;
 }) {
   const { x, y } = rotatePoint(c.x * S, c.y * S, rotation);
-  const n = Math.min(ores.length, 6);
+  // always all 3 colours (even at 0) as small counts, not one chip per tile — a chip row
+  // used to spill past the hex once there was more than a handful of ore of one colour
+  const counts: Record<OreColour, number> = { green: 0, yellow: 0, red: 0 };
+  for (const o of ores) counts[o]++;
   return (
     <Hoverable tip={`${tip}: ${ores.length ? ores.join(", ") : "none"}`} onTip={onTip}>
       <polygon points={hexPts(x, y, TOK + 2.5)} fill={DARK} />
       <polygon points={hexPts(x, y, TOK)} fill={DARK} stroke="#3a4a41" strokeWidth={theme.board.statTokenStrokeWidth} />
       <Tag x={x} y={y} text={tag} col="#8b9a91" />
-      {n === 0 ? (
-        <text x={x} y={y + TOK * 0.2} textAnchor="middle" fill="#4b574f" fontSize={S * 0.34}>–</text>
-      ) : (
-        ores.slice(0, 6).map((o, i) => (
-          <circle key={i} cx={x + (i - (n - 1) / 2) * S * 0.32} cy={y + TOK * 0.18}
-            r={S * 0.14} fill={ORE_VAR[o]} stroke="#000" strokeOpacity={0.3} />
-        ))
-      )}
+      {ORE_ORDER.map((o, i) => (
+        <text
+          key={o}
+          x={x + (i - 1) * S * theme.board.oreCountSpacing}
+          y={y + TOK * theme.board.oreCountOffsetY}
+          textAnchor="middle"
+          fontWeight={800}
+          fontSize={S * theme.board.oreCountFontSize}
+          fill={counts[o] > 0 ? ORE_VAR[o] : "#4b574f"}
+        >
+          {counts[o]}
+        </text>
+      ))}
     </Hoverable>
   );
 }

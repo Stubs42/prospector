@@ -107,6 +107,14 @@ export interface Theme {
        rather than shrinking for longer text */
     statValueFontSize: number;
     statValueOffsetY: number;
+    /** a FREIGHT/SAVED ore cell's 3 per-colour counts (green/yellow/red, always all 3, even
+       when 0) — small enough that the count never grows past the token no matter how much
+       ore is held, unlike drawing one chip per tile (which used to spill past the hex once
+       there were more than a few). Font size + spacing as a fraction of S; offset as a
+       fraction of the token's own radius. */
+    oreCountFontSize: number;
+    oreCountSpacing: number;
+    oreCountOffsetY: number;
   };
   /** the "upgrade card" hex buttons (EquipmentPopup — homecoming and the start-of-game
      draw both use it): the same "small label above a value" shape as a base status cell
@@ -234,6 +242,9 @@ export const theme: Theme = {
     statLabelOffsetY: -0.2,
     statValueFontSize: 0.5,
     statValueOffsetY: 0.25,
+    oreCountFontSize: 0.34,
+    oreCountSpacing: 0.34,
+    oreCountOffsetY: 0.2,
   },
   cards: {
     labelFontSize: 0.62,
