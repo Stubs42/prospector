@@ -99,14 +99,19 @@ export function GameScreen({
         }
         const n = ALL_COLOURS.length;
         const perRoundMs = theme.spin.resourceDurationMs / rounds.length;
+        // one continuous fast->slow curve spans all 3 rounds — round i covers the slice of
+        // that curve from t=i/3 to t=(i+1)/3, so round 2 picks up exactly as fast/slow as
+        // round 1 left off (no reset to fast at each round's start), while each round still
+        // gets an equal time share (perRoundMs) by deriving its own tick count to fit it
+        const delayAt = (t: number) => theme.spin.startIntervalMs + t * t * (theme.spin.endIntervalMs - theme.spin.startIntervalMs);
         const runRound = (roundIdx: number) => {
           if (cancelled) return resolve();
           const round = rounds[roundIdx];
           if (!round) return resolve();
           const { candidates, targetIndex, dotsPrefix } = round;
           const schedule = buildSpinSchedule(n, targetIndex, {
-            startMs: theme.spin.startIntervalMs,
-            endMs: theme.spin.endIntervalMs,
+            startMs: delayAt(roundIdx / rounds.length),
+            endMs: delayAt((roundIdx + 1) / rounds.length),
             totalMs: perRoundMs,
           });
           runSpinSchedule(
