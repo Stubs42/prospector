@@ -10,7 +10,7 @@
  * board space) — no longer anchored to a board cell at all, just always in the same spot.
  */
 import type { BoosterType } from "../../engine/index.js";
-import { ActionBox } from "./ActionBox.js";
+import { ActionBox, HexButton } from "./ActionBox.js";
 import { ASPECT_FILL, ASPECT_TAG } from "./aspects.js";
 import type { PanelButton } from "./BottomPanel.js";
 import { Die } from "./kit.js";
@@ -56,12 +56,12 @@ export function CombatBox({ title, sub, cards, buttons, roll = null }: CombatBox
           {cards.map((c) => {
             const fill = ASPECT_FILL[c.type === "laser" ? "lasers" : "shields"];
             return (
-              <button key={c.id} className="combat-chip" style={{ borderColor: fill }} onClick={c.onClick}>
+              <HexButton key={c.id} className="combat-chip" accent={fill} onClick={c.onClick}>
                 <span className="cc-tag" style={{ color: fill }}>
                   {ASPECT_TAG[c.type === "laser" ? "lasers" : "shields"]}
                 </span>
                 <span className="cc-val">+{c.value}</span>
-              </button>
+              </HexButton>
             );
           })}
         </div>
@@ -88,9 +88,9 @@ export function CombatBox({ title, sub, cards, buttons, roll = null }: CombatBox
       {buttons.length > 0 && (
         <div className="actionbox-buttons">
           {buttons.map((b, i) => (
-            <button key={i} className={b.kind ?? ""} onClick={b.onClick}>
+            <HexButton key={i} kind={b.kind} onClick={b.onClick}>
               {b.label}
-            </button>
+            </HexButton>
           ))}
         </div>
       )}

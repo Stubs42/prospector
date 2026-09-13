@@ -9,8 +9,20 @@
  * `interactive: false` hides the whole button row — there's nothing for the human to do.
  */
 import type { Colour, ShipStats, StatKey } from "../../engine/index.js";
-import { ActionBox } from "./ActionBox.js";
+import { ActionBox, HexButton } from "./ActionBox.js";
 import { ASPECT_ORDER, ASPECT_TAG } from "./aspects.js";
+
+/** a plain shape in a fixed viewBox, not a "‹"/"›" text glyph — a font's own baseline/
+   descender metrics never quite centre a character in its box (see Board.tsx's zoom
+   controls, which hit exactly this and were switched to SVG icons for the same reason) */
+function Chevron({ dir }: { dir: "prev" | "next" }) {
+  const d = dir === "prev" ? "M15 5l-7 7 7 7" : "M9 5l7 7-7 7";
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
+      <path d={d} />
+    </svg>
+  );
+}
 
 export interface ShipPickerProps {
   /** heading shown above the card, e.g. "Select your ship" (+ whose turn, in multi-human) */
@@ -48,9 +60,9 @@ export function ShipPickerPopup({
       <div className="actionbox-title">{title}</div>
       <div className="shippicker-row">
         {interactive && canBrowse && !spinning && (
-          <button className="ship-arrow" onClick={onPrev} aria-label="previous ship">
-            ‹
-          </button>
+          <HexButton className="ship-arrow" onClick={onPrev} aria-label="previous ship">
+            <Chevron dir="prev" />
+          </HexButton>
         )}
         {/* the card itself — a placeholder for real art later, but it should already read
            as "this is the thing being picked", not just floating text */}
@@ -68,21 +80,21 @@ export function ShipPickerPopup({
           </div>
         </div>
         {interactive && canBrowse && !spinning && (
-          <button className="ship-arrow" onClick={onNext} aria-label="next ship">
-            ›
-          </button>
+          <HexButton className="ship-arrow" onClick={onNext} aria-label="next ship">
+            <Chevron dir="next" />
+          </HexButton>
         )}
       </div>
       {interactive && (
         <div className="actionbox-buttons">
           {canBrowse && (
-            <button disabled={spinning} onClick={onRandom}>
+            <HexButton disabled={spinning} onClick={onRandom}>
               🎲 Random
-            </button>
+            </HexButton>
           )}
-          <button className="primary" disabled={spinning} onClick={onSelect}>
+          <HexButton kind="primary" disabled={spinning} onClick={onSelect}>
             Select
-          </button>
+          </HexButton>
         </div>
       )}
     </ActionBox>

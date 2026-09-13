@@ -207,12 +207,35 @@ button.danger { border-color: #6a3a2f; }
 .actionbox-outcome { font-weight: 700; margin-top: 0.15rem; }
 .actionbox-buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center; margin-top: 0.3rem; }
 
+/* every button inside an action box shares the box's own hex silhouette (see
+   ActionBox.tsx's HexButton) instead of the app's plain rounded-rect buttons */
+.hexbutton {
+  position: relative;
+  min-width: 44px; min-height: 30px;
+  background: none; border: none; font: inherit; color: var(--ink);
+  cursor: pointer;
+}
+.hexbutton-hex { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+.hexbutton-hex polygon { fill: #17251f; stroke: var(--line-strong, #3a444e); stroke-width: 1.6; }
+/* "primary" = the safe default (e.g. Cancel) — a little emphasis at rest, same as elsewhere */
+.hexbutton.primary .hexbutton-hex polygon { fill: #26402f; stroke: #3f6f4f; }
+.hexbutton.danger .hexbutton-hex polygon { stroke: #6a3a2f; }
+.hexbutton.danger .hexbutton-content { color: #e08a7a; }
+.hexbutton:hover:not(:disabled) .hexbutton-hex polygon { stroke: var(--gold); }
+.hexbutton:disabled { cursor: default; opacity: 0.4; }
+.hexbutton-content {
+  position: relative;
+  display: flex; align-items: center; justify-content: center; gap: 0.3rem;
+  padding-block: 0.35rem;
+  font-size: 0.78rem; font-weight: 700; white-space: nowrap;
+}
+
 /* confirm dialog: dims the board behind it; the actionbox re-centres itself on top */
 .board-scrim { position: absolute; inset: 0; z-index: 21; background: rgba(4, 10, 7, 0.55); }
 
 /* ship carousel (pickShip stage) */
 .shippicker-row { display: flex; align-items: center; gap: 0.6rem; }
-.ship-arrow { font-size: 1.1rem; padding: 0.2rem 0.6rem; }
+.hexbutton.ship-arrow { min-width: 36px; }
 /* a placeholder frame for the card being picked — real card art comes later */
 .shippicker-card {
   background: rgba(255, 255, 255, 0.03); border: 2px solid; border-radius: 10px;
@@ -225,12 +248,11 @@ button.danger { border-color: #6a3a2f; }
 
 /* combat box (attack/defend staging, dice reveal) */
 .combat-chips { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: center; }
-.combat-chip {
-  display: flex; flex-direction: column; align-items: center; gap: 0.15rem;
-  background: rgba(255, 255, 255, 0.04); border: 1.8px solid; border-radius: 6px;
-  padding: 0.3rem 0.5rem; min-width: 34px;
-}
-.combat-chip:hover { background: rgba(255, 255, 255, 0.1); }
+/* a staged laser/shield chip is a HexButton too, just with its tag+value stacked instead
+   of the usual single-line row of button text */
+.hexbutton.combat-chip { min-width: 34px; }
+.hexbutton.combat-chip .hexbutton-content { flex-direction: column; gap: 0.1rem; }
+.hexbutton.combat-chip:hover .hexbutton-hex polygon { fill: rgba(255, 255, 255, 0.08); }
 .combat-chip .cc-tag { font-size: 0.62rem; font-weight: 700; }
 .combat-chip .cc-val { font-size: 0.95rem; font-weight: 700; }
 .combat-roll { display: flex; align-items: center; gap: 1.2rem; margin-top: 0.2rem; }
