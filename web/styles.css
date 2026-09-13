@@ -147,27 +147,33 @@ button.danger { border-color: #6a3a2f; }
    fixed overlay, like the zoom controls or the status panel — NOT board content, so
    panning/zooming the board never touches it (see HexPopup.tsx's note on why this moved
    out of board space). Centred a little above true middle so it clears the bottom panel.
-   Kept the hexagon silhouette (flattened, pointed left/right — the same shape the old
-   SVG hex buttons used) via clip-path; a plain border can't follow a clip-path, so the
-   "border" is a slightly larger gold hexagon painted behind via ::before instead, and the
-   drop shadow uses `filter` (which does respect the clipped shape) rather than box-shadow
-   (which would just draw a rectangular shadow). The generous side padding keeps text and
-   buttons clear of the two points. */
+   The hex silhouette itself is an SVG polygon (see ActionBox.tsx) sized to the box's real
+   pixels, reproducing the old SVG hex buttons' exact 60°-cut geometry — a plain CSS
+   clip-path's percentages warp that angle as content height changes, which varies a lot
+   here (a two-line message vs. the full combat box). */
 .actionbox {
   position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%);
   z-index: 22;
-  min-width: 280px; max-width: min(440px, 88vw);
-  background: rgba(12, 20, 16, 0.97);
-  clip-path: polygon(8% 0%, 92% 0%, 100% 50%, 92% 100%, 8% 100%, 0% 50%);
+  /* a regular hexagon's side padding grows with height (see ActionBox.tsx) — a tall box
+     (the full combat box) needs real headroom here, or squeezing the width just makes it
+     taller still and needs even more padding */
+  min-width: 280px; max-width: min(560px, 92vw);
+}
+.actionbox-hex { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+.actionbox-hex polygon {
+  fill: rgba(12, 20, 16, 0.97);
+  stroke: var(--gold);
+  stroke-width: 2;
+  stroke-linejoin: round;
   filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.55));
-  padding: 1rem 2.6rem;
+}
+.actionbox-content {
+  position: relative;
+  /* horizontal padding is set inline (ActionBox.tsx) — it depends on the box's own
+     height (a regular hexagon's point cuts in further on a taller box) */
+  padding-block: 1rem;
   display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
   text-align: center; font-size: 0.85rem;
-}
-.actionbox::before {
-  content: ""; position: absolute; inset: -3px; z-index: -1;
-  background: var(--gold);
-  clip-path: polygon(8% 0%, 92% 0%, 100% 50%, 92% 100%, 8% 100%, 0% 50%);
 }
 .actionbox-line { font-weight: 700; font-size: 0.95rem; }
 .actionbox-title { font-weight: 700; font-size: 0.95rem; }

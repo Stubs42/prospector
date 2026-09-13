@@ -9,6 +9,7 @@
  * `interactive: false` hides the whole button row — there's nothing for the human to do.
  */
 import type { Colour, ShipStats, StatKey } from "../../engine/index.js";
+import { ActionBox } from "./ActionBox.js";
 import { ASPECT_ORDER, ASPECT_TAG } from "./aspects.js";
 
 export interface ShipPickerProps {
@@ -43,7 +44,7 @@ export function ShipPickerPopup({
   onRandom,
 }: ShipPickerProps) {
   return (
-    <div className="actionbox shippicker-box">
+    <ActionBox className="shippicker-box">
       <div className="actionbox-title">{title}</div>
       <div className="shippicker-row">
         {interactive && canBrowse && !spinning && (
@@ -84,6 +85,6 @@ export function ShipPickerPopup({
           </button>
         </div>
       )}
-    </div>
+    </ActionBox>
   );
 }

@@ -7,6 +7,8 @@
  * panning could carry it out of view entirely. Living outside that transform, like the
  * zoom controls or the status panel, is what actually fixes it.
  */
+import { ActionBox } from "./ActionBox.js";
+
 export interface HexPopupAction {
   label: string;
   kind?: "primary" | "danger";
@@ -15,7 +17,7 @@ export interface HexPopupAction {
 
 export function HexPopup({ lines, actions }: { lines: string[]; actions?: HexPopupAction[] | undefined }) {
   return (
-    <div className="actionbox">
+    <ActionBox>
       {lines.map((ln, i) => (
         <div key={i} className="actionbox-line">
           {ln}
@@ -30,6 +32,6 @@ export function HexPopup({ lines, actions }: { lines: string[]; actions?: HexPop
           ))}
         </div>
       )}
-    </div>
+    </ActionBox>
   );
 }

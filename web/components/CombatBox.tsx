@@ -10,6 +10,7 @@
  * board space) — no longer anchored to a board cell at all, just always in the same spot.
  */
 import type { BoosterType } from "../../engine/index.js";
+import { ActionBox } from "./ActionBox.js";
 import { ASPECT_FILL, ASPECT_TAG } from "./aspects.js";
 import type { PanelButton } from "./BottomPanel.js";
 import { Die } from "./kit.js";
@@ -46,7 +47,7 @@ export interface CombatBoxProps {
 
 export function CombatBox({ title, sub, cards, buttons, roll = null }: CombatBoxProps) {
   return (
-    <div className="actionbox combatbox-box">
+    <ActionBox className="combatbox-box">
       <div className="actionbox-title">{title}</div>
       {sub && <div className="actionbox-sub">{sub}</div>}
 
@@ -93,6 +94,6 @@ export function CombatBox({ title, sub, cards, buttons, roll = null }: CombatBox
           ))}
         </div>
       )}
-    </div>
+    </ActionBox>
   );
 }
