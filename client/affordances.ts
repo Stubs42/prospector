@@ -50,6 +50,11 @@ export interface Affordances {
      upgrade (whose `mode` tells a GUI whether to auto-spin to a random pick or let the
      player choose); null when nothing is pending */
   equipmentChoice: PendingEquipment | null;
+  /** true when the only progress available right now is an endMove that would strand/lose
+     the ship (mustBurn, no reachable burn target), but a reserve-fuel card in hand could
+     still avoid that by widening the affordable range. A GUI's auto-advance must never fire
+     that endMove on its own here — the player needs a real chance to play the card first. */
+  avoidableShipLoss: boolean;
 }
 
 export interface AffordanceOpts {
@@ -100,5 +105,9 @@ export function affordances(state: GameState, opts: AffordanceOpts = {}): Afford
         : null,
     combat,
     equipmentChoice: state.pendingEquipment ?? null,
+    avoidableShipLoss:
+      !!state.players[state.activePlayerIndex]?.turn.mustBurn &&
+      legal.some((a) => a.type === "endMove") &&
+      legal.some((a) => a.type === "useReserveFuel"),
   };
 }

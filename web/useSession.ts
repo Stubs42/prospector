@@ -234,6 +234,9 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     !state.gameOver &&
     !needPassGate &&
     !activeIsBot &&
+    // never auto-fire the "ship is lost" endMove while a reserve-fuel card could still save
+    // it — see Affordances.avoidableShipLoss
+    !afford.avoidableShipLoss &&
     autoCandidates.length === 1
       ? autoCandidates[0]!
       : null;
