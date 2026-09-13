@@ -10,10 +10,19 @@
  */
 import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 
-/** corner points of a `w`×`h` hexagon, pointed left/right, cut at 60° from horizontal —
-   same formula the old hexButtonPoints used, just driven by the element's real pixel size */
-export function hexFramePoints(w: number, h: number): string {
-  const cut = h / 2 / Math.tan(Math.PI / 3);
+/** the true regular-hexagon cut ratio (point extends this fraction of the height past the
+   flat top/bottom edge, per side) — cut = h * REGULAR_CUT is the old hexButtonPoints' 60°
+   formula. A short, wide button (most of them: "Counter-attack +30" is far wider than
+   tall) barely shows a point at all at that ratio — genuinely hexagonal by the numbers,
+   but reads as a plain rectangle at a glance. Buttons use a deliberately more pronounced
+   ratio instead, trading strict regularity for a shape that's unmistakably a hexagon. */
+const REGULAR_CUT = 1 / (2 * Math.tan(Math.PI / 3));
+const BUTTON_CUT = 0.55;
+
+/** corner points of a `w`×`h` hexagon, pointed left/right, cut `cutRatio * h` past the
+   flat top/bottom edge on each side */
+export function hexFramePoints(w: number, h: number, cutRatio: number = REGULAR_CUT): string {
+  const cut = Math.min(h * cutRatio, w * 0.4); // never let the point eat more than 40% of the width
   const pts: [number, number][] = [
     [0, h / 2],
     [cut, 0],
@@ -35,7 +44,7 @@ interface HexFrame<T extends HTMLElement> {
 
 /** measures `ref`'s own element (via ResizeObserver) and derives the hex polygon size plus
    the horizontal padding its content needs to clear the point on each side */
-function useHexFrame<T extends HTMLElement>(minPad: number): HexFrame<T> {
+function useHexFrame<T extends HTMLElement>(minPad: number, cutRatio: number = REGULAR_CUT): HexFrame<T> {
   const ref = useRef<T>(null);
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   useLayoutEffect(() => {
@@ -47,7 +56,7 @@ function useHexFrame<T extends HTMLElement>(minPad: number): HexFrame<T> {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const cut = size ? size.h / 2 / Math.tan(Math.PI / 3) : 0;
+  const cut = size ? Math.min(size.h * cutRatio, size.w * 0.4) : 0;
   return { ref, size, padX: Math.max(minPad, cut + 6) };
 }
 
@@ -86,7 +95,7 @@ export interface HexButtonProps {
 /** every button inside an action box — same hex silhouette as the box itself, just sized
    to its own (usually much smaller) content instead of measuring separately per caller */
 export function HexButton({ children, onClick, disabled, kind, className, accent, ...aria }: HexButtonProps) {
-  const { ref, size, padX } = useHexFrame<HTMLButtonElement>(10);
+  const { ref, size, padX } = useHexFrame<HTMLButtonElement>(10, BUTTON_CUT);
   return (
     <button
       ref={ref}
@@ -98,7 +107,7 @@ export function HexButton({ children, onClick, disabled, kind, className, accent
     >
       {size && (
         <svg className="hexbutton-hex" viewBox={`0 0 ${size.w} ${size.h}`} preserveAspectRatio="none">
-          <polygon points={hexFramePoints(size.w, size.h)} style={accent ? { stroke: accent } : undefined} />
+          <polygon points={hexFramePoints(size.w, size.h, BUTTON_CUT)} style={accent ? { stroke: accent } : undefined} />
         </svg>
       )}
       <span className="hexbutton-content" style={{ paddingLeft: padX, paddingRight: padX }}>
