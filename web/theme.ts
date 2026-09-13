@@ -107,6 +107,19 @@ export interface Theme {
        rather than shrinking for longer text */
     statValueFontSize: number;
     statValueOffsetY: number;
+    /** the 4 shared "deck" frames sitting just outside the board's own right/left vertex
+       (booster draw + discard on the right, ore supply + equipment draw on the left — see
+       DeckStacks.tsx) — a small card-back-styled rect, its long side parallel to the board
+       edge it sits next to. Width/height/padding/font sizes as a fraction of S, matching
+       every other board-SVG measurement in this file. */
+    deckStack: {
+      width: number;
+      height: number;
+      /** gap between the board's outer vertex and the frame's near edge */
+      padding: number;
+      labelFontSize: number;
+      valueFontSize: number;
+    };
   };
   /** the "upgrade card" hex buttons (EquipmentPopup — homecoming and the start-of-game
      draw both use it): the same "small label above a value" shape as a base status cell
@@ -234,6 +247,13 @@ export const theme: Theme = {
     statLabelOffsetY: -0.2,
     statValueFontSize: 0.5,
     statValueOffsetY: 0.25,
+    deckStack: {
+      width: 1.8,
+      height: 2.7,
+      padding: 0.9,
+      labelFontSize: 0.34,
+      valueFontSize: 0.5,
+    },
   },
   cards: {
     labelFontSize: 0.62,

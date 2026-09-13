@@ -13,6 +13,7 @@ import { hexKey } from "../../engine/hex.js";
 import type { GameState, Hex, Colour, OreColour } from "../../engine/index.js";
 import { SHIP_BOARD_VAR, SHIP_BOARD_HI_VAR, SHIP_BASE_VAR, SHIP_BASE_HI_VAR, ORE_VAR } from "./kit.js";
 import { BaseInfo, type TipFn } from "./BaseInfo.js";
+import { DeckStacks } from "./DeckStacks.js";
 import { ShipMarker } from "./ShipMarker.js";
 import { moveFrame, animDone, type MoveAnim } from "../anim.js";
 import type { Seat } from "../../client/index.js";
@@ -129,8 +130,10 @@ export function Board({
   }
   const xs = cells.map((c) => c.x * S);
   const ys = cells.map((c) => c.y * S);
-  // "fit" viewBox: the whole field + a margin so nothing hugs the frame. Pan/zoom rides on top.
-  const m = 58;
+  // "fit" viewBox: the whole field + a margin so nothing hugs the frame. Pan/zoom rides on
+  // top. Wide enough for DeckStacks' 4 frames, which sit just outside the board's own
+  // left/right vertex.
+  const m = 120;
   const minx = Math.min(...xs) - m;
   const miny = Math.min(...ys) - m;
   const w = Math.max(...xs) - Math.min(...xs) + m * 2;
@@ -633,6 +636,7 @@ export function Board({
 
       {/* table furniture (ship panels, deck counts) — drawn on top so text stays legible */}
       {world && <BaseInfo board={board} state={state} seats={seats} scores={scores} onTip={onTip} rotation={rotation} />}
+      {world && <DeckStacks board={board} state={state} />}
 
     </svg>
       {tip && (

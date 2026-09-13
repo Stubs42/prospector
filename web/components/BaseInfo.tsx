@@ -268,38 +268,6 @@ export function BaseInfo({ board, state, seats, scores, onTip, rotation }: {
             </g>
           );
         })}
-
-      {/* shared supply / deck counts — small text block in the bottom-centre gap */}
-      <g pointerEvents="none">
-      {(() => {
-        const y0 = 1.5 * board.innerRadius * S * 0.62;
-        const rows = [
-          `booster deck ${state.decks.booster.draw.length}`,
-          `equipment deck ${state.decks.equipment.draw.length}`,
-          `supply  ${state.supply.green} / ${state.supply.yellow} / ${state.supply.red}`,
-        ];
-        // this sits in a fixed empty gap on the board, not on any hex — rotate the anchor
-        // point along with everything else so it doesn't end up under rotated furniture
-        const anchor = rotatePoint(0, y0, rotation);
-        const lineOffset = rotatePoint(0, 15, rotation);
-        return (
-          <g>
-            {rows.map((t, i) => (
-              <text
-                key={i}
-                x={anchor.x + lineOffset.x * i}
-                y={anchor.y + lineOffset.y * i}
-                textAnchor="middle"
-                fontSize={11}
-                fill="#7c8b83"
-              >
-                {t}
-              </text>
-            ))}
-          </g>
-        );
-      })()}
-      </g>
     </g>
   );
 }
