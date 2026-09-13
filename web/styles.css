@@ -1,6 +1,4 @@
 :root {
-  --felt: #10201a;
-  --felt-edge: #0a1712;
   --panel: #17251f;
   --panel-2: #1e2f28;
   --line: #2c4238;
@@ -27,10 +25,16 @@
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; overflow: hidden; }
 body {
-  background: radial-gradient(120% 100% at 50% 0%, var(--felt) 0%, var(--felt-edge) 100%);
+  /* a plain fallback colour underneath the starfield canvas — it paints over this the
+     instant it mounts, but this avoids a flash of white before that first frame */
+  background: #030705;
   color: var(--ink);
   font-size: 14px;
 }
+
+/* the window's backdrop: fixed to the viewport, entirely behind everything else, and
+   untouched by the board's own pan/zoom/rotate (see Starfield.tsx) */
+.starfield { position: fixed; inset: 0; z-index: -1; display: block; pointer-events: none; }
 
 .app { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
 
@@ -64,8 +68,9 @@ button.danger { border-color: #6a3a2f; }
 
 /* board-only layout: the board fills the stage; overlays float above it */
 .stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
-/* a little breathing room so the board never butts against the window frame */
-.stage > .boardwrap { position: absolute; inset: 14px; }
+/* the board's own "fit" viewBox already keeps a margin around the field (see Board.tsx's
+   `m`), so the viewport itself can fill the whole window — no extra CSS inset needed */
+.stage > .boardwrap { position: absolute; inset: 0; }
 .boardwrap > svg { display: block; width: 100%; height: 100%; }
 
 .zoomctl {

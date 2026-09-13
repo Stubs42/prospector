@@ -263,6 +263,20 @@ export function Board({
         }
       }}
     >
+      <defs>
+        {/* the grid's own edges read as a metal rod, not a flat painted line — a light-to-
+           dark sweep across the stroke plus a soft drop-shadow on the whole grid gives it
+           a slightly raised, cast-metal feel without per-edge lighting math */}
+        <linearGradient id="rodGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#7c8f85" />
+          <stop offset="45%" stopColor="#3c4f45" />
+          <stop offset="100%" stopColor="#1a2620" />
+        </linearGradient>
+        <filter id="rodDepth" x="-5%" y="-5%" width="110%" height="110%">
+          <feDropShadow dx="0" dy="0.6" stdDeviation="0.5" floodColor="#000" floodOpacity="0.45" />
+        </filter>
+      </defs>
+      <g filter="url(#rodDepth)">
       {cells.map((c) => {
         const { x: cx, y: cy } = rotate({ x: c.x * S, y: c.y * S });
         const key = hexKey(c);
@@ -276,7 +290,10 @@ export function Board({
           : c.region === "outer"
             ? "#1c2b25"
             : "#0e1b15";
-        const stroke = isCellHi ? "var(--gold)" : assigned ? SHIP_VAR[assigned] : "#2b4034";
+        // the plain grid edge reads as a metal rod (a gradient stroke, see <defs>), not a
+        // flat painted line — a highlighted or base-owned cell still overrides it with a
+        // plain functional colour, since those need to stay unambiguous at a glance
+        const stroke = isCellHi ? "var(--gold)" : assigned ? SHIP_VAR[assigned] : "url(#rodGrad)";
         const clickable = isHi || scrapSet.has(key);
         // a base-pick cell shows a tooltip, not its own hover highlight — the region
         // outline (below) is the only visual indicator for "you can pick this"
@@ -284,11 +301,13 @@ export function Board({
         return (
           <polygon
             key={key}
-            points={hexPoints(cx, cy, S * 0.94)}
+            // full size (no gap) — every edge is shared with its neighbour, one continuous
+            // hex grid rather than separated tiles floating with a gap between them
+            points={hexPoints(cx, cy, S)}
             fill={fill}
             fillOpacity={assigned ? 0.85 : 1}
             stroke={stroke}
-            strokeWidth={isCellHi ? 2.5 : assigned ? 1.6 : 1}
+            strokeWidth={isCellHi ? 2.5 : assigned ? 1.6 : 1.4}
             strokeOpacity={assigned ? 0.9 : 1}
             className={clickable ? (isBaseCell ? "cell-hit-quiet" : "cell-hit") : undefined}
             onClick={clickable ? clicked(() => onCell({ q: c.q, r: c.r })) : undefined}
@@ -300,6 +319,7 @@ export function Board({
           />
         );
       })}
+      </g>
 
       {/* base regions being picked: one pulsing outline per free base (the whole region is
          the click target, not each of its 4 cells), plus a solid outline for the one region
