@@ -94,8 +94,8 @@ function Shell({ x, y, col, ink, active }: {
 
 function Tag({ x, y, text, col }: { x: number; y: number; text: string; col: string }) {
   return (
-    <text x={x} y={y - TOK * 0.42} textAnchor="middle" fill={col} opacity={0.85}
-      fontSize={S * 0.23} fontWeight={700} style={{ letterSpacing: "0.04em" }}>
+    <text x={x} y={y + TOK * theme.board.statLabelOffsetY} textAnchor="middle" fill={col} opacity={0.85}
+      fontSize={S * theme.board.statLabelFontSize} fontWeight={700} style={{ letterSpacing: "0.04em" }}>
       {text}
     </text>
   );
@@ -111,8 +111,8 @@ function Token({ c, col, tag, value, ink, active, tip, onTip, rotation }: {
     <Hoverable tip={tip} onTip={onTip}>
       <Shell x={x} y={y} col={col} ink={ink} active={active} />
       <Tag x={x} y={y} text={tag} col={ink ?? col} />
-      <text x={x} y={y + TOK * 0.2} textAnchor="middle" dominantBaseline="central"
-        fill={ink ?? col} fontWeight={800} fontSize={value.length > 2 ? S * 0.44 : S * 0.6}>
+      <text x={x} y={y + TOK * theme.board.statValueOffsetY} textAnchor="middle" dominantBaseline="central"
+        fill={ink ?? col} fontWeight={800} fontSize={S * theme.board.statValueFontSize}>
         {value}
       </text>
     </Hoverable>
@@ -126,13 +126,12 @@ function RatioToken({ c, col, tag, cur, max, active, tip, onTip, gradeCur, warnO
 }) {
   const { x, y } = rotatePoint(c.x * S, c.y * S, rotation);
   const curCol = warnOver && cur > max ? "#c1573c" : gradeCur ? grade(max ? cur / max : 0) : col;
-  const txt = `${cur}/${max}`;
   return (
     <Hoverable tip={tip} onTip={onTip}>
       <Shell x={x} y={y} col={col} active={active} />
       <Tag x={x} y={y} text={tag} col={col} />
-      <text x={x} y={y + TOK * 0.2} textAnchor="middle" dominantBaseline="central"
-        fontWeight={800} fontSize={txt.length > 3 ? S * 0.38 : S * 0.5}>
+      <text x={x} y={y + TOK * theme.board.statValueOffsetY} textAnchor="middle" dominantBaseline="central"
+        fontWeight={800} fontSize={S * theme.board.statValueFontSize}>
         <tspan fill={curCol}>{cur}</tspan>
         <tspan fill={col} opacity={0.6}>/{max}</tspan>
       </text>

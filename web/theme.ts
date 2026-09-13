@@ -87,6 +87,15 @@ export interface Theme {
     /** stroke width for the status cell that's the active player's own (a bit heavier, to
        stand out) */
     statTokenActiveStrokeWidth: number;
+    /** the small label above a status cell's value (e.g. "SHIELD", "LOAD") — font size as
+       a fraction of S, vertical offset as a fraction of the token's own radius (negative =
+       above the cell's centre) */
+    statLabelFontSize: number;
+    statLabelOffsetY: number;
+    /** the value itself (e.g. "2" or "3/5") — one fixed size for every status cell now,
+       rather than shrinking for longer text */
+    statValueFontSize: number;
+    statValueOffsetY: number;
   };
   /** timing shared by every "lucky wheel" spin (base pick, ship pick, the start-player
      roll-off, each coordinate-dice round) — see spin.ts's buildSpinSchedule */
@@ -178,6 +187,10 @@ export const theme: Theme = {
     statTokenRadius: 0.92,
     statTokenStrokeWidth: 1,
     statTokenActiveStrokeWidth: 2,
+    statLabelFontSize: 0.26,
+    statLabelOffsetY: -0.34,
+    statValueFontSize: 0.5,
+    statValueOffsetY: 0.2,
   },
   spin: {
     startIntervalMs: 70,
