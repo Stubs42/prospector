@@ -20,6 +20,7 @@ import { Settings } from "./Settings.js";
 import { ShipPickerPopup } from "./ShipPickerPopup.js";
 import { StatusPanel } from "./StatusPanel.js";
 import type { Prefs } from "../prefs.js";
+import { SkipGate } from "../spin.js";
 import type { Session } from "../useSession.js";
 
 export function SetupScreen({
@@ -49,6 +50,12 @@ export function SetupScreen({
   const canPickNow = setup.stage === "pickBase" && !currentIsBot && !s.needPassGate;
   const canPickShipNow = setup.stage === "pickShip" && !currentIsBot && !s.needPassGate;
 
+  // whichever "already decided" spin is currently running (base pick, ship pick, the
+  // roll-off) — a click anywhere on the board fast-forwards it to its result, since none
+  // of these were ever actually suspenseful at animation time (see spin.ts's SkipGate)
+  const skipGateRef = useRef<SkipGate | null>(null);
+  const onSkipAnimation = () => skipGateRef.current?.skip();
+
   // a seat's "move" is its base pick immediately followed by its ship pick — log both lines
   // before resetting for the next seat
   const setupAction = setup.stage === "pickBase" ? "Picking a base" : "Picking a ship";
@@ -74,7 +81,7 @@ export function SetupScreen({
   const highlightCells =
     canPickNow && !spinning ? freeBases.flatMap((c) => [...board.baseCells(c)]) : [];
 
-  function runBaseSpin() {
+  async function runBaseSpin() {
     if (freeBases.length === 0) return;
     if (freeBases.length === 1) {
       s.pickBase(freeBases[0]!);
@@ -88,19 +95,17 @@ export function SetupScreen({
       const idx = ((startIdx - stepsFromEnd) % freeBases.length + freeBases.length) % freeBases.length;
       return freeBases[idx]!;
     });
-    const tick = (k: number) => {
+    const gate = new SkipGate();
+    skipGateRef.current = gate;
+    for (let k = 0; k < seq.length; k++) {
       setSpinning(seq[k]!);
-      if (k < seq.length - 1) {
-        const t = k / (seq.length - 1);
-        window.setTimeout(() => tick(k + 1), 70 + t * t * 260); // ease-out: fast, then slow to a stop
-      } else {
-        window.setTimeout(() => {
-          setSpinning(null);
-          s.pickBase(target);
-        }, 450);
-      }
-    };
-    tick(0);
+      const last = k === seq.length - 1;
+      const t = k / (seq.length - 1);
+      await gate.wait(last ? 450 : 70 + t * t * 260); // ease-out: fast, then slow to a stop
+    }
+    if (skipGateRef.current === gate) skipGateRef.current = null;
+    setSpinning(null);
+    s.pickBase(target);
   }
   function spinRandomBase() {
     if (!canPickNow || spinning) return;
@@ -139,7 +144,7 @@ export function SetupScreen({
   // the same lucky-wheel motion as "random base": spin through the free ships, decelerating,
   // and confirm whichever one it lands on. Used for both the human's "🎲 Random" button and
   // a bot's own pickShip turn (below).
-  function runShipSpin() {
+  async function runShipSpin() {
     if (freeShips.length === 0) return;
     if (freeShips.length === 1) {
       s.pickShip(freeShips[0]!);
@@ -149,20 +154,18 @@ export function SetupScreen({
     const target = shipAt(targetIdx)!;
     const ticks = freeShips.length * 2 + 6;
     setShipSpinning(true);
-    const tick = (k: number) => {
+    const gate = new SkipGate();
+    skipGateRef.current = gate;
+    for (let k = 0; k < ticks; k++) {
       const stepsFromEnd = ticks - 1 - k;
       setShipIndex(targetIdx - stepsFromEnd);
-      if (k < ticks - 1) {
-        const t = k / (ticks - 1);
-        window.setTimeout(() => tick(k + 1), 70 + t * t * 260);
-      } else {
-        window.setTimeout(() => {
-          setShipSpinning(false);
-          s.pickShip(target);
-        }, 450);
-      }
-    };
-    tick(0);
+      const last = k === ticks - 1;
+      const t = k / (ticks - 1);
+      await gate.wait(last ? 450 : 70 + t * t * 260);
+    }
+    if (skipGateRef.current === gate) skipGateRef.current = null;
+    setShipSpinning(false);
+    s.pickShip(target);
   }
   function spinRandomShip() {
     if (!canPickShipNow || shipSpinning || freeShips.length < 2) return;
@@ -202,19 +205,25 @@ export function SetupScreen({
     const bases = setup.bases.map((b) => b!); // every seat has one by now
     const startIdx = setup.startSeat!;
     const ticks = bases.length * 2 + 6;
-    const tick = (k: number) => {
-      const stepsFromEnd = ticks - 1 - k;
-      const idx = ((startIdx - stepsFromEnd) % bases.length + bases.length) % bases.length;
-      setRollOffBase(bases[idx]!);
-      if (k < ticks - 1) {
-        const t = k / (ticks - 1);
-        window.setTimeout(() => tick(k + 1), 70 + t * t * 260);
-      } else {
-        setRollOffLanded(true);
-        window.setTimeout(() => s.finishSetup(), 1100); // linger on the winner, then open the game
+    const gate = new SkipGate();
+    skipGateRef.current = gate;
+    (async () => {
+      for (let k = 0; k < ticks; k++) {
+        const stepsFromEnd = ticks - 1 - k;
+        const idx = ((startIdx - stepsFromEnd) % bases.length + bases.length) % bases.length;
+        setRollOffBase(bases[idx]!);
+        const last = k === ticks - 1;
+        if (!last) {
+          const t = k / (ticks - 1);
+          await gate.wait(70 + t * t * 260);
+        } else {
+          setRollOffLanded(true);
+          await gate.wait(1100); // linger on the winner, then open the game
+        }
       }
-    };
-    tick(0);
+      if (skipGateRef.current === gate) skipGateRef.current = null;
+      s.finishSetup();
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setup.stage]);
   const rollOffActive = setup.stage === "rollOff";
@@ -293,6 +302,7 @@ export function SetupScreen({
           onMoveAnimEnd={() => {}}
           onCell={onCell}
           onCellHover={() => {}}
+          onSkipAnimation={spinning || shipSpinning || rollOffActive ? onSkipAnimation : null}
         />
 
         {/* guidance popup / ship picker: fixed overlays, like the zoom controls or the

@@ -17,7 +17,7 @@ import { LogOverlay } from "./LogOverlay.js";
 import { Settings } from "./Settings.js";
 import { StatusPanel } from "./StatusPanel.js";
 import type { Prefs } from "../prefs.js";
-import { buildSpinSchedule, runSpinSchedule } from "../spin.js";
+import { buildSpinSchedule, runSpinSchedule, SkipGate } from "../spin.js";
 import { theme } from "../theme.js";
 import type { Session } from "../useSession.js";
 
@@ -54,6 +54,12 @@ export function GameScreen({
   const mode = state.config.modes.prospector;
   const sc = score(state);
 
+  // whichever "everything's already decided, this is just cosmetic suspense" animation is
+  // currently playing (resource placement, the combat dice reveal) — clicking anywhere on
+  // the board fast-forwards it straight to its already-known result, see spin.ts's SkipGate
+  const skipGateRef = useRef<SkipGate | null>(null);
+  const onSkipAnimation = () => skipGateRef.current?.skip();
+
   // --- initial resource placement: a one-time reveal, right when the real game opens -----
   // populateGame already placed every resource atomically; this replays each one's own
   // coordinate-dice roll (resourceSeeded log entries, see engine/game.ts) as three separate
@@ -72,77 +78,68 @@ export function GameScreen({
     if (!placing) return;
     s.setHoldAdvance(true);
     let cancelled = false;
-    const sleep = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));
+    const gate = new SkipGate();
+    skipGateRef.current = gate;
     // spins all 3 rounds (ring 3, 2, 1) for one tile, each round taking the same real time
     // (theme.spin.resourceDurationMs split evenly in 3) and each independently decelerating
     // fast-to-slow — see spin.ts's buildSpinSchedule, shared with every other lucky-wheel
-    // spin in the app.
-    const spinAllThree = (dice: { step: number; colour: Colour }[]): Promise<void> =>
-      new Promise((resolve) => {
-        // the 3 rounds' candidates/target/center are already fully determined (the dice
-        // are the real, already-decided result) — precompute them all up front so the
-        // animation is just replaying a known sequence
-        let pt: Hex = { q: 0, r: 0 };
-        let dotsSoFar: Hex[] = [pt];
-        const rounds = dice.map((die) => {
-          const candidates = ALL_COLOURS.map((c) => add(pt, scale(board.directionOf(c), die.step)));
-          const targetIndex = ALL_COLOURS.indexOf(die.colour);
-          const dotsPrefix = dotsSoFar;
-          pt = candidates[targetIndex]!;
-          dotsSoFar = [...dotsSoFar, pt];
-          return { candidates, targetIndex, dotsPrefix };
-        });
-        if (reducedMotion) {
-          setSpinPath({ dots: dotsSoFar, live: null });
-          window.setTimeout(resolve, 40);
-          return;
-        }
-        const n = ALL_COLOURS.length;
-        const perRoundMs = theme.spin.resourceDurationMs / rounds.length;
-        // one continuous fast->slow curve spans all 3 rounds — round i covers the slice of
-        // that curve from t=i/3 to t=(i+1)/3, so round 2 picks up exactly as fast/slow as
-        // round 1 left off (no reset to fast at each round's start), while each round still
-        // gets an equal time share (perRoundMs) by deriving its own tick count to fit it
-        const delayAt = (t: number) => theme.spin.startIntervalMs + t * t * (theme.spin.endIntervalMs - theme.spin.startIntervalMs);
-        const runRound = (roundIdx: number) => {
-          if (cancelled) return resolve();
-          const round = rounds[roundIdx];
-          if (!round) return resolve();
-          const { candidates, targetIndex, dotsPrefix } = round;
-          const schedule = buildSpinSchedule(n, targetIndex, {
-            startMs: delayAt(roundIdx / rounds.length),
-            endMs: delayAt((roundIdx + 1) / rounds.length),
-            totalMs: perRoundMs,
-          });
-          runSpinSchedule(
-            schedule,
-            (i) => setSpinPath({ dots: dotsPrefix, live: candidates[i]! }),
-            () => cancelled,
-          ).then(() => {
-            if (cancelled) return resolve();
-            const landed = candidates[targetIndex]!;
-            const isLastRound = roundIdx + 1 >= rounds.length;
-            // no pause here at all — the next round's own spin starts immediately, right
-            // from the point this one just landed on, so the whole 3-round reveal reads as
-            // one unbroken motion. The very last round clears the live mark, since nothing
-            // spins again after it.
-            setSpinPath({ dots: [...dotsPrefix, landed], live: isLastRound ? null : landed });
-            if (!isLastRound) runRound(roundIdx + 1);
-            else resolve();
-          });
-        };
-        runRound(0);
+    // spin in the app. Every wait goes through `gate`, so a click anywhere on the board
+    // (see onSkipAnimation) jumps straight through the rest of it to the real result.
+    const spinAllThree = async (dice: { step: number; colour: Colour }[]): Promise<void> => {
+      // the 3 rounds' candidates/target/center are already fully determined (the dice
+      // are the real, already-decided result) — precompute them all up front so the
+      // animation is just replaying a known sequence
+      let pt: Hex = { q: 0, r: 0 };
+      let dotsSoFar: Hex[] = [pt];
+      const rounds = dice.map((die) => {
+        const candidates = ALL_COLOURS.map((c) => add(pt, scale(board.directionOf(c), die.step)));
+        const targetIndex = ALL_COLOURS.indexOf(die.colour);
+        const dotsPrefix = dotsSoFar;
+        pt = candidates[targetIndex]!;
+        dotsSoFar = [...dotsSoFar, pt];
+        return { candidates, targetIndex, dotsPrefix };
       });
+      if (reducedMotion) {
+        setSpinPath({ dots: dotsSoFar, live: null });
+        await gate.wait(40);
+        return;
+      }
+      const n = ALL_COLOURS.length;
+      const perRoundMs = theme.spin.resourceDurationMs / rounds.length;
+      // one continuous fast->slow curve spans all 3 rounds — round i covers the slice of
+      // that curve from t=i/3 to t=(i+1)/3, so round 2 picks up exactly as fast/slow as
+      // round 1 left off (no reset to fast at each round's start), while each round still
+      // gets an equal time share (perRoundMs) by deriving its own tick count to fit it
+      const delayAt = (t: number) => theme.spin.startIntervalMs + t * t * (theme.spin.endIntervalMs - theme.spin.startIntervalMs);
+      for (let roundIdx = 0; roundIdx < rounds.length; roundIdx++) {
+        if (cancelled) return;
+        const { candidates, targetIndex, dotsPrefix } = rounds[roundIdx]!;
+        const schedule = buildSpinSchedule(n, targetIndex, {
+          startMs: delayAt(roundIdx / rounds.length),
+          endMs: delayAt((roundIdx + 1) / rounds.length),
+          totalMs: perRoundMs,
+        });
+        await runSpinSchedule(schedule, (i) => setSpinPath({ dots: dotsPrefix, live: candidates[i]! }), () => cancelled, gate);
+        if (cancelled) return;
+        const landed = candidates[targetIndex]!;
+        const isLastRound = roundIdx + 1 >= rounds.length;
+        // no pause here at all — the next round's own spin starts immediately, right from
+        // the point this one just landed on, so the whole 3-round reveal reads as one
+        // unbroken motion. The very last round clears the live mark, since nothing spins
+        // again after it.
+        setSpinPath({ dots: [...dotsPrefix, landed], live: isLastRound ? null : landed });
+      }
+    };
     (async () => {
       for (const entry of seedEntries) {
         const d = entry.detail as { cell: Hex; dice: { step: number; colour: Colour }[] };
         const dice = [...d.dice].sort((a, b) => b.step - a.step); // coarse to fine: ring 3, 2, 1
         await spinAllThree(dice);
         if (cancelled) return;
-        await sleep(reducedMotion ? 20 : 250); // let the finished path linger a beat
+        await gate.wait(reducedMotion ? 20 : 250); // let the finished path linger a beat
         setRevealed((r) => new Set(r).add(hexKey(d.cell)));
         setSpinPath(null);
-        await sleep(reducedMotion ? 20 : 200);
+        await gate.wait(reducedMotion ? 20 : 200);
       }
       if (!cancelled) {
         setPlacing(false);
@@ -151,6 +148,7 @@ export function GameScreen({
     })();
     return () => {
       cancelled = true;
+      if (skipGateRef.current === gate) skipGateRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -200,6 +198,8 @@ export function GameScreen({
     };
     s.setHoldAdvance(true);
     let cancelled = false;
+    const gate = new SkipGate();
+    skipGateRef.current = gate;
     setCombatReveal({
       attackerId: d.attacker,
       defenderId: d.defender,
@@ -215,30 +215,26 @@ export function GameScreen({
       defenceSettled: false,
       showOutcome: false,
     });
-    const sleep = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));
     // cycles random faces, ease-out deceleration, landing on `real` on the last tick —
-    // same shape as every other lucky-wheel spin, just over 1-6 faces instead of cells
-    const spin = (real: number, apply: (face: number, settled: boolean) => void): Promise<void> =>
-      new Promise((resolve) => {
-        if (reducedMotion) {
-          apply(real, true);
-          window.setTimeout(resolve, 40);
-          return;
-        }
-        const ticks = 14;
-        const tick = (k: number) => {
-          if (cancelled) return resolve();
-          const last = k === ticks - 1;
-          apply(last ? real : 1 + Math.floor(Math.random() * 6), last);
-          if (!last) {
-            const t = k / (ticks - 1);
-            window.setTimeout(() => tick(k + 1), 40 + t * t * 160);
-          } else {
-            window.setTimeout(resolve, 400);
-          }
-        };
-        tick(0);
-      });
+    // same shape as every other lucky-wheel spin, just over 1-6 faces instead of cells.
+    // Every wait goes through `gate`, so a click anywhere on the board (onSkipAnimation)
+    // jumps straight to the real roll — it was already decided the instant combat
+    // resolved, this is purely the reveal.
+    const spin = async (real: number, apply: (face: number, settled: boolean) => void): Promise<void> => {
+      if (reducedMotion) {
+        apply(real, true);
+        await gate.wait(40);
+        return;
+      }
+      const ticks = 14;
+      for (let k = 0; k < ticks; k++) {
+        if (cancelled) return;
+        const last = k === ticks - 1;
+        apply(last ? real : 1 + Math.floor(Math.random() * 6), last);
+        const t = k / (ticks - 1);
+        await gate.wait(last ? 400 : 40 + t * t * 160);
+      }
+    };
     (async () => {
       await spin(d.attackDie, (face, settled) =>
         setCombatReveal((cr) => (cr ? { ...cr, attackFace: face, attackSettled: settled } : cr)),
@@ -249,13 +245,14 @@ export function GameScreen({
       );
       if (cancelled) return;
       setCombatReveal((cr) => (cr ? { ...cr, showOutcome: true } : cr));
-      await sleep(reducedMotion ? 30 : 1100);
+      await gate.wait(reducedMotion ? 30 : 1100);
       if (cancelled) return;
       setCombatReveal(null);
       s.setHoldAdvance(false);
     })();
     return () => {
       cancelled = true;
+      if (skipGateRef.current === gate) skipGateRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.log.length]);
@@ -582,6 +579,7 @@ export function GameScreen({
           onMoveAnimEnd={s.endMoveAnim}
           onCell={onCell}
           onCellHover={setHoverCell}
+          onSkipAnimation={placing || combatReveal ? onSkipAnimation : null}
         />
 
         {/* guidance popup / combat box: fixed overlays, like the zoom controls or the status

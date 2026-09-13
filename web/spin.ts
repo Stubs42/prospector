@@ -41,19 +41,52 @@ export function buildSpinSchedule(n: number, targetIndex: number, cfg: { startMs
   return { seq, delays };
 }
 
-/** Runs a built schedule, calling `onTick` with each candidate index in turn, resolving
-   once the last one has shown. `cancelled()` is checked before every tick and timeout. */
-export function runSpinSchedule(schedule: SpinSchedule, onTick: (index: number) => void, cancelled: () => boolean): Promise<void> {
-  return new Promise((resolve) => {
-    const tick = (k: number) => {
-      if (cancelled()) return resolve();
-      onTick(schedule.seq[k]!);
-      if (k < schedule.seq.length - 1) {
-        window.setTimeout(() => tick(k + 1), schedule.delays[k]!);
-      } else {
+/**
+ * A "skip the rest of this animation" gate. Every outcome here is already decided before
+ * the animation starts (the dice/target are real, not rolled live) — a spin is purely
+ * cosmetic suspense, so there's nothing wrong with cutting it short. `wait(ms)` behaves
+ * like a plain sleep until `skip()` is called, at which point it (and every subsequent
+ * `wait` on the same gate) resolves immediately — one click fast-forwards not just the
+ * current tick but the rest of a whole multi-step reveal (e.g. all 3 coordinate-dice
+ * rounds, or every remaining tile), since impatience rarely means "skip just one step."
+ */
+export class SkipGate {
+  private skipped = false;
+  private pending: (() => void) | null = null;
+
+  wait(ms: number): Promise<void> {
+    if (this.skipped) return Promise.resolve();
+    return new Promise((resolve) => {
+      const id = window.setTimeout(() => {
+        this.pending = null;
         resolve();
-      }
-    };
-    tick(0);
-  });
+      }, ms);
+      this.pending = () => {
+        window.clearTimeout(id);
+        this.pending = null;
+        resolve();
+      };
+    });
+  }
+
+  skip(): void {
+    this.skipped = true;
+    this.pending?.();
+  }
+}
+
+/** Runs a built schedule, calling `onTick` with each candidate index in turn, resolving
+   once the last one has shown. `cancelled()` is checked before every tick; `gate` lets the
+   whole thing be fast-forwarded to its landing (see SkipGate). */
+export async function runSpinSchedule(
+  schedule: SpinSchedule,
+  onTick: (index: number) => void,
+  cancelled: () => boolean,
+  gate: SkipGate,
+): Promise<void> {
+  for (let k = 0; k < schedule.seq.length; k++) {
+    if (cancelled()) return;
+    onTick(schedule.seq[k]!);
+    if (k < schedule.seq.length - 1) await gate.wait(schedule.delays[k]!);
+  }
 }

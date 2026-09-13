@@ -79,6 +79,10 @@ export interface BoardProps {
   onMoveAnimEnd: () => void;
   onCell: (h: Hex) => void;
   onCellHover: (h: Hex | null) => void;
+  /** non-null while a "purely cosmetic, already-decided" animation is playing (a spin, a
+     dice reveal) — a click anywhere on the board fast-forwards it to the result instead of
+     hitting whatever's normally under the cursor */
+  onSkipAnimation?: (() => void) | null;
 }
 
 /** cost 0 = free (green), 1 = yellow, 2 = orange, 3 = red */
@@ -108,6 +112,7 @@ export function Board({
   onMoveAnimEnd,
   onCell,
   onCellHover,
+  onSkipAnimation = null,
 }: BoardProps) {
   const board = boardFor(state);
   const cells = board.allCells();
@@ -300,6 +305,14 @@ export function Board({
       onPointerCancel={endPan}
       onDoubleClick={fit}
       onClickCapture={(e) => {
+        // an "everything here is already decided" animation is running (a lucky-wheel
+        // spin, a dice reveal) — a click anywhere fast-forwards straight to its result,
+        // taking priority over (and pre-empting) whatever that click would otherwise hit
+        if (onSkipAnimation) {
+          e.stopPropagation();
+          onSkipAnimation();
+          return;
+        }
         if (pannedRef.current) {
           e.stopPropagation();
           pannedRef.current = false;
