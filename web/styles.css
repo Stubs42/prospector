@@ -97,13 +97,14 @@ button.danger { border-color: #6a3a2f; }
 .zoomctl button {
   width: 30px; height: 30px; padding: 0;
   /* these are text glyphs, not real icons — without explicit centring a <button>'s
-     default (inline/baseline) layout leaves the character sitting up-and-left of true
-     centre in its box. line-height: 0 (not 1) matters too: at line-height 1 the glyph's
-     line box still reserves its font's normal descender space below the baseline, which
-     these symbols never use, so flex's align-items: center visibly centers an empty box
-     instead of the glyph's own ink — collapsing it pulls the glyph down to true centre. */
+     default (inline/baseline) layout leaves the character off true centre in its box.
+     line-height: 1 alone left every glyph sitting a few px high (its line box still
+     reserves the font's usual descender space below the baseline, which none of these
+     symbols use); line-height: 0 collapsed that but overshot a little low. Splitting the
+     difference with a small upward nudge on top of the collapsed line-height. */
   display: flex; align-items: center; justify-content: center;
   font-size: 1.05rem; line-height: 0;
+  transform: translateY(-1px);
   background: rgba(14, 24, 19, 0.9); border: 1px solid var(--line);
   color: var(--ink); border-radius: 7px;
 }
