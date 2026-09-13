@@ -17,6 +17,8 @@ import { LogOverlay } from "./LogOverlay.js";
 import { Settings } from "./Settings.js";
 import { StatusPanel } from "./StatusPanel.js";
 import type { Prefs } from "../prefs.js";
+import { buildSpinSchedule, runSpinSchedule } from "../spin.js";
+import { theme } from "../theme.js";
 import type { Session } from "../useSession.js";
 
 /** how many lines of "what happened this move" the status panel keeps before trimming */
@@ -71,16 +73,15 @@ export function GameScreen({
     s.setHoldAdvance(true);
     let cancelled = false;
     const sleep = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));
-    // spins all 3 rounds (ring 3, 2, 1) for one tile as a SINGLE continuous deceleration —
-    // fast at the very first tick of round 1, slowest at the last tick of round 3 — rather
-    // than each round separately easing out and resetting to fast at the next round's
-    // start. That's what actually sells "narrowing in": the whole reveal reads as one
-    // motion settling down, not three independent spins back to back.
+    // spins all 3 rounds (ring 3, 2, 1) for one tile, each round taking the same real time
+    // (theme.spin.resourceDurationMs split evenly in 3) and each independently decelerating
+    // fast-to-slow — see spin.ts's buildSpinSchedule, shared with every other lucky-wheel
+    // spin in the app.
     const spinAllThree = (dice: { step: number; colour: Colour }[]): Promise<void> =>
       new Promise((resolve) => {
         // the 3 rounds' candidates/target/center are already fully determined (the dice
         // are the real, already-decided result) — precompute them all up front so the
-        // animation is just replaying a known sequence, same as a single round always was
+        // animation is just replaying a known sequence
         let pt: Hex = { q: 0, r: 0 };
         let dotsSoFar: Hex[] = [pt];
         const rounds = dice.map((die) => {
@@ -97,33 +98,27 @@ export function GameScreen({
           return;
         }
         const n = ALL_COLOURS.length;
-        const ticksPerRound = n * 2 + 6; // a couple of laps, then a settling lap onto target
-        const totalTicks = ticksPerRound * rounds.length;
-        let globalK = 0;
+        const perRoundMs = theme.spin.resourceDurationMs / rounds.length;
         const runRound = (roundIdx: number) => {
           if (cancelled) return resolve();
           const round = rounds[roundIdx];
           if (!round) return resolve();
           const { candidates, targetIndex, dotsPrefix } = round;
-          const seq = Array.from({ length: ticksPerRound }, (_, k) => {
-            const stepsFromEnd = ticksPerRound - 1 - k;
-            return ((targetIndex - stepsFromEnd) % n + n) % n;
+          const schedule = buildSpinSchedule(n, targetIndex, {
+            startMs: theme.spin.startIntervalMs,
+            endMs: theme.spin.endIntervalMs,
+            totalMs: perRoundMs,
           });
-          const tick = (k: number) => {
+          runSpinSchedule(
+            schedule,
+            (i) => setSpinPath({ dots: dotsPrefix, live: candidates[i]! }),
+            () => cancelled,
+          ).then(() => {
             if (cancelled) return resolve();
-            setSpinPath({ dots: dotsPrefix, live: candidates[seq[k]!]! });
-            if (k < seq.length - 1) {
-              const t = globalK / (totalTicks - 1); // progress across ALL 3 rounds
-              globalK++;
-              window.setTimeout(() => tick(k + 1), 70 + t * t * 260);
-            } else {
-              globalK++;
-              setSpinPath({ dots: [...dotsPrefix, candidates[targetIndex]!], live: null });
-              if (roundIdx + 1 < rounds.length) window.setTimeout(() => runRound(roundIdx + 1), 320);
-              else resolve();
-            }
-          };
-          tick(0);
+            setSpinPath({ dots: [...dotsPrefix, candidates[targetIndex]!], live: null });
+            if (roundIdx + 1 < rounds.length) window.setTimeout(() => runRound(roundIdx + 1), theme.spin.settleMs);
+            else resolve();
+          });
         };
         runRound(0);
       });

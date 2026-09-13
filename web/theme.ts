@@ -80,6 +80,23 @@ export interface Theme {
     spinPathDotRadius: number;
     spinPathStrokeWidth: number;
   };
+  /** timing shared by every "lucky wheel" spin (base pick, ship pick, the start-player
+     roll-off, each coordinate-dice round) — see spin.ts's buildSpinSchedule */
+  spin: {
+    /** tick delay (ms) at the very start of a spin (fast) */
+    startIntervalMs: number;
+    /** tick delay (ms) by the very end of a spin (slow, just before landing) */
+    endIntervalMs: number;
+    baseDurationMs: number;
+    shipDurationMs: number;
+    rollOffDurationMs: number;
+    /** total time for the WHOLE 3-round resource-placement reveal — split evenly across
+       the ring-3/ring-2/ring-1 rounds, so each takes the same real time regardless of how
+       far into the reveal it is */
+    resourceDurationMs: number;
+    /** pause after a spin lands before dispatching / moving to the next step */
+    settleMs: number;
+  };
 }
 
 export const theme: Theme = {
@@ -147,6 +164,15 @@ export const theme: Theme = {
     spinPathColor: "#94a89d",
     spinPathDotRadius: 0.12,
     spinPathStrokeWidth: 2,
+  },
+  spin: {
+    startIntervalMs: 70,
+    endIntervalMs: 330,
+    baseDurationMs: 1700,
+    shipDurationMs: 1700,
+    rollOffDurationMs: 1700,
+    resourceDurationMs: 5100, // 1700ms x 3 rounds
+    settleMs: 320,
   },
 };
 
