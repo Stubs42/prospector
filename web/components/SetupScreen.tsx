@@ -297,7 +297,7 @@ export function SetupScreen({
 
         {/* guidance popup / ship picker: fixed overlays, like the zoom controls or the
            status panel — not board content, so pan/zoom never touches them */}
-        {canPickNow && setup.stage === "pickBase" && (
+        {canPickNow && setup.stage === "pickBase" && !spinning && (
           <HexPopup lines={lines} actions={[{ label: "🎲 Random", kind: "primary", onClick: spinRandomBase }]} />
         )}
         {rollOffActive && <HexPopup lines={lines} />}
