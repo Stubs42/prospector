@@ -9,6 +9,7 @@ import { moveFrame, animDone, type MoveAnim } from "../anim.js";
 import type { Seat } from "../../client/index.js";
 import { clusterOutline, pointsAttr } from "./hexOutline.js";
 import { rotatePoint } from "./hexpx.js";
+import { theme } from "../theme.js";
 
 export { S } from "./geo.js";
 import { S } from "./geo.js";
@@ -266,14 +267,21 @@ export function Board({
       <defs>
         {/* the grid's own edges read as a metal rod, not a flat painted line — a light-to-
            dark sweep across the stroke plus a soft drop-shadow on the whole grid gives it
-           a slightly raised, cast-metal feel without per-edge lighting math */}
+           a slightly raised, cast-metal feel without per-edge lighting math. Colours and
+           the shadow's own numbers live in theme.ts (theme.board), not here. */}
         <linearGradient id="rodGrad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#7c8f85" />
-          <stop offset="45%" stopColor="#3c4f45" />
-          <stop offset="100%" stopColor="#1a2620" />
+          <stop offset="0%" stopColor={theme.board.gridGradient[0]} />
+          <stop offset="45%" stopColor={theme.board.gridGradient[1]} />
+          <stop offset="100%" stopColor={theme.board.gridGradient[2]} />
         </linearGradient>
         <filter id="rodDepth" x="-5%" y="-5%" width="110%" height="110%">
-          <feDropShadow dx="0" dy="0.6" stdDeviation="0.5" floodColor="#000" floodOpacity="0.45" />
+          <feDropShadow
+            dx="0"
+            dy={theme.board.gridShadowOffset}
+            stdDeviation={theme.board.gridShadowBlur}
+            floodColor="#000"
+            floodOpacity={theme.board.gridShadowOpacity}
+          />
         </filter>
       </defs>
       <g filter="url(#rodDepth)">
@@ -285,11 +293,9 @@ export function Board({
         // so a cell here only gets the per-cell gold border for "place" (launch-cell) picks
         const isCellHi = isHi && highlight.kind !== "base";
         const assigned = c.base ? baseColourOf.get(c.base) : undefined;
-        const fill = assigned
-          ? SHIP_VAR[assigned]
-          : c.region === "outer"
-            ? "#1c2b25"
-            : "#0e1b15";
+        // an unassigned field cell is mostly transparent — the starfield behind the board
+        // shows through its interior, with only a faint tint left to tell inner from outer
+        const fill = assigned ? SHIP_VAR[assigned] : c.region === "outer" ? theme.board.outerFill : theme.board.innerFill;
         // the plain grid edge reads as a metal rod (a gradient stroke, see <defs>), not a
         // flat painted line — a highlighted or base-owned cell still overrides it with a
         // plain functional colour, since those need to stay unambiguous at a glance
@@ -305,10 +311,14 @@ export function Board({
             // hex grid rather than separated tiles floating with a gap between them
             points={hexPoints(cx, cy, S)}
             fill={fill}
-            fillOpacity={assigned ? 0.85 : 1}
+            fillOpacity={assigned ? 0.85 : theme.board.cellFillOpacity}
             stroke={stroke}
             strokeWidth={isCellHi ? 2.5 : assigned ? 1.6 : 1.4}
             strokeOpacity={assigned ? 0.9 : 1}
+            // a click target must stay clickable even though its fill is almost fully
+            // transparent now (the starfield shows through) — visiblePainted (the SVG
+            // default) can miss a very low fillOpacity in some browsers
+            pointerEvents={clickable ? "all" : undefined}
             className={clickable ? (isBaseCell ? "cell-hit-quiet" : "cell-hit") : undefined}
             onClick={clickable ? clicked(() => onCell({ q: c.q, r: c.r })) : undefined}
             onMouseEnter={clickable && !isBaseCell ? () => onCellHover({ q: c.q, r: c.r }) : undefined}

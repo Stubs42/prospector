@@ -1,3 +1,6 @@
+/* Every colour below is overwritten at startup by theme.ts's applyTheme() — these are
+   only the pre-JS fallback (and the type each var should hold). To actually change a
+   colour, edit theme.ts, not this file. */
 :root {
   --panel: #17251f;
   --panel-2: #1e2f28;
@@ -18,6 +21,20 @@
   --ship-white: #e9e9e9;
   --ship-green: #3f9f63;
   --ship-yellow: #d9b53c;
+
+  --aspect-engines: #c8483b;
+  --aspect-engines-ink: #ffffff;
+  --aspect-cargo: #3f9f63;
+  --aspect-cargo-ink: #08130c;
+  --aspect-lasers: #8a929b;
+  --aspect-lasers-ink: #0c1013;
+  --aspect-shields: #e9e9e9;
+  --aspect-shields-ink: #1a1a1a;
+  --aspect-fuelTanks: #3f74c9;
+  --aspect-fuelTanks-ink: #ffffff;
+  --aspect-booster: #d9b53c;
+  --aspect-booster-ink: #1a1400;
+  --card-hyperspace: #9a6fd0;
 
   font-family: "IBM Plex Sans", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
 }
@@ -378,16 +395,19 @@ button.danger { border-color: #6a3a2f; }
   0%, 100% { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); }
   50% { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35), 0 0 0 2px currentColor; }
 }
-/* card accent = the shared aspect palette (see aspects.ts); .cicon uses currentColor */
-.card.booster-shield { border-color: #e9e9e9; color: #e9e9e9; }
+/* card accent = the shared aspect palette (colour values live in theme.ts, applied as
+   these --aspect-* custom properties); .cicon uses currentColor. The `color`/.ctype
+   values are a lighter hand-picked tint of each border colour for legibility on the
+   dark card face, not themeable on their own yet. */
+.card.booster-shield { border-color: var(--aspect-shields); color: #e9e9e9; }
 .card.booster-shield .ctype { color: #e9e9e9; }
-.card.booster-laser { border-color: #8a929b; color: #aab2ba; }
+.card.booster-laser { border-color: var(--aspect-lasers); color: #aab2ba; }
 .card.booster-laser .ctype { color: #aab2ba; }
-.card.booster-engine { border-color: #c8483b; color: #e0776b; }
+.card.booster-engine { border-color: var(--aspect-engines); color: #e0776b; }
 .card.booster-engine .ctype { color: #e0776b; }
-.card.booster-reserveFuel { border-color: #3f74c9; color: #7aa0e0; }
+.card.booster-reserveFuel { border-color: var(--aspect-fuelTanks); color: #7aa0e0; }
 .card.booster-reserveFuel .ctype { color: #7aa0e0; }
-.card.booster-hyperspace { border-color: #9a6fd0; color: #b394de; }
+.card.booster-hyperspace { border-color: var(--card-hyperspace); color: #b394de; }
 .card.booster-hyperspace .ctype { color: #b394de; }
 
 .actions { display: flex; flex-wrap: wrap; gap: 6px; }
