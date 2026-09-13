@@ -56,7 +56,11 @@ export function ActionBox({ children, className }: { children: ReactNode; classN
   return (
     <div ref={ref} className={`actionbox${className ? ` ${className}` : ""}`}>
       {size && (
-        <svg className="actionbox-hex" width={size.w} height={size.h}>
+        // viewBox + preserveAspectRatio="none" (not width/height attributes) so the
+        // polygon always exactly fills whatever box CSS actually renders, even the one
+        // render where `size` (from the previous measurement) is a beat behind the
+        // padding it just caused — no gap/overflow between the fill and the real edges
+        <svg className="actionbox-hex" viewBox={`0 0 ${size.w} ${size.h}`} preserveAspectRatio="none">
           <polygon points={hexFramePoints(size.w, size.h)} />
         </svg>
       )}
@@ -93,7 +97,7 @@ export function HexButton({ children, onClick, disabled, kind, className, accent
       {...aria}
     >
       {size && (
-        <svg className="hexbutton-hex" width={size.w} height={size.h}>
+        <svg className="hexbutton-hex" viewBox={`0 0 ${size.w} ${size.h}`} preserveAspectRatio="none">
           <polygon points={hexFramePoints(size.w, size.h)} style={accent ? { stroke: accent } : undefined} />
         </svg>
       )}
