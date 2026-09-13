@@ -75,7 +75,14 @@ export function GameScreen({
   // re-seed — nobody's turn while it plays — "the system" is doing this — so the normal
   // auto-draw/bot timers are held off the whole time (see useSession's holdAdvance) and the
   // status panel shows a placeholder identity.
-  const seedLogLen = useRef(0);
+  // how much of the log has already been turned into a finished reveal — React STATE, not a
+  // ref: a ref would advance the instant the effect body below runs, even if that particular
+  // run gets torn down right away (react-strict-mode's dev-only double-invoke of a fresh
+  // effect does exactly this) — leaving the *next* (kept) run seeing nothing left to animate
+  // and the whole reveal stuck on whatever single tick the aborted run managed to draw. State
+  // only advances once a run actually finishes uncancelled, so a StrictMode remount just
+  // replays the same batch from scratch instead of silently dropping it.
+  const [seedProcessed, setSeedProcessed] = useState(0);
   // cells that are ALREADY placed in real engine state but not yet revealed on screen —
   // hidden from `displayState` below until their own spin lands (initial seeding hides
   // every starting tile at once; a homecoming re-seed only ever hides the 1-2 new ones,
@@ -84,8 +91,7 @@ export function GameScreen({
   const [spinPath, setSpinPath] = useState<{ dots: Hex[]; live: Hex | null } | null>(null);
   const [placing, setPlacing] = useState(() => state.log.some((l) => l.event === "resourceSeeded"));
   useEffect(() => {
-    const newEntries = state.log.slice(seedLogLen.current).filter((l) => l.event === "resourceSeeded");
-    seedLogLen.current = state.log.length;
+    const newEntries = state.log.slice(seedProcessed).filter((l) => l.event === "resourceSeeded");
     if (newEntries.length === 0) return;
     setHiddenSeeds(
       new Set(newEntries.map((e) => hexKey((e.detail as { cell: Hex }).cell))),
@@ -162,6 +168,7 @@ export function GameScreen({
       }
       if (!cancelled) {
         setPlacing(false);
+        setSeedProcessed(state.log.length);
         s.setHoldAdvance(false);
       }
     })();
@@ -170,7 +177,7 @@ export function GameScreen({
       if (skipGateRef.current === gate) skipGateRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.log.length]);
+  }, [state.log.length, seedProcessed]);
   const displayState = hiddenSeeds.size
     ? {
         ...state,
