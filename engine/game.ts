@@ -69,6 +69,10 @@ export interface CreateGameOptions {
      Mutually exclusive with `colours`/`bases`/`startPlayer`. */
   seats?: SeatKind[];
   variant?: "standard" | "short" | "long";
+  /** each player's one-time draw-3-keep-1 upgrade before their first burn: skip it
+     entirely ("none"), auto-spin to one ("random"), or let the player pick ("select").
+     Default: "select". */
+  upgradeAtStart?: "none" | "random" | "select";
   config?: Config;
   /** force the start player (seat index); default: rolled. Ignored when `seats` is given —
      setup picks it the instant the last base is claimed. */
@@ -113,6 +117,7 @@ export function createGame(opts: CreateGameOptions = {}): GameState {
     state.setup = {
       seats: [...seats],
       variant: opts.variant,
+      upgradeAtStart: opts.upgradeAtStart ?? "select",
       stage: "pickBase",
       bases: seats.map(() => null),
       colours: seats.map(() => null),
@@ -132,7 +137,7 @@ export function createGame(opts: CreateGameOptions = {}): GameState {
   }
 
   const state = emptyState(colours.length);
-  populateGame(state, board, colours, homeBases, opts.variant);
+  populateGame(state, board, colours, homeBases, opts.variant, opts.upgradeAtStart ?? "select");
 
   // pickStartPlayer always runs (even when overridden below) so the rng stream position is
   // the same regardless of whether startPlayer is passed — keeps seeded games reproducible.
@@ -154,6 +159,7 @@ function populateGame(
   colours: Colour[],
   bases: Colour[],
   variant: CreateGameOptions["variant"],
+  upgradeAtStart: NonNullable<CreateGameOptions["upgradeAtStart"]> = "select",
 ): void {
   const content = requireData().content;
   const mode = state.config.modes.prospector;
@@ -177,13 +183,17 @@ function populateGame(
       const ship = mode.ships[colour];
       const baseCells = board.baseCells(homeBase);
       const start = baseCells[0]!;
-      // setup equipment: draw 3, keep the first (choice not modelled at setup), bottom the rest
-      const drawn = equipmentDraw.slice(0, mode.homeBase.setupEquipmentDraw);
-      equipmentDraw = equipmentDraw.slice(mode.homeBase.setupEquipmentDraw);
-      const kept = drawn.slice(0, mode.homeBase.setupEquipmentKeep);
-      equipmentDraw = [...equipmentDraw, ...drawn.slice(mode.homeBase.setupEquipmentKeep)];
+      // "none" grants nothing, ever; otherwise draw 3 candidates and defer the actual
+      // pick (draw-3-keep-1, same shape as a homecoming reward) to a pendingEquipment
+      // interrupt right before this player's first burn — see the "drift" action below
+      let startEquipment: PlayerState["startEquipment"] = null;
+      if (upgradeAtStart !== "none") {
+        const drawn = equipmentDraw.slice(0, mode.homeBase.setupEquipmentDraw);
+        equipmentDraw = equipmentDraw.slice(mode.homeBase.setupEquipmentDraw);
+        if (drawn.length > 0) startEquipment = { cards: drawn, mode: upgradeAtStart };
+      }
 
-      const fuelMax = ship.fuelTanks + kept.filter((c) => c.stat === "fuelTanks").reduce((a, c) => a + c.amount, 0);
+      const fuelMax = ship.fuelTanks; // no upgrade applied yet — resolved via chooseEquipment
       return {
         id: i,
         colour,
@@ -193,7 +203,8 @@ function populateGame(
         pose: atRestPose(start),
         fuel: fuelMax,
         fuelMax,
-        equipment: kept,
+        equipment: [],
+        startEquipment,
         hand: [],
         cargo: [],
         delivered: [],
@@ -276,7 +287,7 @@ function stepSetup(state: GameState, prev: GameState, board: BoardModel, action:
   const colours = setup.colours.map((c) => c!);
   const bases = setup.bases.map((b) => b!);
   const winner = setup.startSeat!;
-  populateGame(state, board, colours, bases, setup.variant);
+  populateGame(state, board, colours, bases, setup.variant, setup.upgradeAtStart ?? "select");
   state.activePlayerIndex = winner; // the real game's start player
   state.players[winner]!.turn = freshTurn();
   state.turnNumber = 1;
@@ -508,7 +519,7 @@ function arriveHomeBaseIfAny(state: GameState, board: BoardModel, p: PlayerState
         );
         state.decks.equipment = deck;
         if (cards.length > 0) {
-          state.pendingEquipment = { playerId: p.id, cards };
+          state.pendingEquipment = { playerId: p.id, cards, reason: "homecoming" };
         }
       });
     }
@@ -588,9 +599,11 @@ export function applyAction(prev: GameState, action: Action): StepResult {
         state.decks.equipment,
         pe.cards.filter((c) => c.id !== action.cardId),
       );
-      log(state, "equipped", { player: pe.playerId, card: keep.id, stat: keep.stat, amount: keep.amount });
+      log(state, "equipped", { player: pe.playerId, card: keep.id, stat: keep.stat, amount: keep.amount, reason: pe.reason });
       state.pendingEquipment = null;
-      state.phase = "moved";
+      // a homecoming reward interrupts the post-move phase and resumes there; the
+      // start-of-game upgrade interrupts "start" (right before a burn) and resumes there
+      state.phase = pe.reason === "homecoming" ? "moved" : "start";
       return done();
     }
 
@@ -652,6 +665,12 @@ export function applyAction(prev: GameState, action: Action): StepResult {
       }
       p.pose = res.pose;
       p.turn.mustBurn = res.needsBurn;
+      // the one-time "upgrade at game start" draw (see populateGame) interrupts here,
+      // right before this player would otherwise choose a burn target
+      if (p.startEquipment) {
+        state.pendingEquipment = { playerId: p.id, cards: p.startEquipment.cards, reason: "start", mode: p.startEquipment.mode };
+        p.startEquipment = null;
+      }
       return done();
     }
 

@@ -150,6 +150,11 @@ export interface PlayerState {
   fuel: number;
   fuelMax: number;
   equipment: EquipmentCard[];
+  /** an unresolved "upgrade at game start" draw (see CreateGameOptions.upgradeAtStart) —
+     3 candidates and which mode picked them, surfaced as pendingEquipment the moment this
+     player finishes their first drift (i.e. right before they'd choose a burn target).
+     Null once resolved, or from the start if upgradeAtStart is "none". */
+  startEquipment: { cards: EquipmentCard[]; mode: "random" | "select" } | null;
   hand: BoosterCard[];
   cargo: OreColour[];
   delivered: OreColour[];
@@ -182,6 +187,17 @@ export interface PendingCombat {
   autoRepel?: boolean;
 }
 
+/** why a chooseEquipment choice is pending, and what phase to resume once it resolves —
+   a homecoming reward interrupts the post-move phase (resumes "moved"); the start-of-game
+   upgrade interrupts the pre-burn moment of the "start" phase (resumes "start", so burn is
+   still available right after). `mode` only exists for "start": a GUI spins to a random
+   card itself for "random" (the engine doesn't roll it — same as any other lucky-wheel
+   pick in this game, the "randomness" is cosmetic/client-side), or lets the player choose
+   for "select"; a homecoming reward is always an interactive choice. */
+export type PendingEquipment =
+  | { playerId: number; cards: EquipmentCard[]; reason: "start"; mode: "random" | "select" }
+  | { playerId: number; cards: EquipmentCard[]; reason: "homecoming" };
+
 export type TurnPhase = "start" | "moved" | "done";
 
 export type SeatKind = "human" | "bot";
@@ -204,6 +220,9 @@ export interface SetupState {
   /** fixed at creation; index = the eventual player id */
   seats: SeatKind[];
   variant?: "standard" | "short" | "long" | undefined;
+  /** whether each player gets a random draw-3-keep-1 upgrade before their first burn;
+     see CreateGameOptions.upgradeAtStart. Default (also the type's default): "select" */
+  upgradeAtStart?: "none" | "random" | "select" | undefined;
   stage: "pickBase" | "pickShip" | "rollOff";
   /** per seat index; null until that seat has picked */
   bases: (Colour | null)[];
@@ -235,8 +254,10 @@ export interface GameState {
   };
   phase: TurnPhase;
   pendingCombat: PendingCombat | null;
-  /** a homecoming delivery is offering these equipment cards; one must be chosen */
-  pendingEquipment: { playerId: number; cards: EquipmentCard[] } | null;
+  /** one must be chosen from `cards` before anything else can happen — either a homecoming
+     delivery reward (always an interactive choice) or the start-of-game upgrade (whose
+     `mode` tells a GUI whether to auto-spin to a random one or let the player pick) */
+  pendingEquipment: PendingEquipment | null;
   log: LogEntry[];
   gameOver: boolean;
   winnerIds: number[] | null;

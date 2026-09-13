@@ -45,8 +45,8 @@ describe("createGame", () => {
 
   it("builds full decks", () => {
     expect(g.decks.booster.draw).toHaveLength(45);
-    // 36 equipment minus 4 players * 1 kept
-    expect(g.decks.equipment.draw).toHaveLength(36 - 4);
+    // 36 equipment minus 4 players * 3 drawn (default upgradeAtStart "select" — pending until chosen)
+    expect(g.decks.equipment.draw).toHaveLength(36 - 4 * 3);
   });
 
   it("defaults homeBase to colour (the classic fixed pairing) when `bases` is omitted", () => {
@@ -93,7 +93,7 @@ describe("base picked independently of ship colour", () => {
 
 describe("a hand-driven turn", () => {
   it("draw -> drift -> burn (free departure cell) -> endMove -> endTurn", () => {
-    let s = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0 });
+    let s = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "none" });
     const y = () => s.players[0]!;
     const start = { ...y().pose.current };
 
@@ -118,7 +118,7 @@ describe("a hand-driven turn", () => {
 
 describe("voluntary scrap", () => {
   it("is not offered before the ship is launched, but is at any point during the move after", () => {
-    let s = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0 });
+    let s = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "none" });
     const Y = () => s.players[0]!;
 
     // turn 1, before placeShip: no scrap yet
@@ -178,7 +178,7 @@ describe("reserve fuel card", () => {
 
 describe("homecoming upgrade pick", () => {
   it("a delivery pauses for a 3-card equipment choice, then applies it", () => {
-    let s = createGame({ seed: 8, colours: ["yellow", "black"], startPlayer: 0 });
+    let s = createGame({ seed: 8, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "none" });
     const Y = () => s.players[0]!;
     Y().pose = { current: { q: -7, r: 7 }, previous: { q: -7, r: 7 }, atRest: true };
     Y().cargo = ["red"];
@@ -214,6 +214,71 @@ describe("homecoming upgrade pick", () => {
   });
 });
 
+describe("upgrade at game start", () => {
+  it("defaults to \"select\": drift raises a pending 3-card choice before burn is offered", () => {
+    let s = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0 });
+    const Y = () => s.players[0]!;
+    s = run(s, { type: "drawBooster" });
+    while (Y().hand.length > 3) s = run(s, { type: "discardBooster", cardId: Y().hand[0]!.id });
+    expect(Y().equipment).toHaveLength(0); // nothing auto-granted yet
+
+    s = run(s, { type: "drift" });
+    expect(s.pendingEquipment).not.toBeNull();
+    expect(s.pendingEquipment).toMatchObject({ playerId: 0, reason: "start", mode: "select" });
+    const acts = legalActions(s);
+    expect(acts).toHaveLength(3);
+    expect(acts.every((a) => a.type === "chooseEquipment")).toBe(true);
+    expect(applyAction(s, { type: "burn", path: [{ q: -8, r: 8 }] }).ok).toBe(false);
+
+    const chosen = s.pendingEquipment!.cards[0]!;
+    s = run(s, { type: "chooseEquipment", cardId: chosen.id });
+    expect(s.pendingEquipment).toBeNull();
+    expect(s.phase).toBe("start"); // resumed right where drift left off — burn is available again
+    expect(Y().equipment.map((c) => c.id)).toContain(chosen.id);
+    expect(applyAction(s, { type: "burn", path: [{ q: -8, r: 8 }] }).ok).toBe(true);
+  });
+
+  it("\"none\" never grants or pends any starting equipment", () => {
+    let s = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "none" });
+    const Y = () => s.players[0]!;
+    s = run(s, { type: "drawBooster" });
+    while (Y().hand.length > 3) s = run(s, { type: "discardBooster", cardId: Y().hand[0]!.id });
+    s = run(s, { type: "drift" });
+    expect(s.pendingEquipment).toBeNull();
+    expect(Y().equipment).toHaveLength(0);
+    expect(applyAction(s, { type: "burn", path: [{ q: -8, r: 8 }] }).ok).toBe(true);
+  });
+
+  it("\"random\" pends the same 3-card draw, tagged so a GUI knows to auto-spin", () => {
+    let s = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "random" });
+    const Y = () => s.players[0]!;
+    s = run(s, { type: "drawBooster" });
+    while (Y().hand.length > 3) s = run(s, { type: "discardBooster", cardId: Y().hand[0]!.id });
+    s = run(s, { type: "drift" });
+    expect(s.pendingEquipment).toMatchObject({ playerId: 0, reason: "start", mode: "random" });
+    expect(s.pendingEquipment!.cards).toHaveLength(3);
+    // resolution is still a plain chooseEquipment — the client just picks which one to dispatch
+    s = run(s, { type: "chooseEquipment", cardId: s.pendingEquipment!.cards[2]!.id });
+    expect(s.pendingEquipment).toBeNull();
+    expect(Y().equipment).toHaveLength(1);
+  });
+
+  it("interactive setup (finishSetup) threads upgradeAtStart through too", () => {
+    let s = createGame({ seed: 4, seats: ["human", "human"], upgradeAtStart: "none" });
+    while (s.setup) {
+      const acts = legalActions(s);
+      s = run(s, acts[0]!);
+    }
+    for (const p of s.players) expect(p.startEquipment).toBeNull();
+    s = run(s, { type: "drawBooster" });
+    while (s.players[0]!.hand.length > 3) {
+      s = run(s, { type: "discardBooster", cardId: s.players[0]!.hand[0]!.id });
+    }
+    s = run(s, { type: "drift" });
+    expect(s.pendingEquipment).toBeNull(); // "none" carried through the interactive setup path too
+  });
+});
+
 describe("launch base-cell choice", () => {
   it("lets the player pick any of their base cells on the first turn, once", () => {
     let s = createGame({ seed: 8, colours: ["green", "black"], startPlayer: 0 });
@@ -245,7 +310,7 @@ describe("launch base-cell choice", () => {
 
 describe("departing the home base", () => {
   it("keeps velocity when accelerating within the base cluster (no wrongful brake)", () => {
-    let s = createGame({ seed: 3, colours: ["blue", "black"], startPlayer: 0 });
+    let s = createGame({ seed: 3, colours: ["blue", "black"], startPlayer: 0, upgradeAtStart: "none" });
     const B = () => s.players[0]!;
     const start = { ...B().pose.current }; // (9,-9)
     expect(B().pose.atRest).toBe(true);
@@ -280,7 +345,7 @@ describe("departing the home base", () => {
 
 describe("burn options can turn", () => {
   it("legalActions offers reachable cells off the straight lines", () => {
-    let s = createGame({ seed: 7, colours: ["red", "black"], startPlayer: 0 });
+    let s = createGame({ seed: 7, colours: ["red", "black"], startPlayer: 0, upgradeAtStart: "none" });
     s.board.resources = {};
     const R = () => s.players[0]!;
     R().pose = { current: { q: 0, r: 0 }, previous: { q: 0, r: 0 }, atRest: true }; // at rest, mid-field
@@ -312,7 +377,7 @@ describe("burn can cross outer cells on the way to an inner destination", () => 
     // no *directly* adjacent free inner cell, wrongly scrapped the ship: legalActions'
     // burn BFS only ever expanded through inner cells, so it could never find a path
     // that has to detour through another outer cell first.
-    let s = createGame({ seed: 7, colours: ["red", "black"], startPlayer: 0 });
+    let s = createGame({ seed: 7, colours: ["red", "black"], startPlayer: 0, upgradeAtStart: "none" });
     s.board.resources = { "9,0": "green" };
     const R = () => s.players[0]!;
     R().pose = { current: { q: 10, r: 0 }, previous: { q: 10, r: 0 }, atRest: true };

@@ -44,7 +44,7 @@ describe("affordances", () => {
   });
 
   it("produces burn targets with cost + path after drift", () => {
-    let g = createGame({ seed: 7, colours: ["red", "black"], startPlayer: 0 });
+    let g = createGame({ seed: 7, colours: ["red", "black"], startPlayer: 0, upgradeAtStart: "none" });
     g.board.resources = {};
     g.players[0]!.pose = { current: { q: 0, r: 0 }, previous: { q: 0, r: 0 }, atRest: true };
     g.players[0]!.placed = true;
@@ -62,7 +62,7 @@ describe("affordances", () => {
   });
 
   it("extraEngines widens the reachable set", () => {
-    let g = createGame({ seed: 9, colours: ["yellow", "black"], startPlayer: 0 });
+    let g = createGame({ seed: 9, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "none" });
     g.board.resources = {};
     g.players[0]!.pose = { current: { q: 0, r: 0 }, previous: { q: 0, r: 0 }, atRest: true };
     g.players[0]!.placed = true;
