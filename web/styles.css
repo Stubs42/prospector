@@ -212,7 +212,11 @@ button.danger { border-color: #6a3a2f; }
 .hexbutton {
   position: relative;
   min-width: 44px; min-height: 30px;
-  background: none; border: none; font: inherit; color: var(--ink);
+  /* the global `button` rule's rounded-rect background/border still painted underneath
+     the hex polygon (native button chrome, -webkit-appearance: button, isn't removed by
+     background/border alone) — appearance: none turns that off */
+  appearance: none; -webkit-appearance: none;
+  background: none; border: none; border-radius: 0; padding: 0; font: inherit; color: var(--ink);
   cursor: pointer;
 }
 .hexbutton-hex { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
