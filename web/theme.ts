@@ -94,7 +94,10 @@ export interface Theme {
        the ring-3/ring-2/ring-1 rounds, so each takes the same real time regardless of how
        far into the reveal it is */
     resourceDurationMs: number;
-    /** pause after a spin lands before dispatching / moving to the next step */
+    /** pause after a spin lands before dispatching / moving to the next step. Not read
+       anywhere yet — SetupScreen.tsx's base/ship/roll-off spins still hardcode their own
+       450ms locally (not yet ported to buildSpinSchedule); the resource-placement rounds
+       don't use a pause at all any more, flowing straight into the next round instead */
     settleMs: number;
   };
 }

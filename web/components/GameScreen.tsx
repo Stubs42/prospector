@@ -122,12 +122,12 @@ export function GameScreen({
             if (cancelled) return resolve();
             const landed = candidates[targetIndex]!;
             const isLastRound = roundIdx + 1 >= rounds.length;
-            // keep the live mark parked right on the spot it just landed on through the
-            // settle pause instead of clearing it to null — otherwise it visibly vanishes
-            // for a beat before the next round's spin picks back up, breaking the flow.
-            // The very last round DOES clear it, since nothing spins again after it.
+            // no pause here at all — the next round's own spin starts immediately, right
+            // from the point this one just landed on, so the whole 3-round reveal reads as
+            // one unbroken motion. The very last round clears the live mark, since nothing
+            // spins again after it.
             setSpinPath({ dots: [...dotsPrefix, landed], live: isLastRound ? null : landed });
-            if (!isLastRound) window.setTimeout(() => runRound(roundIdx + 1), theme.spin.settleMs);
+            if (!isLastRound) runRound(roundIdx + 1);
             else resolve();
           });
         };
