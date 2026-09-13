@@ -146,18 +146,28 @@ button.danger { border-color: #6a3a2f; }
 /* the "action box" family (guidance popup, ship picker, combat box, confirm dialog): a
    fixed overlay, like the zoom controls or the status panel — NOT board content, so
    panning/zooming the board never touches it (see HexPopup.tsx's note on why this moved
-   out of board space). Centred a little above true middle so it clears the bottom panel. */
+   out of board space). Centred a little above true middle so it clears the bottom panel.
+   Kept the hexagon silhouette (flattened, pointed left/right — the same shape the old
+   SVG hex buttons used) via clip-path; a plain border can't follow a clip-path, so the
+   "border" is a slightly larger gold hexagon painted behind via ::before instead, and the
+   drop shadow uses `filter` (which does respect the clipped shape) rather than box-shadow
+   (which would just draw a rectangular shadow). The generous side padding keeps text and
+   buttons clear of the two points. */
 .actionbox {
   position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%);
   z-index: 22;
-  max-width: min(440px, 88vw);
+  min-width: 280px; max-width: min(440px, 88vw);
   background: rgba(12, 20, 16, 0.97);
-  border: 1px solid var(--gold);
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
-  padding: 0.9rem 1.15rem;
+  clip-path: polygon(8% 0%, 92% 0%, 100% 50%, 92% 100%, 8% 100%, 0% 50%);
+  filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.55));
+  padding: 1rem 2.6rem;
   display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
   text-align: center; font-size: 0.85rem;
+}
+.actionbox::before {
+  content: ""; position: absolute; inset: -3px; z-index: -1;
+  background: var(--gold);
+  clip-path: polygon(8% 0%, 92% 0%, 100% 50%, 92% 100%, 8% 100%, 0% 50%);
 }
 .actionbox-line { font-weight: 700; font-size: 0.95rem; }
 .actionbox-title { font-weight: 700; font-size: 0.95rem; }
