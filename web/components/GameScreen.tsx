@@ -498,7 +498,7 @@ export function GameScreen({
               : afford.equipmentChoice.mode === "random"
                 ? "Rolling for a starting upgrade…"
                 : "Choose a starting upgrade",
-          options: afford.equipmentChoice.cards.map((c) => ({ id: c.id, stat: c.stat, amount: c.amount, effect: c.effect })),
+          options: afford.equipmentChoice.cards.map((c) => ({ id: c.id, stat: c.stat, amount: c.amount })),
           spinningId: equipSpinId,
           // no onChoose while the random spin is animating — it's not clickable, just a reveal
           onChoose:

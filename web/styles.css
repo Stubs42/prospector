@@ -177,9 +177,10 @@ button.danger { border-color: #6a3a2f; }
    .equip-card it replaced (see BottomPanel's now-removed equip-choice) */
 .hexbutton.equip-card { width: 108px; min-height: 96px; }
 .hexbutton.equip-card .hexbutton-content { flex-direction: column; gap: 3px; }
-.equip-card .et { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em; }
-.equip-card .ev { font-size: 1.4rem; font-weight: 800; line-height: 1; }
-.equip-card .ee { font-size: 0.56rem; color: var(--muted); line-height: 1.25; margin-top: auto; }
+/* font-size/vertical offset come from theme.ts (cards.label/valueFontSize, .../OffsetY),
+   set inline per-span in EquipmentPopup.tsx — only weight/spacing stay fixed here */
+.equip-card .et { font-weight: 700; letter-spacing: 0.08em; }
+.equip-card .ev { font-weight: 800; line-height: 1; }
 
 /* the "action box" family (guidance popup, ship picker, combat box, confirm dialog): a
    fixed overlay, like the zoom controls or the status panel — NOT board content, so

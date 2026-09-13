@@ -108,6 +108,19 @@ export interface Theme {
     statValueFontSize: number;
     statValueOffsetY: number;
   };
+  /** the "upgrade card" hex buttons (EquipmentPopup — homecoming and the start-of-game
+     draw both use it): the same "small label above a value" shape as a base status cell
+     above, but plain HTML/CSS rather than board SVG, so these are rem/em, not fractions of
+     a hex cell's size (S). */
+  cards: {
+    /** the tag above the value (e.g. "SHIELD") — font size in rem, vertical shift in em
+       (negative = up) */
+    labelFontSize: number;
+    labelOffsetY: number;
+    /** the "+N" value itself */
+    valueFontSize: number;
+    valueOffsetY: number;
+  };
   /** timing shared by every "lucky wheel" spin (base pick, ship pick, the start-player
      roll-off, each coordinate-dice round) — see spin.ts's buildSpinSchedule */
   spin: {
@@ -221,6 +234,12 @@ export const theme: Theme = {
     statLabelOffsetY: -0.2,
     statValueFontSize: 0.5,
     statValueOffsetY: 0.25,
+  },
+  cards: {
+    labelFontSize: 0.62,
+    labelOffsetY: 0,
+    valueFontSize: 1.4,
+    valueOffsetY: 0,
   },
   spin: {
     startIntervalMs: 70,

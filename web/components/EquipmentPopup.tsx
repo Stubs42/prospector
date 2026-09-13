@@ -12,13 +12,13 @@
  */
 import type { StatKey } from "../../engine/index.js";
 import { ActionBox, HexButton } from "./ActionBox.js";
-import { ASPECT_FILL, ASPECT_TAG, ASPECT_LABEL } from "./aspects.js";
+import { ASPECT_FILL, ASPECT_TAG } from "./aspects.js";
+import { theme } from "../theme.js";
 
 export interface EquipmentOption {
   id: string;
   stat: StatKey;
   amount: number;
-  effect: string;
 }
 
 export interface EquipmentPopupProps {
@@ -46,9 +46,26 @@ export function EquipmentPopup({ title, options, spinningId = null, onChoose }: 
               onClick={onChoose ? () => onChoose(o.id) : undefined}
               disabled={!onChoose}
             >
-              <span className="et" style={{ color: spinningHere ? "var(--gold)" : fill }}>{ASPECT_TAG[o.stat]}</span>
-              <span className="ev" style={{ color: spinningHere ? "var(--gold)" : fill }}>+{o.amount}</span>
-              <span className="ee">{o.effect || `${ASPECT_LABEL[o.stat]} upgrade`}</span>
+              <span
+                className="et"
+                style={{
+                  color: spinningHere ? "var(--gold)" : fill,
+                  fontSize: `${theme.cards.labelFontSize}rem`,
+                  transform: `translateY(${theme.cards.labelOffsetY}em)`,
+                }}
+              >
+                {ASPECT_TAG[o.stat]}
+              </span>
+              <span
+                className="ev"
+                style={{
+                  color: spinningHere ? "var(--gold)" : fill,
+                  fontSize: `${theme.cards.valueFontSize}rem`,
+                  transform: `translateY(${theme.cards.valueOffsetY}em)`,
+                }}
+              >
+                +{o.amount}
+              </span>
             </HexButton>
           );
         })}
