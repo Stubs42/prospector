@@ -369,16 +369,14 @@ describe("burn options can turn", () => {
 });
 
 describe("burn can cross outer cells on the way to an inner destination", () => {
-  it("still finds a path when the only directly-adjacent inner cell is blocked", () => {
-    // (10,0) is one ring outside the inner/outer boundary (innerRadius 9); its only
-    // inner neighbour is (9,0). Block that with a resource — (10,0) is still not
-    // stranded, since (10,0) -> (10,-1) [outer] -> (9,-1) [inner, free] is a legal
-    // 2-cell burn. Regression for a bug where a drift landing in the outer ring, with
-    // no *directly* adjacent free inner cell, wrongly scrapped the ship: legalActions'
-    // burn BFS only ever expanded through inner cells, so it could never find a path
-    // that has to detour through another outer cell first.
+  it("doesn't strand a ship that drifted into the outer ring", () => {
+    // (10,0) is one ring outside the inner/outer boundary (innerRadius 9). Regression for a
+    // bug where a drift landing in the outer ring wrongly scrapped the ship even when an
+    // inner cell was perfectly reachable: legalActions' burn BFS only ever expanded through
+    // INNER cells, so any path that had to pass through another outer cell first (even just
+    // to turn a corner) was never found.
     let s = createGame({ seed: 7, colours: ["red", "black"], startPlayer: 0, upgradeAtStart: "none" });
-    s.board.resources = { "9,0": "green" };
+    s.board.resources = {};
     const R = () => s.players[0]!;
     R().pose = { current: { q: 10, r: 0 }, previous: { q: 10, r: 0 }, atRest: true };
     R().placed = true;
@@ -387,15 +385,47 @@ describe("burn can cross outer cells on the way to an inner destination", () => 
     while (R().hand.length > 3) s = run(s, { type: "discardBooster", cardId: R().hand[0]!.id });
     s = run(s, { type: "drift" }); // at rest -> no-op, still at (10,0)
 
+    const board = boardFor(s);
     const burns = legalActions(s).filter((a) => a.type === "burn") as Extract<Action, { type: "burn" }>[];
-    expect(burns.some((b) => b.path.length === 1)).toBe(false); // the direct inner cell is blocked
-    const detour = burns.find((b) => b.path.length === 2 && b.path[1]!.q === 9 && b.path[1]!.r === -1);
-    expect(detour).toBeTruthy();
-    expect(detour!.path[0]).toEqual({ q: 10, r: -1 }); // the outer cell it passes through
+    expect(burns.length).toBeGreaterThan(0);
+    expect(burns.every((b) => board.isInner(b.path[b.path.length - 1]!))).toBe(true);
 
-    const applied = applyAction(s, detour!);
+    // an outer cell is still accepted as an intermediate path step, not just tolerated as a
+    // starting point — apply a path that deliberately detours through one
+    const applied = applyAction(s, { type: "burn", path: [{ q: 10, r: -1 }, { q: 9, r: -1 }] });
     expect(applied.ok).toBe(true);
     expect(applied.state.players[0]!.pose.current).toEqual({ q: 9, r: -1 });
+  });
+
+  it("flies over a resource blocking the direct route, at the target's true (shorter) distance", () => {
+    // Regression: legalActions' burn BFS used to treat a resource cell as an impassable
+    // wall for TRAVERSAL (not just as an illegal destination), even though movement.ts's own
+    // burn() never enforced that — a resource directly in a burn's path forced a detour (or
+    // made the cell behind it unreachable within the step budget entirely), when a real
+    // burn straight over that resource would have succeeded. Ships already fly over other
+    // ships the same way; resources now do too — only the destination cell must be clear.
+    let s = createGame({ seed: 7, colours: ["red", "black"], startPlayer: 0, upgradeAtStart: "none" });
+    s.board.resources = { "1,0": "green" }; // directly between the ship and its target
+    const R = () => s.players[0]!;
+    R().pose = { current: { q: 0, r: 0 }, previous: { q: 0, r: 0 }, atRest: true };
+    R().placed = true;
+    R().fuel = R().fuelMax;
+    s = run(s, { type: "drawBooster" });
+    while (R().hand.length > 3) s = run(s, { type: "discardBooster", cardId: R().hand[0]!.id });
+    s = run(s, { type: "drift" });
+
+    const burns = legalActions(s).filter((a) => a.type === "burn") as Extract<Action, { type: "burn" }>[];
+    // the resource cell itself is never a legal destination
+    expect(burns.some((b) => b.path[b.path.length - 1]!.q === 1 && b.path[b.path.length - 1]!.r === 0)).toBe(false);
+    // (2,0) is genuinely 2 cells away in a straight line through the resource — reachable
+    // at that true distance/fuel cost, not some inflated detour-around-it cost
+    const target = burns.find((b) => b.path[b.path.length - 1]!.q === 2 && b.path[b.path.length - 1]!.r === 0);
+    expect(target).toBeTruthy();
+    expect(target!.path).toHaveLength(2);
+    expect(target!.path[0]).toEqual({ q: 1, r: 0 }); // flies straight over the resource
+    const applied = applyAction(s, target!);
+    expect(applied.ok).toBe(true);
+    expect(applied.state.players[0]!.fuel).toBe(R().fuelMax - 2); // paid for 2 cells, not more
   });
 });
 

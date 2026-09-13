@@ -118,11 +118,12 @@ export function legalActions(state: GameState, opts?: LegalOpts): Action[] {
       const stepBudget = Math.min(cap, hardCap) + freeCells;
       const fuelBudget = Math.min(p.fuel + Math.max(0, opts?.extraFuel ?? 0), p.fuelMax);
 
-      // A burn may turn and may pass through outer cells on its way in — only the
-      // destination must be inner (matches movement.ts's burn(), which only requires the
-      // LAST path cell to be inner). It flies OVER other ships, so they don't block the
-      // path — only the destination must be a clear cell. Resources and the field edge
-      // still wall off every cell, start to finish.
+      // A burn may turn and may pass through outer cells — and resource/ship-occupied
+      // cells — on its way in; only the destination must be inner and clear (matches
+      // movement.ts's burn(), which only checks offField for intermediate cells, and inner
+      // + isFreeAt for the LAST path cell only). Flying over an obstacle instead of being
+      // walled off by it means a target's reachability is just its real hex distance, never
+      // inflated by however many extra steps a detour around that obstacle would need.
       const startKey = hexKey(p.pose.current);
       const depth = new Map<string, number>([[startKey, 0]]);
       const parent = new Map<string, Hex>();
@@ -133,7 +134,7 @@ export function legalActions(state: GameState, opts?: LegalOpts): Action[] {
         if (d >= stepBudget) continue;
         for (const nb of board.neighbours(cell)) {
           const k = hexKey(nb);
-          if (depth.has(k) || board.offField(nb) || resources.has(k)) continue;
+          if (depth.has(k) || board.offField(nb)) continue;
           depth.set(k, d + 1);
           parent.set(k, cell);
           queue.push(nb);
