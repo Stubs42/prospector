@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useReducer, useRef, useState, type PointerEvent as RPointerEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+  type PointerEvent as RPointerEvent,
+  type ReactNode,
+} from "react";
 import { boardFor } from "../../engine/game.js";
 import { hexKey } from "../../engine/hex.js";
 import type { GameState, Hex, Colour, OreColour } from "../../engine/index.js";
@@ -13,6 +21,17 @@ import { theme } from "../theme.js";
 
 export { S } from "./geo.js";
 import { S } from "./geo.js";
+
+/** the zoom/pan/rotate control icons — a plain shape in a fixed viewBox, so flex centring
+   in the button lands exactly on it (unlike a text glyph, whose position within its own
+   line box depends on the current font's baseline/descender metrics) */
+function CtlIcon({ children }: { children: ReactNode }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+      {children}
+    </svg>
+  );
+}
 
 function hexPoints(cx: number, cy: number, size: number): string {
   const pts: string[] = [];
@@ -596,11 +615,29 @@ export function Board({
         </div>
       )}
       <div className="zoomctl">
-        <button type="button" aria-label="rotate left" onClick={() => setRotation((r) => (r + 5) % 6)}>⟲</button>
-        <button type="button" aria-label="rotate right" onClick={() => setRotation((r) => (r + 1) % 6)}>⟳</button>
-        <button type="button" aria-label="zoom out" onClick={() => zoomBy(1 / 1.3)}>–</button>
-        <button type="button" aria-label="fit board" onClick={fit}>⤢</button>
-        <button type="button" aria-label="zoom in" onClick={() => zoomBy(1.3)}>+</button>
+        {/* real SVG icons, not text glyphs — a font's glyph sits wherever that font's own
+           baseline/descender metrics put it (never quite centred, and inconsistently so
+           across fonts/browsers); a plain shape in a fixed viewBox centres exactly */}
+        <button type="button" aria-label="rotate left" onClick={() => setRotation((r) => (r + 5) % 6)}>
+          <CtlIcon><path d="M3 12a9 9 0 1 0 3-6.7" /><polyline points="3 3 3 8 8 8" /></CtlIcon>
+        </button>
+        <button type="button" aria-label="rotate right" onClick={() => setRotation((r) => (r + 1) % 6)}>
+          <CtlIcon><path d="M21 12a9 9 0 1 1-3-6.7" /><polyline points="21 3 21 8 16 8" /></CtlIcon>
+        </button>
+        <button type="button" aria-label="zoom out" onClick={() => zoomBy(1 / 1.3)}>
+          <CtlIcon><line x1="5" y1="12" x2="19" y2="12" /></CtlIcon>
+        </button>
+        <button type="button" aria-label="fit board" onClick={fit}>
+          <CtlIcon>
+            <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+            <path d="M16 3h3a2 2 0 0 1 2 2v3" />
+            <path d="M21 16v3a2 2 0 0 1-2 2h-3" />
+            <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+          </CtlIcon>
+        </button>
+        <button type="button" aria-label="zoom in" onClick={() => zoomBy(1.3)}>
+          <CtlIcon><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></CtlIcon>
+        </button>
       </div>
     </div>
   );
