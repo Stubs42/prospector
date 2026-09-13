@@ -139,6 +139,35 @@ button.danger { border-color: #6a3a2f; }
 .status-action { color: var(--muted); font-size: 0.72rem; padding-left: 1.05rem; opacity: 0.5; }
 .status-action.current { opacity: 1; color: var(--ink); }
 
+/* the 4 shared deck piles — fixed screen overlays (see DeckPanels.tsx), same family as
+   .status-panel: top-right mirrors its top-left identity panel (booster deck), lower-right
+   sits clear of both .zoomctl (bottom-left) and .bottompanel (bottom-centre). */
+.deck-panel, .supply-panel { position: absolute; z-index: 20; display: flex; gap: 8px; pointer-events: none; }
+.deck-panel { right: 12px; top: 12px; }
+.supply-panel { right: 12px; bottom: 14px; }
+/* a plain card-back placeholder — same portrait shape as a hand card (.card) by default,
+   square for the upgrade/ore pair (upgrade cards will eventually be square-art, same as
+   ships/boosters are getting — see this file's own note history). Two backing edges peeking
+   out bottom-right suggest a stack, not a single card. */
+.deckcard {
+  position: relative; z-index: 0;
+  width: 82px; min-height: 104px;
+  background: linear-gradient(160deg, #26332c, #1a241f);
+  border: 2px solid var(--line); border-radius: 10px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.deckcard.square { width: 90px; min-height: 0; height: 90px; }
+.deckcard::before, .deckcard::after {
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  background: inherit; border: 2px solid var(--line); border-radius: 10px;
+}
+.deckcard::before { transform: translate(4px, 5px); }
+.deckcard::after { transform: translate(2px, 2.5px); }
+.deckcard-label { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
+.deckcard-value { font-size: 0.95rem; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+.deckcard-orerow { display: flex; gap: 0.4em; }
+
 .board-tip {
   position: absolute; z-index: 30; pointer-events: none;
   transform: translate(12px, -130%);

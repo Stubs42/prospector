@@ -17,6 +17,7 @@ import { HexPopup } from "./HexPopup.js";
 import { LogOverlay } from "./LogOverlay.js";
 import { Settings } from "./Settings.js";
 import { StatusPanel } from "./StatusPanel.js";
+import { DeckPanels } from "./DeckPanels.js";
 import type { Prefs } from "../prefs.js";
 import { buildSpinSchedule, runSpinSchedule, SkipGate } from "../spin.js";
 import { theme } from "../theme.js";
@@ -721,6 +722,7 @@ export function GameScreen({
             log={moveLog}
           />
         )}
+        <DeckPanels state={state} />
         {isWaitingOnBot && !activeIsBot && <div className="board-toast">🤖 waiting on the bot…</div>}
         {state.gameOver && (
           <div className="board-toast win">
