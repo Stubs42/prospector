@@ -346,12 +346,21 @@ export function GameScreen({
   // whoever is actually making the current decision — the attacker/mover normally, the
   // *defender* while combat is waiting on them (their shields, their counter-attack call),
   // or the attacker again while the dice reveal plays out (pendingCombat may have already
-  // moved on by then, so the reveal snapshot takes priority)
-  const handOwner = combatReveal
+  // moved on by then, so the reveal snapshot takes priority). Drives the status panel's
+  // identity/log — that must always reflect whoever is actually acting, bot included.
+  const activeMover = combatReveal
     ? state.players[combatReveal.attackerId]!
     : pc && (pc.awaiting === "defend" || pc.awaiting === "counter")
       ? state.players[pc.defenderId]!
       : p;
+  // the hand PANEL's owner: activeMover, unless that's a bot and we're playing solo (one
+  // human, the rest bots) — solo, your own hand stays visible the whole time (a real board
+  // game's hand doesn't vanish while the other players take their turns), so it falls back
+  // to the sole human's hand instead of hiding outright while a bot acts. In real hot-seat
+  // (2+ humans) this never applies — another human's hand must stay hidden on a bot's turn
+  // exactly like before.
+  const soloHumanId = s.humans === 1 ? seats.indexOf("human") : -1;
+  const handOwner = seats[activeMover.id] === "bot" && soloHumanId >= 0 ? state.players[soloHumanId]! : activeMover;
   const handHidden = seats[handOwner.id] === "bot";
 
   // --- status panel: who's doing what, and a running log of their move ---------------
@@ -422,10 +431,14 @@ export function GameScreen({
       .reduce((a, c) => a + (c.value ?? 0), 0);
   const hyperspaceId = state.players[pc?.defenderId ?? -1]?.hand.find((c) => c.type === "hyperspace")?.id;
 
+  // whether THIS hand (not just any hand) has a freshly-drawn card — matters now that
+  // handOwner can be the solo human while a bot (whose own draw also touches newCardIds) is
+  // the one actually acting; a bot's own new card must never force the human's hand open
+  const handHasNewCard = handOwner.hand.some((c) => s.newCardIds.has(c.id));
   const showCards =
     !handHidden &&
     handOwner.hand.length > 0 &&
-    (overLimit || inBurnPhase || combatCardType !== null || s.newCardIds.size > 0);
+    (overLimit || inBurnPhase || combatCardType !== null || handHasNewCard);
   const cardHint = overLimit
     ? null // the centred hex popup carries this message instead
     : inBurnPhase && p.hand.some((c) => c.type === "engine" || c.type === "reserveFuel")
@@ -716,9 +729,9 @@ export function GameScreen({
           <StatusPanel colour={null} name="⚙ System" bot={false} log={["Placing resources"]} system />
         ) : (
           <StatusPanel
-            colour={handOwner.colour}
-            name={s.names[handOwner.id] ?? "?"}
-            bot={seats[handOwner.id] === "bot"}
+            colour={activeMover.colour}
+            name={s.names[activeMover.id] ?? "?"}
+            bot={seats[activeMover.id] === "bot"}
             log={moveLog}
           />
         )}
