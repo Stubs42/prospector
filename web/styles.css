@@ -165,31 +165,44 @@ button.danger { border-color: #6a3a2f; }
 .board-toast.win { border-color: var(--gold); color: var(--gold); }
 
 /* the hand — docked beside .zoomctl (bottom-left), matching its stacked-button height
-   (5 * 30px buttons + 4 * 4px gaps = 166px) so the two read as one control cluster.
-   Collapsed: just .handpanel-toggle, a thin bar. Expanded (.open): the card row slides out
-   to the right of it — see HandPanel.tsx for when that happens. */
-.handpanel { position: absolute; left: 42px; bottom: 4px; z-index: 20; display: flex; align-items: stretch; height: 166px; }
+   (5 * 30px buttons + 4 * 4px gaps = 166px) so the two read as one control cluster. One
+   frame throughout (background+border live on .handpanel itself, not the toggle) that
+   actually widens to contain the revealed cards — .handpanel-body comes BEFORE
+   .handpanel-toggle in the DOM (see HandPanel.tsx) so the toggle always sits at the
+   frame's trailing edge: alone at the left when collapsed (the body occupies zero width),
+   pushed out to the right once the body's width reveals. */
+.handpanel {
+  position: absolute; left: 42px; bottom: 4px; z-index: 20;
+  display: flex; align-items: stretch; height: 166px;
+  background: rgba(14, 24, 19, 0.9); border: 1px solid var(--line); border-radius: 7px;
+  overflow: hidden; transition: border-color 0.15s ease;
+}
+/* over the hand limit: a plain, steady red frame — not animated, so it doesn't fight with
+   the cards' own pulsing border once expanded */
+.handpanel.urgent { border-color: #c1573c; }
+/* width-only slide (max-width, not width — "auto" doesn't animate) so the frame widens to
+   reveal the cards instead of just popping in; overflow:hidden clips it while collapsed */
+.handpanel-body {
+  overflow: hidden; max-width: 0; opacity: 0;
+  transition: max-width 0.28s ease, opacity 0.2s ease, padding 0.28s ease;
+  display: flex; flex-direction: column; justify-content: center; gap: 0.3rem;
+}
+.handpanel.open .handpanel-body { max-width: 900px; opacity: 1; padding: 0 0.5rem; }
+.handpanel-cards { display: flex; gap: 6px; flex-wrap: nowrap; align-items: center; }
 .handpanel-toggle {
   flex: 0 0 auto; width: 26px; padding: 0;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(14, 24, 19, 0.9); border: 1px solid var(--line); border-radius: 7px;
+  background: none; border: none; border-left: 1px solid transparent;
   color: var(--ink); cursor: pointer;
 }
-.handpanel-toggle:hover { border-color: var(--gold); color: var(--gold); }
+.handpanel.open .handpanel-toggle { border-left-color: var(--line); }
+.handpanel.urgent.open .handpanel-toggle { border-left-color: #c1573c; }
+.handpanel-toggle:hover:not(:disabled) { color: var(--gold); }
+/* disabled while the hand is forced open (battle/discard/burn) — not the player's to
+   dismiss until that clears */
+.handpanel-toggle:disabled { cursor: default; opacity: 0.35; }
 .handpanel-toggle svg { transition: transform 0.25s ease; }
 .handpanel.open .handpanel-toggle svg { transform: rotate(180deg); }
-/* over the hand limit: a plain, steady red frame on the toggle — not animated, so it
-   doesn't fight with the cards' own pulsing border once expanded */
-.handpanel.urgent .handpanel-toggle { border-color: #c1573c; }
-/* width-only slide (max-width, not width — "auto" doesn't animate) so the card row reveals
-   itself instead of just popping in; overflow:hidden clips it while collapsed */
-.handpanel-body {
-  overflow: hidden; max-width: 0; opacity: 0; margin-left: 0;
-  transition: max-width 0.28s ease, opacity 0.2s ease, margin-left 0.28s ease;
-  display: flex; flex-direction: column; justify-content: center; gap: 0.3rem;
-}
-.handpanel.open .handpanel-body { max-width: 900px; opacity: 1; margin-left: 6px; }
-.handpanel-cards { display: flex; gap: 6px; flex-wrap: nowrap; align-items: center; }
 
 .equip-choice { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 /* one offered card in EquipmentPopup — real square art (UpgradeCardArt), this is just the

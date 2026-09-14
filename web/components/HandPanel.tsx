@@ -1,12 +1,18 @@
 /**
  * The player's hand — docked beside the board's own zoom/pan/rotate control stack
- * (bottom-left), matching its height. Collapsed: a thin vertical bar with a chevron to
- * expand. Expanded: the full hand, one row. Pinned open by the player (clicking the
- * chevron) stays open no matter what, until they collapse it again; otherwise it only opens
- * automatically while `forceOpen` is true (a forced action is pending — over the hand
- * limit, an armable card during a burn, a card staged for combat, a freshly drawn card) and
- * closes again the instant that clears — same "show only when there's something to do"
- * behaviour the old always-centred panel had, just collapsible instead of vanishing outright.
+ * (bottom-left), matching its height. One visible frame throughout: collapsed, it's just a
+ * thin bar (the toggle chevron, pointing right); expanded, the frame widens to actually
+ * contain the revealed cards, and the toggle slides along with it to sit at the frame's
+ * *far* edge (now pointing left, "collapse") — never a fixed button with cards floating
+ * past it.
+ *
+ * Two independent reasons the panel can be open: the player asked for it (`userOpen`, free
+ * to toggle whenever nothing needs their attention), or the game forced it (`forceOpen` —
+ * over the hand limit, an armable card during a burn, a card staged for combat, a freshly
+ * drawn card). While forced, the toggle is disabled outright — a forced hand isn't the
+ * player's to dismiss. The instant the force clears, the panel reverts to whatever the
+ * player's own toggle was already set to (open if they'd deliberately expanded it earlier,
+ * collapsed otherwise) — "auto-collapses" is really just that reversion, not a separate rule.
  */
 import { useEffect, useState } from "react";
 import type { BoosterCard } from "../../engine/index.js";
@@ -30,13 +36,13 @@ export interface HandPanelProps {
     onClick?: (() => void) | undefined;
     pulse?: "urgent" | "new" | "ready" | null;
   };
-  /** over the hand limit — redden the toggle and keep every card pulsing until resolved */
+  /** over the hand limit — redden the frame and keep every card pulsing until resolved */
   urgent?: boolean;
-  /** true while a forced action is pending on this hand — expands the panel even if the
-     player hasn't pinned it open, and keeps it open until this clears */
+  /** true while a forced action is pending on this hand — expands the panel regardless of
+     the player's own toggle, and disables that toggle until this clears */
   forceOpen: boolean;
-  /** whose hand this is — collapses (and un-pins) whenever it changes, so the next player
-     doesn't inherit the last one's pinned-open panel */
+  /** whose hand this is — collapses (and resets the player's own toggle) whenever it
+     changes, so the next player doesn't inherit the last one's open panel */
   ownerId: number;
 }
 
@@ -49,20 +55,12 @@ function Chevron() {
 }
 
 export function HandPanel({ cards, cardHint, cardState, urgent, forceOpen, ownerId }: HandPanelProps) {
-  const [pinned, setPinned] = useState(false);
-  useEffect(() => setPinned(false), [ownerId]);
+  const [userOpen, setUserOpen] = useState(false);
+  useEffect(() => setUserOpen(false), [ownerId]);
   if (!cards.length) return null;
-  const open = pinned || forceOpen;
+  const open = forceOpen || userOpen;
   return (
     <div className={`handpanel${open ? " open" : ""}${urgent ? " urgent" : ""}`}>
-      <button
-        type="button"
-        className="handpanel-toggle"
-        aria-label={open ? "Collapse hand" : "Expand hand"}
-        onClick={() => setPinned((p) => !p)}
-      >
-        <Chevron />
-      </button>
       <div className="handpanel-body">
         {cardHint && <div className="hint">{cardHint}</div>}
         <div className="handpanel-cards">
@@ -81,6 +79,15 @@ export function HandPanel({ cards, cardHint, cardState, urgent, forceOpen, owner
           })}
         </div>
       </div>
+      <button
+        type="button"
+        className="handpanel-toggle"
+        aria-label={open ? "Collapse hand" : "Expand hand"}
+        disabled={forceOpen}
+        onClick={() => setUserOpen((o) => !o)}
+      >
+        <Chevron />
+      </button>
     </div>
   );
 }
