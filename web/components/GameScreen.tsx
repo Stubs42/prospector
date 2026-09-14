@@ -10,7 +10,7 @@ import { boardFor } from "../../engine/game.js";
 import { add, hexKey, scale } from "../../engine/hex.js";
 import type { Colour, Hex } from "../../engine/index.js";
 import { Board } from "./Board.js";
-import { BottomPanel, type PanelButton } from "./BottomPanel.js";
+import { HandPanel, type PanelButton } from "./HandPanel.js";
 import { CombatBox, type CombatBoxProps, type CombatCardChip } from "./CombatBox.js";
 import { EquipmentPopup } from "./EquipmentPopup.js";
 import { HexPopup } from "./HexPopup.js";
@@ -730,16 +730,18 @@ export function GameScreen({
           </div>
         )}
 
-        <BottomPanel
+        <HandPanel
           // a staged laser/shield moved into the combat box above — it no longer shows here
           cards={
-            showCards
-              ? handOwner.hand.filter((c) => !(combatCardType && c.type === combatCardType && combatSel.has(c.id)))
-              : []
+            handHidden
+              ? []
+              : handOwner.hand.filter((c) => !(combatCardType && c.type === combatCardType && combatSel.has(c.id)))
           }
           cardHint={cardHint}
           cardState={cardState}
           urgent={overLimit}
+          forceOpen={showCards}
+          ownerId={handOwner.id}
         />
       </div>
 

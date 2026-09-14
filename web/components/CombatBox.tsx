@@ -12,7 +12,7 @@
 import type { BoosterType } from "../../engine/index.js";
 import { ActionBox, HexButton } from "./ActionBox.js";
 import { ASPECT_FILL, ASPECT_TAG } from "./aspects.js";
-import type { PanelButton } from "./BottomPanel.js";
+import type { PanelButton } from "./HandPanel.js";
 import { Die } from "./kit.js";
 
 export interface CombatCardChip {

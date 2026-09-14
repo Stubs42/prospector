@@ -141,7 +141,7 @@ button.danger { border-color: #6a3a2f; }
 
 /* the 4 shared deck piles — fixed screen overlays (see DeckPanels.tsx), same family as
    .status-panel: top-right mirrors its top-left identity panel (booster deck), lower-right
-   sits clear of both .zoomctl (bottom-left) and .bottompanel (bottom-centre). */
+   sits clear of both .zoomctl and .handpanel (bottom-left). */
 .deck-panel, .supply-panel { position: absolute; z-index: 20; display: flex; gap: 8px; pointer-events: none; }
 .deck-panel { right: 12px; top: 12px; }
 .supply-panel { right: 12px; bottom: 14px; }
@@ -164,21 +164,32 @@ button.danger { border-color: #6a3a2f; }
 }
 .board-toast.win { border-color: var(--gold); color: var(--gold); }
 
-.bottompanel {
-  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
-  z-index: 25; max-width: min(680px, 92vw);
-  background: rgba(14, 24, 19, 0.96);
-  border: 1px solid var(--line-strong, var(--line)); border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-  padding: 0.7rem 0.85rem;
-  display: flex; flex-direction: column; gap: 0.5rem; align-items: center;
+/* the hand — docked beside .zoomctl (bottom-left), matching its stacked-button height
+   (5 * 30px buttons + 4 * 4px gaps = 166px) so the two read as one control cluster.
+   Collapsed: just .handpanel-toggle, a thin bar. Expanded (.open): the card row slides out
+   to the right of it — see HandPanel.tsx for when that happens. */
+.handpanel { position: absolute; left: 42px; bottom: 4px; z-index: 20; display: flex; align-items: stretch; height: 166px; }
+.handpanel-toggle {
+  flex: 0 0 auto; width: 26px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(14, 24, 19, 0.9); border: 1px solid var(--line); border-radius: 7px;
+  color: var(--ink); cursor: pointer;
 }
-.bottompanel .bp-title { font-weight: 700; }
-.bottompanel .hand { justify-content: center; }
-.bottompanel .actions { justify-content: center; }
-/* over the hand limit: a plain, steady red frame — not animated, so it doesn't fight
-   with the cards' own pulsing border */
-.bottompanel.urgent { border-color: #c1573c; }
+.handpanel-toggle:hover { border-color: var(--gold); color: var(--gold); }
+.handpanel-toggle svg { transition: transform 0.25s ease; }
+.handpanel.open .handpanel-toggle svg { transform: rotate(180deg); }
+/* over the hand limit: a plain, steady red frame on the toggle — not animated, so it
+   doesn't fight with the cards' own pulsing border once expanded */
+.handpanel.urgent .handpanel-toggle { border-color: #c1573c; }
+/* width-only slide (max-width, not width — "auto" doesn't animate) so the card row reveals
+   itself instead of just popping in; overflow:hidden clips it while collapsed */
+.handpanel-body {
+  overflow: hidden; max-width: 0; opacity: 0; margin-left: 0;
+  transition: max-width 0.28s ease, opacity 0.2s ease, margin-left 0.28s ease;
+  display: flex; flex-direction: column; justify-content: center; gap: 0.3rem;
+}
+.handpanel.open .handpanel-body { max-width: 900px; opacity: 1; margin-left: 6px; }
+.handpanel-cards { display: flex; gap: 6px; flex-wrap: nowrap; align-items: center; }
 
 .equip-choice { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 /* one offered card in EquipmentPopup — real square art (UpgradeCardArt), this is just the
@@ -407,7 +418,6 @@ button.hexbutton {
   font-size: 0.7rem; font-weight: 700; color: rgba(0,0,0,0.6);
 }
 
-.hand { display: flex; gap: 6px; flex-wrap: wrap; }
 .card {
   position: relative;
   width: 82px; min-height: 104px;
