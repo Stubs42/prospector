@@ -434,6 +434,7 @@ button.hexbutton {
 .card {
   position: relative;
   width: 82px; min-height: 104px;
+  transition: transform 0.15s ease;
   /* starfield/nebula backdrop, echoing the physical cards' photo background */
   background:
     radial-gradient(1px 1px at 12% 22%, #fff, transparent),
@@ -493,8 +494,12 @@ button.hexbutton {
 .card-art-wrap {
   position: relative; display: inline-block;
   border: 2px solid transparent; border-radius: 10px;
+  transition: transform 0.15s ease;
 }
 .card-art-wrap.picked { outline: 2px solid var(--gold); outline-offset: 1px; }
+/* same "lift on hover" affordance as EquipmentPopup's .equip-card-wrap — playable cards
+   only (a card you can't act on right now shouldn't invite a click) */
+.card-art-wrap.clickable:hover, .card.clickable:hover { transform: translateY(-3px); }
 /* every path in the art carries an inline style="fill:...;stroke:..." (always beats a CSS
    class alone) — !important is required to theme it. Only the property each icon family
    actually draws with is overridden, so a neutral ("any ship"/ore) accent living inside a

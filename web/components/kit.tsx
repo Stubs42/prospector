@@ -188,7 +188,7 @@ export function BoosterCardFace({
   if (artStat && card.value != null) {
     return (
       <div
-        className={`card-art-wrap${selected ? " picked" : ""}${pulse ? ` pulse-${pulse}` : ""}`}
+        className={`card-art-wrap${clickable ? " clickable" : ""}${selected ? " picked" : ""}${pulse ? ` pulse-${pulse}` : ""}`}
         style={{ cursor: clickable ? "pointer" : "default", color: ASPECT_FILL[artStat] }}
         onClick={onClick}
       >
@@ -198,7 +198,7 @@ export function BoosterCardFace({
   }
   return (
     <div
-      className={`card booster-${card.type}${selected ? " picked" : ""}${pulse ? ` pulse-${pulse}` : ""}`}
+      className={`card booster-${card.type}${clickable ? " clickable" : ""}${selected ? " picked" : ""}${pulse ? ` pulse-${pulse}` : ""}`}
       style={{ cursor: clickable ? "pointer" : "default" }}
       onClick={onClick}
     >
