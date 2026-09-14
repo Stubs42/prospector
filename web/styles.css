@@ -181,28 +181,44 @@ button.danger { border-color: #6a3a2f; }
    the cards' own pulsing border once expanded */
 .handpanel.urgent { border-color: #c1573c; }
 /* width-only slide (max-width, not width — "auto" doesn't animate) so the frame widens to
-   reveal the cards instead of just popping in; overflow:hidden clips it while collapsed */
+   reveal the cards instead of just popping in; overflow:hidden clips it while collapsed.
+   One shared duration (--handpanel-anim-ms, theme.ts handPanel.animMs) drives every animated
+   property here (max-width/opacity/padding on the body, the chevron's rotate below) so expand
+   and collapse always move in lockstep instead of drifting apart if tuned separately. */
 .handpanel-body {
   overflow: hidden; max-width: 0; opacity: 0;
-  transition: max-width 0.28s ease, opacity 0.2s ease, padding 0.28s ease;
+  transition:
+    max-width var(--handpanel-anim-ms) ease,
+    opacity var(--handpanel-anim-ms) ease,
+    padding var(--handpanel-anim-ms) ease;
   display: flex; flex-direction: column; justify-content: center; gap: 0.3rem;
 }
 .handpanel.open .handpanel-body { max-width: 900px; opacity: 1; padding: 0 0.5rem; }
 .handpanel-cards { display: flex; gap: 6px; flex-wrap: nowrap; align-items: center; }
+/* explicit reset against the global `button` rule (styles.css ~L87) — that rule's own
+   background/border would otherwise show through on this borderless, backgroundless toggle,
+   and its `button:hover:not(:disabled) { border-color: var(--gold) }` (specificity 0,2,1) was
+   winning a tie-break against the border this panel sets, flashing a stray gold/orange edge on
+   hover. outline:none + tabIndex=-1/preventDefault in HandPanel.tsx also keep it from ever
+   taking a native focus ring, matching the app's convention for non-primary buttons. */
 .handpanel-toggle {
   flex: 0 0 auto; width: 26px; padding: 0;
   display: flex; align-items: center; justify-content: center;
   background: none; border: none; border-left: 1px solid transparent;
-  color: var(--ink); cursor: pointer;
+  color: var(--ink); cursor: pointer; outline: none;
 }
 .handpanel.open .handpanel-toggle { border-left-color: var(--line); }
 .handpanel.urgent.open .handpanel-toggle { border-left-color: #c1573c; }
-.handpanel-toggle:hover:not(:disabled) { color: var(--gold); }
 /* disabled while the hand is forced open (battle/discard/burn) — not the player's to
    dismiss until that clears */
 .handpanel-toggle:disabled { cursor: default; opacity: 0.35; }
-.handpanel-toggle svg { transition: transform 0.25s ease; }
+.handpanel-toggle svg { transition: transform var(--handpanel-anim-ms) ease; }
 .handpanel.open .handpanel-toggle svg { transform: rotate(180deg); }
+/* declared last, self-contained (0,3,0) so it beats both the global button:hover rule and
+   .handpanel.open .handpanel-toggle above on source order — hovers the same gold as a zoom
+   button, border-left included, whether open or collapsed */
+.handpanel-toggle:hover:not(:disabled) { color: var(--gold); border-left-color: transparent; }
+.handpanel.open .handpanel-toggle:hover:not(:disabled) { border-left-color: var(--gold); }
 
 .equip-choice { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 /* one offered card in EquipmentPopup — real square art (UpgradeCardArt), this is just the

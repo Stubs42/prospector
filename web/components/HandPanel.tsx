@@ -84,6 +84,8 @@ export function HandPanel({ cards, cardHint, cardState, urgent, forceOpen, owner
         className="handpanel-toggle"
         aria-label={open ? "Collapse hand" : "Expand hand"}
         disabled={forceOpen}
+        tabIndex={-1}
+        onMouseDown={(e) => e.preventDefault()}
         onClick={() => setUserOpen((o) => !o)}
       >
         <Chevron />

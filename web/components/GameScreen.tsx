@@ -435,10 +435,14 @@ export function GameScreen({
   // handOwner can be the solo human while a bot (whose own draw also touches newCardIds) is
   // the one actually acting; a bot's own new card must never force the human's hand open
   const handHasNewCard = handOwner.hand.some((c) => s.newCardIds.has(c.id));
+  // `overLimit` (afford.overLimit) is only ever meaningful for state.activePlayerIndex — a
+  // bot's own over-limit moment (before its auto-discard resolves) must never force the
+  // solo human's collapsed hand open, same reasoning as handHasNewCard above
+  const handOwnerOverLimit = overLimit && handOwner.id === state.activePlayerIndex;
   const showCards =
     !handHidden &&
     handOwner.hand.length > 0 &&
-    (overLimit || inBurnPhase || combatCardType !== null || handHasNewCard);
+    (handOwnerOverLimit || inBurnPhase || combatCardType !== null || handHasNewCard);
   const cardHint = overLimit
     ? null // the centred hex popup carries this message instead
     : inBurnPhase && p.hand.some((c) => c.type === "engine" || c.type === "reserveFuel")
@@ -752,7 +756,7 @@ export function GameScreen({
           }
           cardHint={cardHint}
           cardState={cardState}
-          urgent={overLimit}
+          urgent={handOwnerOverLimit}
           forceOpen={showCards}
           ownerId={handOwner.id}
         />

@@ -185,6 +185,14 @@ export interface Theme {
        don't use a pause at all any more, flowing straight into the next round instead */
     settleMs: number;
   };
+  /** the docked hand panel (HandPanel.tsx) — pushed as a CSS custom property (applyTheme),
+     not consumed directly in JS, so expand and collapse always animate over exactly the
+     same duration (one CSS transition-duration var driving width/opacity/padding/chevron
+     together) instead of drifting out of sync if each were tuned separately. */
+  handPanel: {
+    /** expand/collapse transition duration, ms */
+    animMs: number;
+  };
 }
 
 export const theme: Theme = {
@@ -327,6 +335,9 @@ export const theme: Theme = {
     resourceDurationMs: 5100, // 1700ms x 3 rounds
     settleMs: 320,
   },
+  handPanel: {
+    animMs: 450,
+  },
 };
 
 /** pushes the theme's colour tokens onto <html> as CSS custom properties — call once,
@@ -360,4 +371,5 @@ export function applyTheme(t: Theme): void {
   root.setProperty("--gold", ui.gold);
   root.setProperty("--danger", ui.danger);
   root.setProperty("--ok", ui.ok);
+  root.setProperty("--handpanel-anim-ms", `${t.handPanel.animMs}ms`);
 }
