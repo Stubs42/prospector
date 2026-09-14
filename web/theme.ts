@@ -111,7 +111,13 @@ export interface Theme {
   /** real card artwork (see cardAssets.ts / CardArt.tsx) — booster cards (hand, deck-panel
      stacks), ship cards (the setup screen's picker) and upgrade cards (EquipmentPopup, the
      deck-panel stack) all size themselves off this one config, in px, so tuning a card's
-     size in one place resizes every popup/frame that shows one. */
+     size in one place resizes every popup/frame that shows one.
+     Every position nudge below is a fraction of the CARD's own width/height, added to the
+     baked-in layout position CardArt.tsx measured off the artwork's examples — 0 means "use
+     the measured position exactly", positive moves right/down. Every fontSize is a fraction
+     of the card's own height. Every iconScale multiplies the icon's box size around its own
+     centre within its slot (1 = as measured, <1 shrinks it — also useful headroom if an
+     icon's stroke ever crowds its slot's edge again). */
   cards: {
     /** hand / deck-panel-stack booster card width — height follows the art's own portrait
        aspect ratio (cardAssets.ts's PORTRAIT_ASPECT). Was 82px as a plain CSS .card;
@@ -124,11 +130,38 @@ export interface Theme {
     upgradeSize: number;
     /** gap between adjacent cards — hand row, a deck-panel pair, an equipment offer row */
     gap: number;
-    /** the label ("FUEL"/"SHIELD") and value ("2"/"+1") text drawn on top of the card art,
-       at its own baked-in position (see CardArt.tsx's *_LAYOUT fractions) — only font size
-       is tunable here, as a fraction of the card's own height */
-    labelFontSize: number;
-    valueFontSize: number;
+    booster: {
+      titleFontSize: number;
+      titleOffsetY: number;
+      valueFontSize: number;
+      valueOffsetY: number;
+      iconScale: number;
+    };
+    upgrade: {
+      titleFontSize: number;
+      titleOffsetY: number;
+      valueFontSize: number;
+      valueOffsetX: number;
+      valueOffsetY: number;
+      iconScale: number;
+      iconOffsetX: number;
+      iconOffsetY: number;
+    };
+    ship: {
+      nameFontSize: number;
+      nameOffsetY: number;
+      /** the 6 stat-grid icons (shield/laser/cargo/engine/hand-stars — not fuel, which has
+         its own icon+number layout below) */
+      statIconScale: number;
+      /** the fuel cell shows an icon AND its real number side by side, not centred like the
+         other 5 (their value IS the icon, 1-3 pips) — fuel's capacity (10s) can't be a pip
+         count, so it always shows one representative tank icon to the left, real number to
+         the right */
+      fuelIconOffsetX: number;
+      fuelFontSize: number;
+      fuelOffsetX: number;
+      fuelOffsetY: number;
+    };
   };
   /** timing shared by every "lucky wheel" spin (base pick, ship pick, the start-player
      roll-off, each coordinate-dice round) — see spin.ts's buildSpinSchedule */
@@ -249,8 +282,32 @@ export const theme: Theme = {
     shipWidth: 190,
     upgradeSize: 96,
     gap: 8,
-    labelFontSize: 0.09,
-    valueFontSize: 0.15,
+    booster: {
+      titleFontSize: 0.09,
+      titleOffsetY: 0,
+      valueFontSize: 0.15,
+      valueOffsetY: 0,
+      iconScale: 1,
+    },
+    upgrade: {
+      titleFontSize: 0.09,
+      titleOffsetY: 0,
+      valueFontSize: 0.2,
+      valueOffsetX: 0,
+      valueOffsetY: 0,
+      iconScale: 1,
+      iconOffsetX: 0,
+      iconOffsetY: 0,
+    },
+    ship: {
+      nameFontSize: 0.09,
+      nameOffsetY: 0,
+      statIconScale: 1,
+      fuelIconOffsetX: 0,
+      fuelFontSize: 0.15,
+      fuelOffsetX: 0,
+      fuelOffsetY: 0,
+    },
   },
   spin: {
     startIntervalMs: 70,

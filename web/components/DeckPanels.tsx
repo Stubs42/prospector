@@ -20,14 +20,15 @@ const OVERLAY_INK = "#e8efe9";
 function DeckStack({ square, label, value }: { square?: boolean; label: string; value: React.ReactNode }) {
   const labelPt = square ? UPGRADE_LABEL : BOOSTER_LABEL;
   const valuePt = square ? UPGRADE_VALUE : BOOSTER_VALUE;
+  const t = square ? theme.cards.upgrade : theme.cards.booster;
   const h = square ? theme.cards.upgradeSize : theme.cards.boosterWidth / PORTRAIT_ASPECT;
   return (
     <div style={{ position: "relative" }}>
       <CardBackArt square={square} />
-      <CardText x={labelPt.x} y={labelPt.y} frac={theme.cards.labelFontSize} cardHeight={h} color={OVERLAY_INK}>
+      <CardText x={labelPt.x} y={labelPt.y + t.titleOffsetY} frac={t.titleFontSize} cardHeight={h} color={OVERLAY_INK}>
         {label}
       </CardText>
-      <CardText x={valuePt.x} y={valuePt.y} frac={theme.cards.valueFontSize} cardHeight={h} color={OVERLAY_INK}>
+      <CardText x={valuePt.x} y={valuePt.y + t.valueOffsetY} frac={t.valueFontSize} cardHeight={h} color={OVERLAY_INK}>
         {value}
       </CardText>
     </div>
@@ -50,17 +51,23 @@ export function DeckPanels({ state }: { state: GameState }) {
         <DeckStack square label="UPGRADES" value={`${state.decks.equipment.draw.length}/${equipmentTotal}`} />
         <div style={{ position: "relative" }}>
           <CardBackArt square />
-          <CardText x={UPGRADE_LABEL.x} y={UPGRADE_LABEL.y} frac={theme.cards.labelFontSize} cardHeight={upgradeH} color={OVERLAY_INK}>
+          <CardText
+            x={UPGRADE_LABEL.x}
+            y={UPGRADE_LABEL.y + theme.cards.upgrade.titleOffsetY}
+            frac={theme.cards.upgrade.titleFontSize}
+            cardHeight={upgradeH}
+            color={OVERLAY_INK}
+          >
             ORE
           </CardText>
           <div
             className="deckcard-orerow"
             style={{
               position: "absolute",
-              left: `${UPGRADE_VALUE.x * 100}%`,
-              top: `${UPGRADE_VALUE.y * 100}%`,
+              left: `${(UPGRADE_VALUE.x + theme.cards.upgrade.valueOffsetX) * 100}%`,
+              top: `${(UPGRADE_VALUE.y + theme.cards.upgrade.valueOffsetY) * 100}%`,
               transform: "translate(-50%, -50%)",
-              fontSize: theme.cards.valueFontSize * upgradeH,
+              fontSize: theme.cards.upgrade.valueFontSize * upgradeH,
             }}
           >
             {ORE_ORDER.map((o) => (
