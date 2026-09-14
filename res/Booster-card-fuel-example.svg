@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="716.11 1188.93 797.70 1138.23">
+<style>.icon-ore-neutral-fill {   }
+.icon-fuel-fill {   }
+.icon-fuel-caps-fill {   }
+.icon-card-fill {   }
+.icon-ore-red {   }
+.icon-ore-yellow {   }
+.icon-ore-green-fill {   }
+.icon-cargo-stroke {   }
+.icon-ship-neutral-bgstroke {   }
+.icon-shield-stroke {   }
+.icon-ship-neutral-fill {   }
+.icon-engine-fill {   }
+.icon-laser-stroke {   }
+</style>
+<g transform="matrix(3.779513888888889 0 0 3.779513888888889 18.897697401543457 19.27747694086035)">
+<g id="g120">
+      <path id="rect112-8" style="fill:#b3b3b3;stroke:none;stroke-width:0.2;stroke-linecap:round;stroke-linejoin:round" d="m 260,-15.199979 h 179.99997 a 15.000005,15.000005 45 0 1 15.00001,15.000005 V 269.89999 a 15.000005,15.000005 135 0 1 -15.00001,15 H 260 a 15.000005,15.000005 45 0 1 -15,-15 V -0.199974 a 15.000005,15.000005 135 0 1 15,-15.000005 z" transform="translate(-59.999997,325.19998)"></path>
+      <text xml:space="preserve" style="font-size:3.79235px;font-family:'Repetition Scrolling';-inkscape-font-specification:'Repetition Scrolling, Normal';writing-mode:lr-tb;direction:ltr;fill:#000000;fill-opacity:1;stroke:#00ccff;stroke-width:0.2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1" x="260.03592" y="347.94302" id="text113-6"><tspan id="tspan113-6" style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:22.5778px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.2" x="260.03592" y="347.94302">FUEL</tspan></text>
+      <text xml:space="preserve" style="font-size:3.79235px;font-family:'Repetition Scrolling';-inkscape-font-specification:'Repetition Scrolling, Normal';writing-mode:lr-tb;direction:ltr;fill:#000000;fill-opacity:1;stroke:#00ccff;stroke-width:0.2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1" x="283.5788" y="588.11389" id="text113-6-0"><tspan id="tspan113-6-8" style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:22.5778px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.2" x="283.5788" y="588.11389">2</tspan></text>
+      <g id="layer1-6-4-6-2" transform="matrix(1.2000001,0,0,1.2,194.99999,365.00001)">
+        <path id="rect1-5-0-3" style="stroke-width:0.3;stroke-linejoin:round" d="M 4.1666711,-1.0024529e-7 154.16665,-3.7090712e-6 A 4.1666698,4.1666698 44.999999 0 1 158.33332,4.1666661 V 154.16666 a 4.1666704,4.1666704 135 0 1 -4.16667,4.16667 H 4.1666665 A 4.1666703,4.1666703 45.000001 0 1 -3.791679e-6,154.16666 L -1.0247792e-7,4.1666711 A 4.1666713,4.1666713 135 0 1 4.1666711,-1.0024529e-7 Z"></path>
+      </g>
+      <g id="g104-2" transform="matrix(3.2,0,0,3.2,18.599968,-516)">
+        <rect style="fill:#6060ff;fill-opacity:1;stroke:none;stroke-width:1.94029;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1" id="rect43-3-8" width="11" height="32" x="69.5" y="289" class="icon-fuel-fill "></rect>
+        <rect style="fill:#6060ff;fill-opacity:1;stroke:none;stroke-width:1.94029;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1" id="rect43-6-3" width="11" height="32" x="89.500008" y="289" class="icon-fuel-fill "></rect>
+        <g id="g82-1">
+          <path id="rect42-83-9-4" style="fill:#e6e6e6;stroke-width:2.82843;stroke-linecap:round;stroke-linejoin:round" d="M 1.9999909,320 H 13.000009 A 1.9999909,1.9999909 45 0 1 15,321.99999 V 328 a 1.9999909,1.9999909 135 0 1 -1.999991,1.99999 l -11.0000181,0 A 1.9999909,1.9999909 45 0 1 0,328 v -6.00001 A 1.9999909,1.9999909 135 0 1 1.9999909,320 Z" transform="translate(67.500002)" class="icon-fuel-caps-fill"></path>
+          <path id="rect42-83-1-4-3" style="fill:#e6e6e6;stroke-width:2.82843;stroke-linecap:round;stroke-linejoin:round" d="M 1.9999909,320 H 13.000009 A 1.9999909,1.9999909 45 0 1 15,321.99999 V 328 a 1.9999909,1.9999909 135 0 1 -1.999991,1.99999 l -11.0000181,0 A 1.9999909,1.9999909 45 0 1 0,328 v -6.00001 A 1.9999909,1.9999909 135 0 1 1.9999909,320 Z" transform="translate(67.499993,-40.000004)" class="icon-fuel-caps-fill"></path>
+          <path id="rect42-83-14-1" style="fill:#e6e6e6;stroke-width:2.82843;stroke-linecap:round;stroke-linejoin:round" d="M 1.9999909,320 H 13.000009 A 1.9999909,1.9999909 45 0 1 15,321.99999 V 328 a 1.9999909,1.9999909 135 0 1 -1.999991,1.99999 l -11.0000181,0 A 1.9999909,1.9999909 45 0 1 0,328 v -6.00001 A 1.9999909,1.9999909 135 0 1 1.9999909,320 Z" transform="translate(87.500002)" class="icon-fuel-caps-fill"></path>
+          <path id="rect42-83-1-46-0" style="fill:#e6e6e6;stroke-width:2.82843;stroke-linecap:round;stroke-linejoin:round" d="M 1.9999909,320 H 13.000009 A 1.9999909,1.9999909 45 0 1 15,321.99999 V 328 a 1.9999909,1.9999909 135 0 1 -1.999991,1.99999 l -11.0000181,0 A 1.9999909,1.9999909 45 0 1 0,328 v -6.00001 A 1.9999909,1.9999909 135 0 1 1.9999909,320 Z" transform="translate(87.499993,-39.999999)" class="icon-fuel-caps-fill"></path>
+        </g>
+      </g>
+    </g>
+</g>
+</svg>

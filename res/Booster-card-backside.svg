@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="716.11 2360.58 797.70 1138.23">
+<style>.icon-ore-neutral-fill {   }
+.icon-fuel-fill {   }
+.icon-fuel-caps-fill {   }
+.icon-card-fill {   }
+.icon-ore-red {   }
+.icon-ore-yellow {   }
+.icon-ore-green-fill {   }
+.icon-cargo-stroke {   }
+.icon-ship-neutral-bgstroke {   }
+.icon-shield-stroke {   }
+.icon-ship-neutral-fill {   }
+.icon-engine-fill {   }
+.icon-laser-stroke {   }
+</style>
+<g transform="matrix(3.779513888888889 0 0 3.779513888888889 0.00002883540259467231 0.37991470526655263)">
+<g id="g129">
+      <g id="g120-1" transform="translate(5.0000351,314.99999)">
+        <path id="rect112-8-5" style="fill:#b3b3b3;stroke:none;stroke-width:0.2;stroke-linecap:round;stroke-linejoin:round" d="m 260,-15.199979 h 179.99997 a 15.000005,15.000005 45 0 1 15.00001,15.000005 V 269.89999 a 15.000005,15.000005 135 0 1 -15.00001,15 H 260 a 15.000005,15.000005 45 0 1 -15,-15 V -0.199974 a 15.000005,15.000005 135 0 1 15,-15.000005 z" transform="translate(-59.999997,325.19998)"></path>
+        <g id="layer1-6-4-6-2-6" transform="matrix(1.2000001,0,0,1.768421,194.99999,320.00001)">
+          <path id="rect1-5-0-3-1" style="stroke-width:0.3;stroke-linejoin:round" d="M 4.1666711,-1.0024529e-7 154.16665,-3.7090712e-6 A 4.1666698,4.1666698 44.999999 0 1 158.33332,4.1666661 V 154.16666 a 4.1666704,4.1666704 135 0 1 -4.16667,4.16667 H 4.1666665 A 4.1666703,4.1666703 45.000001 0 1 -3.791679e-6,154.16666 L -1.0247792e-7,4.1666711 A 4.1666713,4.1666713 135 0 1 4.1666711,-1.0024529e-7 Z"></path>
+        </g>
+      </g>
+      <g id="g106-5" class="icon-card-fill" transform="matrix(3.1752861,0,0,3.1752861,215.55793,-416.00212)" style="fill:#e6e6e6;fill-opacity:1">
+        <path style="fill:#cccccc;fill-opacity:1;stroke:none;stroke-width:0.2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1" d="m 25.001213,352.52323 5.60382,17.12106 17.99602,-0.007 -14.54112,10.63249 5.52071,17.20702 L 24.968853,386.97677 10.360491,397.40532 15.73453,380.3206 1.3989616,369.64426 H 19.33834 Z" id="path55-3-1-0"></path>
+      </g>
+    </g>
+</g>
+</svg>

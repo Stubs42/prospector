@@ -108,18 +108,27 @@ export interface Theme {
     statValueFontSize: number;
     statValueOffsetY: number;
   };
-  /** the "upgrade card" hex buttons (EquipmentPopup — homecoming and the start-of-game
-     draw both use it): the same "small label above a value" shape as a base status cell
-     above, but plain HTML/CSS rather than board SVG, so these are rem/em, not fractions of
-     a hex cell's size (S). */
+  /** real card artwork (see cardAssets.ts / CardArt.tsx) — booster cards (hand, deck-panel
+     stacks), ship cards (the setup screen's picker) and upgrade cards (EquipmentPopup, the
+     deck-panel stack) all size themselves off this one config, in px, so tuning a card's
+     size in one place resizes every popup/frame that shows one. */
   cards: {
-    /** the tag above the value (e.g. "SHIELD") — font size in rem, vertical shift in em
-       (negative = up) */
+    /** hand / deck-panel-stack booster card width — height follows the art's own portrait
+       aspect ratio (cardAssets.ts's PORTRAIT_ASPECT). Was 82px as a plain CSS .card;
+       that's this value's starting point. */
+    boosterWidth: number;
+    /** the setup screen's ship-picker card — same portrait shape, its own size since it's
+       shown in a different context than a hand/deck-panel card */
+    shipWidth: number;
+    /** upgrade card width AND height, px (square, unlike booster/ship cards) */
+    upgradeSize: number;
+    /** gap between adjacent cards — hand row, a deck-panel pair, an equipment offer row */
+    gap: number;
+    /** the label ("FUEL"/"SHIELD") and value ("2"/"+1") text drawn on top of the card art,
+       at its own baked-in position (see CardArt.tsx's *_LAYOUT fractions) — only font size
+       is tunable here, as a fraction of the card's own height */
     labelFontSize: number;
-    labelOffsetY: number;
-    /** the "+N" value itself */
     valueFontSize: number;
-    valueOffsetY: number;
   };
   /** timing shared by every "lucky wheel" spin (base pick, ship pick, the start-player
      roll-off, each coordinate-dice round) — see spin.ts's buildSpinSchedule */
@@ -236,10 +245,12 @@ export const theme: Theme = {
     statValueOffsetY: 0.25,
   },
   cards: {
-    labelFontSize: 0.62,
-    labelOffsetY: 0,
-    valueFontSize: 1.4,
-    valueOffsetY: 0,
+    boosterWidth: 82,
+    shipWidth: 190,
+    upgradeSize: 96,
+    gap: 8,
+    labelFontSize: 0.09,
+    valueFontSize: 0.15,
   },
   spin: {
     startIntervalMs: 70,

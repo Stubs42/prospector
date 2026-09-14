@@ -8,9 +8,9 @@
  * During a bot's own turn the card still shows and spins (so the pick is watchable), but
  * `interactive: false` hides the whole button row — there's nothing for the human to do.
  */
-import type { Colour, ShipStats, StatKey } from "../../engine/index.js";
+import type { Colour, ShipStats } from "../../engine/index.js";
 import { ActionBox, HexButton } from "./ActionBox.js";
-import { ASPECT_ORDER, ASPECT_TAG } from "./aspects.js";
+import { ShipCardArt } from "./CardArt.js";
 
 /** a plain shape in a fixed viewBox, not a "‹"/"›" text glyph — a font's own baseline/
    descender metrics never quite centre a character in its box (see Board.tsx's zoom
@@ -64,21 +64,7 @@ export function ShipPickerPopup({
             <Chevron dir="prev" />
           </HexButton>
         )}
-        {/* the card itself — a placeholder for real art later, but it should already read
-           as "this is the thing being picked", not just floating text */}
-        <div className="shippicker-card" style={{ borderColor: `var(--ship-${colour})` }}>
-          <div className="shippicker-name">
-            <i className="status-dot" style={{ background: `var(--ship-${colour})`, borderColor: `var(--ship-${colour})` }} />
-            {name}
-          </div>
-          <div className="shippicker-stats">
-            {ASPECT_ORDER.map((stat: StatKey) => (
-              <span key={stat} className="shippicker-stat">
-                {ASPECT_TAG[stat]} {stats[stat]}
-              </span>
-            ))}
-          </div>
-        </div>
+        <ShipCardArt colour={colour} name={name} stats={stats} />
         {interactive && canBrowse && !spinning && (
           <HexButton className="ship-arrow" onClick={onNext} aria-label="next ship">
             <Chevron dir="next" />

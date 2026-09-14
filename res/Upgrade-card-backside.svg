@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="2379.09 2020.42 797.70 797.70">
+<style>.icon-ore-neutral-fill {   }
+.icon-fuel-fill {   }
+.icon-fuel-caps-fill {   }
+.icon-card-fill {   }
+.icon-ore-red {   }
+.icon-ore-yellow {   }
+.icon-ore-green-fill {   }
+.icon-cargo-stroke {   }
+.icon-ship-neutral-bgstroke {   }
+.icon-shield-stroke {   }
+.icon-ship-neutral-fill {   }
+.icon-engine-fill {   }
+.icon-laser-stroke {   }
+</style>
+<g transform="matrix(3.779513888888889 0 0 3.779513888888889 18.897697401543457 19.27747694086035)">
+<g id="g131">
+      <g id="g126-4" transform="translate(20.000022,234.99995)">
+        <g id="g122-1-2" transform="translate(309.99996,250.80524)">
+          <path id="rect112-8-2-4-7" style="fill:#b3b3b3;stroke:none;stroke-width:0.2;stroke-linecap:round;stroke-linejoin:round" d="m 260,-15.199979 h 179.99997 a 15.000005,15.000005 45 0 1 15.00001,15.000005 l 0,179.999974 a 15.000005,15.000005 135 0 1 -15.00001,15.00001 H 260 A 15.000005,15.000005 45 0 1 245,179.8 V -0.199974 a 15.000005,15.000005 135 0 1 15,-15.000005 z" transform="translate(49.999997,59.394779)"></path>
+          <g id="layer1-6-4-6-2-7-5-7" transform="matrix(1.2000001,0,0,1.1517027,325,86.841829)"></g>
+        </g>
+      </g>
+      <g id="layer1-6-4-6-2-7-4" transform="matrix(1.2000001,0,0,1.2,634.99997,540)">
+        <path id="rect1-5-0-3-5-3" style="stroke-width:0.3;stroke-linejoin:round" d="M 4.1666711,-1.0024529e-7 154.16665,-3.7090712e-6 A 4.1666698,4.1666698 44.999999 0 1 158.33332,4.1666661 V 154.16666 a 4.1666704,4.1666704 135 0 1 -4.16667,4.16667 H 4.1666665 A 4.1666703,4.1666703 45.000001 0 1 -3.791679e-6,154.16666 L -1.0247792e-7,4.1666711 A 4.1666713,4.1666713 135 0 1 4.1666711,-1.0024529e-7 Z"></path>
+      </g>
+      <path style="fill:#cccccc;fill-opacity:1;stroke:none;stroke-width:31.8928;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1" d="m 799.99997,564.99993 -140.00001,81.29041 58.7097,58.70971 z" id="path5-96-30-4-3-2" class="icon-ship-neutral-fill"></path>
+    </g>
+</g>
+</svg>

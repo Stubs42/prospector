@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="470.44 1356.88 192.98 158.33">
+<style>.icon-ore-neutral-fill {   }
+.icon-fuel-fill {   }
+.icon-fuel-caps-fill {   }
+.icon-card-fill {   }
+.icon-ore-red {   }
+.icon-ore-yellow {   }
+.icon-ore-green-fill {   }
+.icon-cargo-stroke {   }
+.icon-ship-neutral-bgstroke {   }
+.icon-shield-stroke {   }
+.icon-ship-neutral-fill {   }
+.icon-engine-fill {   }
+.icon-laser-stroke {   }
+</style>
+<g transform="matrix(3.779513888888889 0 0 3.779513888888889 18.897697401543457 19.27747694086035)">
+<g id="g108" class="icon-card-fill">
+      <path style="fill:#e6e6e6;fill-opacity:1;stroke:none;stroke-width:0.102878;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1" d="m 132.14083,372.14932 2.88256,8.80694 9.25701,-0.004 -7.47984,5.46927 2.83981,8.85116 -7.51619,-5.40113 -7.51443,5.36436 2.76437,-8.78825 -7.37411,-5.49182 h 9.22788 z" id="path55-3-7-0"></path>
+      <path style="fill:#e6e6e6;fill-opacity:1;stroke:none;stroke-width:0.102878;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1" d="m 157.86044,372.14932 2.88256,8.80694 9.25701,-0.004 -7.47984,5.46927 2.83981,8.85116 -7.51619,-5.40113 -7.51442,5.36436 2.76436,-8.78825 -7.37411,-5.49182 h 9.22788 z" id="path55-3-9"></path>
+      <path style="fill:#e6e6e6;fill-opacity:1;stroke:none;stroke-width:0.102878;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1" d="m 145.00063,354.43832 2.88256,8.80694 9.25701,-0.004 -7.47983,5.46927 2.83981,8.85116 -7.5162,-5.40113 -7.51442,5.36436 2.76436,-8.78825 -7.3741,-5.49182 h 9.22787 z" id="path55-3-7-0-6"></path>
+    </g>
+</g>
+</svg>

@@ -1,0 +1,224 @@
+/**
+ * Real card artwork (res/cards-artwork.svg, via cardAssets.ts) composed into booster/upgrade
+ * card faces and backs. The raw art supplies the frame shape, the black "screen" inset, and
+ * every icon; this file only supplies DYNAMIC content (which tier icon, the label/value
+ * text) at positions read off the artwork's own examples (see cardAssets.ts's history for
+ * how those fractions were measured) — never hand-redrawn.
+ *
+ * Colour theming: every path in the art carries an inline `style="fill:...;stroke:..."`,
+ * which always beats a CSS class alone — the `.icon-*` class rules only take effect with
+ * `!important` (see styles.css's "card artwork theming" block), which is why every card
+ * face here is wrapped in `.card-art`.
+ */
+import type { CSSProperties, ReactNode } from "react";
+import type { Colour, ShipStats, StatKey } from "../../engine/index.js";
+import { CARD_ART, PORTRAIT_ASPECT, tierIconFor } from "../cardAssets.js";
+import { theme } from "../theme.js";
+import { ASPECT_TAG } from "./aspects.js";
+
+/** a rectangle positioned as a fraction of the card's own box (0..1) */
+interface FracBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+function Layer({ box, svg }: { box: FracBox; svg: string }) {
+  const style: CSSProperties = {
+    position: "absolute",
+    left: `${box.x * 100}%`,
+    top: `${box.y * 100}%`,
+    width: `${box.w * 100}%`,
+    height: `${box.h * 100}%`,
+  };
+  return <div className="card-art-layer" style={style} dangerouslySetInnerHTML={{ __html: svg }} />;
+}
+
+/** a label/value string drawn on top of the art, centred on one point — position comes from
+   the card's own baked-in layout (BOOSTER_LABEL etc. below), size from theme.cards as a
+   fraction of the card's actual pixel height (`cardHeight`) so it scales correctly — a CSS
+   `%` font-size resolves against the *inherited* font-size, not the container's own size,
+   so this needs a real px value, not a percentage. Exported so other "text on top of real
+   card art" spots (DeckPanels' deck-back stacks) can match a real face's placement. */
+export function CardText({
+  x, y, frac, cardHeight, color, children,
+}: {
+  x: number; y: number; frac: number; cardHeight: number; color: string; children: ReactNode;
+}) {
+  const style: CSSProperties = {
+    position: "absolute",
+    left: `${x * 100}%`,
+    top: `${y * 100}%`,
+    transform: "translate(-50%, -50%)",
+    fontSize: frac * cardHeight,
+    fontWeight: 800,
+    color,
+    whiteSpace: "nowrap",
+    textAlign: "center",
+  };
+  return <div style={style}>{children}</div>;
+}
+
+const FULL: FracBox = { x: 0, y: 0, w: 1, h: 1 };
+// measured off Booster-card-fuel-example / Booster-card-laser-example (see cardAssets.ts)
+const BOOSTER_SCREEN: FracBox = { x: 0.048, y: 0.183, w: 0.905, h: 0.633 };
+const BOOSTER_ICON: FracBox = { x: 0.1, y: 0.21, w: 0.8, h: 0.56 };
+export const BOOSTER_LABEL = { x: 0.5, y: 0.1 };
+export const BOOSTER_VALUE = { x: 0.5, y: 0.86 };
+// measured off Upgarde-card-laser-example
+const UPGRADE_SCREEN: FracBox = { x: 0.048, y: 0.19, w: 0.905, h: 0.762 };
+const UPGRADE_ICON: FracBox = { x: 0.14, y: 0.24, w: 0.72, h: 0.72 };
+export const UPGRADE_LABEL = { x: 0.5, y: 0.1 };
+export const UPGRADE_VALUE = { x: 0.79, y: 0.85 };
+
+export interface BoosterCardArtProps {
+  stat: StatKey;
+  /** the printed value — every booster shows one (e.g. a fuel/laser/shield/engine amount) */
+  value: number;
+  /** anything drawn on top after the standard label/value (e.g. a "+1" corner chip) */
+  children?: ReactNode;
+}
+
+/** a booster card's face — real art, portrait. Used for hand cards and the booster
+   deck-panel stack's "example" face isn't needed (the deck panel shows the back, not a
+   face); mainly consumed by kit.tsx's BoosterCardFace. */
+export function BoosterCardArt({ stat, value, children }: BoosterCardArtProps) {
+  const w = theme.cards.boosterWidth;
+  const h = w / PORTRAIT_ASPECT;
+  const icon = tierIconFor(stat, value);
+  return (
+    <div className="card-art" style={{ position: "relative", width: w, height: h }}>
+      <Layer box={FULL} svg={CARD_ART.framePortraitOuter} />
+      <Layer box={BOOSTER_SCREEN} svg={CARD_ART.framePortraitInner} />
+      {icon && <Layer box={BOOSTER_ICON} svg={icon} />}
+      <CardText x={BOOSTER_LABEL.x} y={BOOSTER_LABEL.y} frac={theme.cards.labelFontSize} cardHeight={h} color="#000">
+        {ASPECT_TAG[stat]}
+      </CardText>
+      <CardText x={BOOSTER_VALUE.x} y={BOOSTER_VALUE.y} frac={theme.cards.valueFontSize} cardHeight={h} color="#000">
+        {value}
+      </CardText>
+      {children}
+    </div>
+  );
+}
+
+export interface UpgradeCardArtProps {
+  stat: StatKey;
+  amount: number;
+}
+
+/** an upgrade card's face — real art, square. Used by EquipmentPopup. */
+export function UpgradeCardArt({ stat, amount }: UpgradeCardArtProps) {
+  const w = theme.cards.upgradeSize;
+  const icon = tierIconFor(stat, amount);
+  return (
+    <div className="card-art" style={{ position: "relative", width: w, height: w }}>
+      <Layer box={FULL} svg={CARD_ART.frameSquareOuter} />
+      <Layer box={UPGRADE_SCREEN} svg={CARD_ART.frameSquareInner} />
+      {icon && <Layer box={UPGRADE_ICON} svg={icon} />}
+      <CardText x={UPGRADE_LABEL.x} y={UPGRADE_LABEL.y} frac={theme.cards.labelFontSize} cardHeight={w} color="#000">
+        {ASPECT_TAG[stat]}
+      </CardText>
+      <CardText x={UPGRADE_VALUE.x} y={UPGRADE_VALUE.y} frac={theme.cards.valueFontSize * 1.3} cardHeight={w} color="#b3b3b3">
+        +{amount}
+      </CardText>
+    </div>
+  );
+}
+
+/** a face-down card, real art — the deck-panel stacks (DeckPanels.tsx) use these instead of
+   a plain CSS placeholder */
+export function CardBackArt({ square }: { square?: boolean | undefined }) {
+  const w = square ? theme.cards.upgradeSize : theme.cards.boosterWidth;
+  const h = square ? w : w / PORTRAIT_ASPECT;
+  return (
+    <div className="card-art" style={{ position: "relative", width: w, height: h }}>
+      <Layer box={FULL} svg={square ? CARD_ART.upgradeBack : CARD_ART.boosterBack} />
+    </div>
+  );
+}
+
+// measured off Ship-card-Atlas-example (see cardAssets.ts's history)
+const SHIP_SCREEN: FracBox = { x: 0.048, y: 0.034, w: 0.905, h: 0.417 };
+const SHIP_NOSE: FracBox = { x: 0.22, y: 0.1, w: 0.56, h: 0.26 };
+const SHIP_NAME = { x: 0.5, y: 0.46 };
+// a 2x3 grid, each cell the same size — column/row index -> fraction box
+const SHIP_CELL_W = 0.2857;
+const SHIP_CELL_H = 0.1999;
+const SHIP_CELL_X = [0.0476, 0.3571, 0.6667] as const;
+const SHIP_CELL_Y = [0.5501, 0.7667] as const;
+function shipCellBox(col: 0 | 1 | 2, row: 0 | 1): FracBox {
+  return { x: SHIP_CELL_X[col], y: SHIP_CELL_Y[row], w: SHIP_CELL_W, h: SHIP_CELL_H };
+}
+/** a cell's icon sits centred with a little breathing room inside its own frame */
+function shipIconBox(col: 0 | 1 | 2, row: 0 | 1): FracBox {
+  const pad = 0.05;
+  return { x: SHIP_CELL_X[col] + pad, y: SHIP_CELL_Y[row] + pad, w: SHIP_CELL_W - pad * 2, h: SHIP_CELL_H - pad * 2 };
+}
+/** top row: shields, lasers, fuel (printed number only); bottom row: cargo, engines, hand
+   limit (a star rating, not its own icon shape — see cardAssets.ts's tierIconFor) */
+const SHIP_GRID: { stat: StatKey; col: 0 | 1 | 2; row: 0 | 1 }[] = [
+  { stat: "shields", col: 0, row: 0 },
+  { stat: "lasers", col: 1, row: 0 },
+  { stat: "fuelTanks", col: 2, row: 0 },
+  { stat: "cargo", col: 0, row: 1 },
+  { stat: "engines", col: 1, row: 1 },
+  { stat: "booster", col: 2, row: 1 },
+];
+
+export interface ShipCardArtProps {
+  colour: Colour;
+  name: string;
+  stats: ShipStats;
+}
+
+/** a ship's stat card — real art, portrait, the same shape/size family as a booster card
+   but its own configurable width (theme.cards.shipWidth). Every non-fuel stat (0-3) shows
+   as a tiered pip icon — 0 means an empty slot, no icon at all; fuel alone prints its real
+   number (its capacity is well past what 3 pips could show). Used by the setup screen's
+   ship picker (ShipPickerPopup). */
+export function ShipCardArt({ colour, name, stats }: ShipCardArtProps) {
+  const w = theme.cards.shipWidth;
+  const h = w / PORTRAIT_ASPECT;
+  return (
+    <div className="card-art" style={{ position: "relative", width: w, height: h }}>
+      <Layer box={FULL} svg={CARD_ART.framePortraitOuter} />
+      <Layer box={SHIP_SCREEN} svg={CARD_ART.shipScreenBg} />
+      <div
+        className="card-art-layer"
+        style={{
+          position: "absolute",
+          left: `${SHIP_NOSE.x * 100}%`, top: `${SHIP_NOSE.y * 100}%`,
+          width: `${SHIP_NOSE.w * 100}%`, height: `${SHIP_NOSE.h * 100}%`,
+          color: `var(--ship-${colour})`,
+        }}
+        dangerouslySetInnerHTML={{ __html: CARD_ART.shipNose }}
+      />
+      <CardText x={SHIP_NAME.x} y={SHIP_NAME.y} frac={theme.cards.labelFontSize * 1.4} cardHeight={h} color="#000">
+        {name}
+      </CardText>
+      {SHIP_GRID.map(({ stat, col, row }) => {
+        const value = stats[stat];
+        const icon = stat === "fuelTanks" ? null : tierIconFor(stat, value);
+        return (
+          <div key={stat}>
+            <Layer box={shipCellBox(col, row)} svg={CARD_ART.shipCellBg} />
+            {icon && <Layer box={shipIconBox(col, row)} svg={icon} />}
+            {stat === "fuelTanks" && (
+              <CardText
+                x={SHIP_CELL_X[col] + SHIP_CELL_W / 2}
+                y={SHIP_CELL_Y[row] + SHIP_CELL_H / 2}
+                frac={theme.cards.valueFontSize}
+                cardHeight={h}
+                color="#b3b3b3"
+              >
+                {value}
+              </CardText>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}

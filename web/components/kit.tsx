@@ -2,7 +2,19 @@
  * Physical-component kit. Every widget looks like a real thing from a game box, and any
  * motion it makes is a rigid-body move / flip / tumble — nothing a cardboard piece couldn't do.
  */
-import type { BoosterCard as BoosterCardT, BoosterType, Colour, OreColour } from "../../engine/index.js";
+import type { BoosterCard as BoosterCardT, BoosterType, Colour, OreColour, StatKey } from "../../engine/index.js";
+import { BoosterCardArt } from "./CardArt.js";
+import { ASPECT_FILL } from "./aspects.js";
+
+/** which booster types have real card art (cardAssets.ts) yet, mapped to the ship stat
+   whose tiered icon they reuse — hyperspace has none yet, falls back to the old plain
+   CardIcon face below until it does */
+const BOOSTER_ART_STAT: Partial<Record<BoosterType, StatKey>> = {
+  shield: "shields",
+  laser: "lasers",
+  engine: "engines",
+  reserveFuel: "fuelTanks",
+};
 
 export const SHIP_VAR: Record<Colour, string> = {
   black: "var(--ship-black)",
@@ -172,6 +184,18 @@ export function BoosterCardFace({
      "ready" = playable right now (armable this burn / usable in combat) */
   pulse?: "urgent" | "new" | "ready" | null | undefined;
 }) {
+  const artStat = BOOSTER_ART_STAT[card.type];
+  if (artStat && card.value != null) {
+    return (
+      <div
+        className={`card-art-wrap${selected ? " picked" : ""}${pulse ? ` pulse-${pulse}` : ""}`}
+        style={{ cursor: clickable ? "pointer" : "default", color: ASPECT_FILL[artStat] }}
+        onClick={onClick}
+      >
+        <BoosterCardArt stat={artStat} value={card.value} />
+      </div>
+    );
+  }
   return (
     <div
       className={`card booster-${card.type}${selected ? " picked" : ""}${pulse ? ` pulse-${pulse}` : ""}`}
