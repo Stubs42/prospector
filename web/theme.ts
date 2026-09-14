@@ -150,9 +150,11 @@ export interface Theme {
     ship: {
       nameFontSize: number;
       nameOffsetY: number;
-      /** the 6 stat-grid icons (shield/laser/cargo/engine/hand-stars — not fuel, which has
-         its own icon+number layout below) */
-      statIconScale: number;
+      /** one scale per stat's own grid icon — they're all drawn at different natural sizes
+         in the source art, so a single shared scale never reads right for all 6 at once.
+         `fuelTanks` here is the small tank icon sitting next to the fuel cell's printed
+         number (see fuelIconOffsetX etc. below for its position). */
+      iconScale: Record<StatKey, number>;
       /** the fuel cell shows an icon AND its real number side by side, not centred like the
          other 5 (their value IS the icon, 1-3 pips) — fuel's capacity (10s) can't be a pip
          count, so it always shows one representative tank icon to the left, real number to
@@ -300,13 +302,20 @@ export const theme: Theme = {
       iconOffsetY: 0,
     },
     ship: {
-      nameFontSize: 0.09,
-      nameOffsetY: 0,
-      statIconScale: 1,
+      nameFontSize: 0.08,
+      nameOffsetY: 0.035,
+      iconScale: {
+        shields: 1.5,
+        lasers: 1.5,
+        cargo: 1.5,
+        engines: 1.5,
+        booster: 1.5,
+        fuelTanks: 1.5,
+      },
       fuelIconOffsetX: 0,
-      fuelFontSize: 0.15,
-      fuelOffsetX: 0,
-      fuelOffsetY: 0,
+      fuelFontSize: 0.05,
+      fuelOffsetX: 0.02,
+      fuelOffsetY: 0.06,
     },
   },
   spin: {

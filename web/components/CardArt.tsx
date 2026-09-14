@@ -183,16 +183,17 @@ function shipIconBox(col: 0 | 1 | 2, row: 0 | 1): FracBox {
 }
 /** the fuel cell is laid out differently from the other 5 (icon on the left, its real
    number on the right — see theme.cards.ship's own doc comment) */
-function fuelIconBox(col: 0 | 1 | 2, row: 0 | 1): FracBox {
+function fuelIconBox(col: 0 | 1 | 2, row: 0 | 1, scale: number): FracBox {
   const pad = 0.06;
   const cellX = SHIP_CELL_X[col];
   const cellY = SHIP_CELL_Y[row];
-  return {
+  const box: FracBox = {
     x: cellX + pad + theme.cards.ship.fuelIconOffsetX,
     y: cellY + pad,
     w: SHIP_CELL_W * 0.46,
     h: SHIP_CELL_H - pad * 2,
   };
+  return scaleBox(box, scale);
 }
 /** top row: shields, lasers, fuel (icon + printed number); bottom row: cargo, engines, hand
    limit (a star rating, not its own icon shape — see cardAssets.ts's tierIconFor) */
@@ -244,7 +245,12 @@ export function ShipCardArt({ colour, name, stats }: ShipCardArtProps) {
         return (
           <div key={stat}>
             <Layer box={shipCellBox(col, row)} svg={CARD_ART.shipCellBg} />
-            {icon && <Layer box={isFuel ? fuelIconBox(col, row) : scaleBox(shipIconBox(col, row), t.statIconScale)} svg={icon} />}
+            {icon && (
+              <Layer
+                box={isFuel ? fuelIconBox(col, row, t.iconScale[stat]) : scaleBox(shipIconBox(col, row), t.iconScale[stat])}
+                svg={icon}
+              />
+            )}
             {isFuel && (
               <CardText
                 x={SHIP_CELL_X[col] + SHIP_CELL_W * 0.72 + t.fuelOffsetX}
