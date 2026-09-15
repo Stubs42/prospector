@@ -100,14 +100,15 @@ export function GameScreen({
     setPlacing(true);
     s.setHoldAdvance(true);
     let cancelled = false;
-    const gate = new SkipGate();
-    skipGateRef.current = gate;
     // spins all 3 rounds (ring 3, 2, 1) for one tile, each round taking the same real time
     // (theme.spin.resourceDurationMs split evenly in 3) and each independently decelerating
     // fast-to-slow — see spin.ts's buildSpinSchedule, shared with every other lucky-wheel
     // spin in the app. Every wait goes through `gate`, so a click anywhere on the board
-    // (see onSkipAnimation) jumps straight through the rest of it to the real result.
-    const spinAllThree = async (dice: { step: number; colour: Colour }[]): Promise<void> => {
+    // (see onSkipAnimation) jumps straight through the rest of THIS tile's reveal to its
+    // real result — `gate` is a fresh SkipGate per tile (see the loop below), not shared
+    // across the whole batch, so skipping one tile still plays the next one at full speed
+    // instead of instantly dumping every remaining tile in the delivery at once.
+    const spinAllThree = async (dice: { step: number; colour: Colour }[], gate: SkipGate): Promise<void> => {
       // the 3 rounds' candidates/target/center are already fully determined (the dice
       // are the real, already-decided result) — precompute them all up front so the
       // animation is just replaying a known sequence
@@ -154,9 +155,13 @@ export function GameScreen({
     };
     (async () => {
       for (const entry of newEntries) {
+        // a fresh gate per tile — skipping this one's reveal must not also fast-forward
+        // every tile still queued after it in the same delivery (see spinAllThree's comment)
+        const gate = new SkipGate();
+        skipGateRef.current = gate;
         const d = entry.detail as { cell: Hex; dice: { step: number; colour: Colour }[] };
         const dice = [...d.dice].sort((a, b) => b.step - a.step); // coarse to fine: ring 3, 2, 1
-        await spinAllThree(dice);
+        await spinAllThree(dice, gate);
         if (cancelled) return;
         await gate.wait(reducedMotion ? 20 : 250); // let the finished path linger a beat
         setHiddenSeeds((h) => {
@@ -175,7 +180,9 @@ export function GameScreen({
     })();
     return () => {
       cancelled = true;
-      if (skipGateRef.current === gate) skipGateRef.current = null;
+      // whichever tile's gate is current when this effect tears down — no single fixed
+      // `gate` to compare against any more now that each tile gets its own
+      skipGateRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.log.length, seedProcessed]);
@@ -445,7 +452,15 @@ export function GameScreen({
   // whether THIS hand (not just any hand) has a freshly-drawn card — matters now that
   // handOwner can be the solo human while a bot (whose own draw also touches newCardIds) is
   // the one actually acting; a bot's own new card must never force the human's hand open
-  const handHasNewCard = handOwner.hand.some((c) => s.newCardIds.has(c.id));
+  // suppressed while a start-of-game upgrade offer is imminent or already up: the auto-draw
+  // -> drift -> equipment-choice chain fires within one short auto-advance tick, so without
+  // this the hand would pulse open for the freshly-drawn card and immediately collapse again
+  // a moment later as drift consumes p.startEquipment and the (unrelated) equipment popup
+  // takes over — a flash the player can't act on either way. p.startEquipment is still set
+  // in the brief window between draw and drift; state.pendingEquipment covers the choice
+  // itself (same reasoning as inBurnPhase's own pendingEquipment check above).
+  const startUpgradeImminent = !!handOwner.startEquipment || !!state.pendingEquipment;
+  const handHasNewCard = !startUpgradeImminent && handOwner.hand.some((c) => s.newCardIds.has(c.id));
   // `overLimit` (afford.overLimit) is only ever meaningful for state.activePlayerIndex — a
   // bot's own over-limit moment (before its auto-discard resolves) must never force the
   // solo human's collapsed hand open, same reasoning as handHasNewCard above
