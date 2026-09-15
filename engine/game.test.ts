@@ -318,6 +318,58 @@ describe("hyperspace", () => {
     expect(s.phase).toBe("moved");
     expect(s.activePlayerIndex).toBe(0);
   });
+
+  describe("as a mid-combat defence (fleeing an attack)", () => {
+    function setupAdjacentCombat(seed: number): GameState {
+      let s = createGame({ seed, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "none" });
+      const board = boardFor(s);
+      const A = () => s.players[0]!;
+      const D = () => s.players[1]!;
+      const attackerCell = { q: 0, r: 0 };
+      const defenderCell = board.neighbours(attackerCell).find((h) => board.isInner(h))!;
+      A().pose = { current: attackerCell, previous: attackerCell, atRest: true };
+      A().placed = true;
+      D().pose = { current: defenderCell, previous: defenderCell, atRest: true };
+      D().placed = true;
+      D().cargo = ["red"];
+      const hsCard: BoosterCard = { id: "hs1", deck: "booster", type: "hyperspace", value: null, effect: "" };
+      D().hand = [hsCard];
+      s = { ...s, phase: "moved" };
+      s = run(s, { type: "attack", targetPlayerId: 1 });
+      expect(s.pendingCombat).toMatchObject({ attackerId: 0, defenderId: 1, awaiting: "defend" });
+      return s;
+    }
+
+    it("never offers a counter-attack, whatever the jump's outcome", () => {
+      // true regardless of where the roll lands (escaped, lost, or landed back in range) —
+      // "no reattack possible" holds universally for this path, unlike an ordinary failed
+      // attack (which normally offers awaiting:"counter")
+      for (const seed of [1, 2, 3, 4, 5]) {
+        const s0 = setupAdjacentCombat(seed);
+        const hsCard = s0.players[1]!.hand[0]!;
+        const s = run(s0, { type: "combatDefend", hyperspaceBoosterId: hsCard.id });
+        expect(s.pendingCombat?.awaiting).not.toBe("counter");
+        expect(s.players[1]!.hand.some((c) => c.id === hsCard.id)).toBe(false); // consumed either way
+      }
+    });
+
+    it("landing out of range ends the fight (or losing the ship does)", () => {
+      // seed 1 happens to land the defender outside the attacker's reach
+      const s0 = setupAdjacentCombat(1);
+      const s = run(s0, { type: "combatDefend", hyperspaceBoosterId: s0.players[1]!.hand[0]!.id });
+      expect(s.pendingCombat).toBeNull();
+      expect(s.log.some((e) => e.event === "defenderFled")).toBe(true);
+    });
+
+    it("landing back in range keeps the same attack live, unresolved", () => {
+      // seed 15 happens to land the defender back within the attacker's reach
+      const s0 = setupAdjacentCombat(15);
+      const before = s0.pendingCombat!;
+      const s = run(s0, { type: "combatDefend", hyperspaceBoosterId: s0.players[1]!.hand[0]!.id });
+      expect(s.pendingCombat).toMatchObject({ attackerId: before.attackerId, defenderId: before.defenderId, round: before.round, awaiting: "defend" });
+      expect(s.log.some((e) => e.event === "hyperspaceStayedInRange")).toBe(true);
+    });
+  });
 });
 
 describe("equipment reroll", () => {
