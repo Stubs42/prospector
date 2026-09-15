@@ -415,8 +415,19 @@ export function GameScreen({
           : null;
     return { clickable: !!onClick, selected: armed.has(id) || combatSel.has(id), onClick, pulse };
   };
+  // NOT yet true while the start-of-game upgrade choice is pending: that interrupt sits
+  // between drift (driftDone) and the player's first real chance to arm a burn booster —
+  // p.turn.driftDone is already true at that point (see engine's "drift" reducer case),
+  // so without this check the hand panel force-opened for reserve-fuel/engine cards well
+  // before there was any burn to arm them for
   const inBurnPhase =
-    !activeIsBot && !pc && state.phase === "start" && p.turn.driftDone && !p.turn.moved && !overLimit;
+    !activeIsBot &&
+    !pc &&
+    !state.pendingEquipment &&
+    state.phase === "start" &&
+    p.turn.driftDone &&
+    !p.turn.moved &&
+    !overLimit;
   const combatCardType: "laser" | "shield" | null =
     pc?.awaiting === "defend" && seats[pc.defenderId] === "human"
       ? "shield"
