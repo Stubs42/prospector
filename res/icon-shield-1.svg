@@ -1,23 +1,10 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="38.40 567.91 149.97 149.97">
-<style>.icon-ore-neutral-fill {   }
-.icon-fuel-fill {   }
-.icon-fuel-caps-fill {   }
-.icon-card-fill {   }
-.icon-ore-red {   }
-.icon-ore-yellow {   }
-.icon-ore-green-fill {   }
-.icon-cargo-stroke {   }
-.icon-ship-neutral-bgstroke {   }
-.icon-shield-stroke {   }
-.icon-ship-neutral-fill {   }
-.icon-engine-fill {   }
-.icon-laser-stroke {   }
-</style>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 210.44 210.44">
+<g transform="translate(-8.164 -537.676)">
 <g transform="matrix(3.779513888888889 0 0 3.779513888888889 18.897697401543457 19.27747694086035)">
-<g id="g97">
+<g id="g97" inkscape:label="icon-shield-1">
       <path style="fill:none;fill-opacity:1;stroke:#ffffff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1" id="path9-6-8-3-1-9" d="M 40.999995,164.99341 A 15.999998,16.000002 0 0 1 25.007605,181 15.999998,16.000002 0 0 1 9.0000023,165.00863 15.999998,16.000002 0 0 1 24.990349,149 15.999998,16.000002 0 0 1 40.999993,164.98933" class="icon-shield-stroke"></path>
       <path style="fill:#666666;fill-opacity:1;stroke:none;stroke-width:0.916155;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1" id="path9-6-8-3-6-5" d="M 35.999998,164.99547 A 11.000001,10.999999 0 0 1 25.048452,175.99989 11.000001,10.999999 0 0 1 14.000385,165.09238 11.000001,10.999999 0 0 1 24.863694,154.00085 11.000001,10.999999 0 0 1 35.998523,164.81977" class="-fill  icon-ship-neutral-fill"></path>
     </g>
+</g>
 </g>
 </svg>

@@ -1,21 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="223.44 0.83 229.64 229.64">
-<style>.icon-ore-neutral-fill {   }
-.icon-fuel-fill {   }
-.icon-fuel-caps-fill {   }
-.icon-card-fill {   }
-.icon-ore-red {   }
-.icon-ore-yellow {   }
-.icon-ore-green-fill {   }
-.icon-cargo-stroke {   }
-.icon-ship-neutral-bgstroke {   }
-.icon-shield-stroke {   }
-.icon-ship-neutral-fill {   }
-.icon-engine-fill {   }
-.icon-laser-stroke {   }
-</style>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 214.83 214.83">
+<g transform="translate(-230.853 -8.241)">
 <g transform="matrix(3.779513888888889 0 0 3.779513888888889 18.897697401543457 19.27747694086035)">
-<g id="g92">
+<g id="g92" inkscape:label="icon-laser-2">
       <g id="g68" class="icon-laser-stroke">
         <path style="fill:#ffff00;stroke:#ffff00;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1" d="M 94.134265,6.3823584 91.000002,16.999999" id="path3-7-3-2"></path>
         <path style="fill:#ffff00;stroke:#ffff00;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1" d="m 94.000003,5.7883443 -1e-6,-4.78834472" id="path4-58-0-6"></path>
@@ -36,5 +22,6 @@
       </g>
       <path style="fill:#666666;fill-opacity:1;stroke:none;stroke-width:7.06197;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1" d="m 90.999982,18.999989 -30.99999,18.000012 13,13.000003 z" id="path5-96-30-1" class="icon-ship-neutral-fill"></path>
     </g>
+</g>
 </g>
 </svg>

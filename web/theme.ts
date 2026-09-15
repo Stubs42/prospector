@@ -150,10 +150,14 @@ export interface Theme {
     ship: {
       nameFontSize: number;
       nameOffsetY: number;
-      /** one scale per stat's own grid icon — they're all drawn at different natural sizes
-         in the source art, so a single shared scale never reads right for all 6 at once.
-         `fuelTanks` here is the small tank icon sitting next to the fuel cell's printed
-         number (see fuelIconOffsetX etc. below for its position). */
+      /** one scale per stat's own grid icon, default 1 for all six now that each icon
+         family's 3 tiers are extracted into one shared, correctly-proportioned viewBox (see
+         res/icon-*.svg's regeneration history) — the relative size differences between tier
+         1/2/3 (and across stats) are baked into the source files themselves, not faked here
+         any more. Kept per-stat (not a single shared number) only for the rare case a
+         specific icon still wants a touch of fine-tuning. `fuelTanks` here is the small tank
+         icon sitting next to the fuel cell's printed number (see fuelIconOffsetX etc. below
+         for its position). */
       iconScale: Record<StatKey, number>;
       /** the fuel cell shows an icon AND its real number side by side, not centred like the
          other 5 (their value IS the icon, 1-3 pips) — fuel's capacity (10s) can't be a pip
@@ -313,12 +317,12 @@ export const theme: Theme = {
       nameFontSize: 0.08,
       nameOffsetY: 0.035,
       iconScale: {
-        shields: 1.5,
-        lasers: 1.5,
-        cargo: 1.5,
-        engines: 1.5,
-        booster: 1.5,
-        fuelTanks: 1.5,
+        shields: 1,
+        lasers: 1,
+        cargo: 1,
+        engines: 1,
+        booster: 1,
+        fuelTanks: 1,
       },
       fuelIconOffsetX: 0,
       fuelFontSize: 0.05,

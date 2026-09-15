@@ -1,21 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="454.45 530.42 224.96 224.96">
-<style>.icon-ore-neutral-fill {   }
-.icon-fuel-fill {   }
-.icon-fuel-caps-fill {   }
-.icon-card-fill {   }
-.icon-ore-red {   }
-.icon-ore-yellow {   }
-.icon-ore-green-fill {   }
-.icon-cargo-stroke {   }
-.icon-ship-neutral-bgstroke {   }
-.icon-shield-stroke {   }
-.icon-ship-neutral-fill {   }
-.icon-engine-fill {   }
-.icon-laser-stroke {   }
-</style>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 210.44 210.44">
+<g transform="translate(-461.706 -537.676)">
 <g transform="matrix(3.779513888888889 0 0 3.779513888888889 18.897697401543457 19.27747694086035)">
-<g id="g99" class="icon-shield-stroke">
+<g id="g99" class="icon-shield-stroke" inkscape:label="icon-shield-3">
       <g id="g75">
         <path style="fill:none;fill-opacity:1;stroke:#ffffff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1" id="path9-6-8-77" d="M 169.00001,164.99012 A 23.999998,24.000002 0 0 1 145.01065,189 23.999998,24.000002 0 0 1 121.00002,165.01138 23.999998,24.000002 0 0 1 144.98788,141 a 23.999998,24.000002 0 0 1 24.01213,23.98712"></path>
         <path style="fill:none;fill-opacity:1;stroke:#ffffff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1" id="path9-6-8-3-2" d="M 165.00001,164.99177 A 19.999998,20.000002 0 0 1 145.00952,185 19.999998,20.000002 0 0 1 125.00002,165.01079 19.999998,20.000002 0 0 1 144.98795,145 a 19.999998,20.000002 0 0 1 20.01206,19.98666"></path>
@@ -23,5 +9,6 @@
       </g>
       <path style="fill:#666666;fill-opacity:1;stroke:none;stroke-width:0.916155;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1" id="path9-6-8-3-6-9" d="m 156.00002,164.99547 a 11.000001,10.999999 0 0 1 -10.95155,11.00442 11.000001,10.999999 0 0 1 -11.04807,-10.90751 11.000001,10.999999 0 0 1 10.86331,-11.09153 11.000001,10.999999 0 0 1 11.13483,10.81892" class="icon-ship-neutral-fill"></path>
     </g>
+</g>
 </g>
 </svg>
