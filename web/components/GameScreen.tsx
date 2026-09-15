@@ -283,11 +283,10 @@ export function GameScreen({
         setCombatReveal((cr) => (cr ? { ...cr, defenceFace: face, defenceSettled: settled } : cr)),
       );
       if (cancelled) return;
+      // the reveal itself is done the instant both dice settle — holdAdvance stays true
+      // (and combatReveal stays set) until the player explicitly confirms the outcome
+      // (see combatBox's Confirm button below), not a fixed timeout
       setCombatReveal((cr) => (cr ? { ...cr, showOutcome: true } : cr));
-      await gate.wait(reducedMotion ? 30 : 1100);
-      if (cancelled) return;
-      setCombatReveal(null);
-      s.setHoldAdvance(false);
     })();
     return () => {
       cancelled = true;
@@ -555,7 +554,21 @@ export function GameScreen({
           mode.ships[state.players[combatReveal.defenderId]!.colour].name
         }`,
         cards: [],
-        buttons: [],
+        // the outcome sits on screen until explicitly acknowledged — a milestone-ish
+        // result (won a resource, or didn't) deserves a real "ok, got it" rather than
+        // vanishing on its own after a fixed pause
+        buttons: combatReveal.showOutcome
+          ? [
+              {
+                label: "Confirm",
+                kind: "primary",
+                onClick: () => {
+                  setCombatReveal(null);
+                  s.setHoldAdvance(false);
+                },
+              },
+            ]
+          : [],
         roll: {
           attack: { value: combatReveal.attackFace, settled: combatReveal.attackSettled, total: combatReveal.attackTotal },
           defence: combatReveal.attackSettled
@@ -762,7 +775,7 @@ export function GameScreen({
           onMoveAnimEnd={s.endMoveAnim}
           onCell={onCell}
           onCellHover={setHoverCell}
-          onSkipAnimation={placing || combatReveal || equipSpinId ? onSkipAnimation : null}
+          onSkipAnimation={placing || (combatReveal && !combatReveal.showOutcome) || equipSpinId ? onSkipAnimation : null}
         />
 
         {/* guidance popup / combat box: fixed overlays, like the zoom controls or the status
