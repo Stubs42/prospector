@@ -3,12 +3,12 @@
  * motion it makes is a rigid-body move / flip / tumble — nothing a cardboard piece couldn't do.
  */
 import type { BoosterCard as BoosterCardT, BoosterType, Colour, OreColour, StatKey } from "../../engine/index.js";
-import { BoosterCardArt } from "./CardArt.js";
+import { BoosterCardArt, HyperspaceCardArt } from "./CardArt.js";
 import { ASPECT_FILL } from "./aspects.js";
 
-/** which booster types have real card art (cardAssets.ts) yet, mapped to the ship stat
-   whose tiered icon they reuse — hyperspace has none yet, falls back to the old plain
-   CardIcon face below until it does */
+/** which booster types have real card art, mapped to the ship stat whose tiered icon they
+   reuse — hyperspace isn't tied to a stat, it's routed to HyperspaceCardArt separately
+   (see BoosterCardFace below) */
 const BOOSTER_ART_STAT: Partial<Record<BoosterType, StatKey>> = {
   shield: "shields",
   laser: "lasers",
@@ -191,6 +191,13 @@ export function BoosterCardFace({
   const artStat = BOOSTER_ART_STAT[card.type];
   const cls = (base: string) =>
     `${base}${clickable ? " clickable" : ""}${selected ? " picked" : ""}${pulse ? ` pulse-${pulse}` : ""}${dimmed ? " dimmed" : ""}`;
+  if (card.type === "hyperspace") {
+    return (
+      <div className={cls("card-art-wrap")} style={{ cursor: clickable ? "pointer" : "default" }} onClick={onClick}>
+        <HyperspaceCardArt />
+      </div>
+    );
+  }
   if (artStat && card.value != null) {
     return (
       <div

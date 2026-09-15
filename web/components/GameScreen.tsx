@@ -412,6 +412,10 @@ export function GameScreen({
     // reserve fuel isn't armed for a later burn — it's used up the instant it's clicked
     if (inBurnPhase && c.type === "reserveFuel" && canRefuel(c.id)) return () => dispatch({ type: "useReserveFuel", cardId: c.id });
     if (inBurnPhase && c.type === "engine") return () => s.toggleArmed(c.id);
+    // an alternative to burning, not staged/armed — playing it resolves the jump (and the
+    // whole move) immediately, same "used up on click" shape as reserve fuel above
+    if (inBurnPhase && c.type === "hyperspace" && afford.legal.some((a) => a.type === "hyperspace" && a.via === "booster" && a.boosterId === c.id))
+      return () => dispatch({ type: "hyperspace", via: "booster", boosterId: c.id });
     if (combatCardType && c.type === combatCardType) return () => s.toggleCombatSel(c.id);
     return undefined;
   };
@@ -484,8 +488,8 @@ export function GameScreen({
       handHasNewCard);
   const cardHint = overLimit
     ? null // the centred hex popup carries this message instead
-    : inBurnPhase && p.hand.some((c) => c.type === "engine" || c.type === "reserveFuel")
-      ? "Tap an engine card to arm it for this burn, or a reserve-fuel card to refuel now."
+    : inBurnPhase && p.hand.some((c) => c.type === "engine" || c.type === "reserveFuel" || c.type === "hyperspace")
+      ? "Tap an engine card to arm it for this burn, a reserve-fuel card to refuel now, or a hyperspace card to jump instead."
       : combatCardType === "shield"
         ? "Tap shield cards to add to your defence."
         : combatCardType === "laser"
