@@ -8,7 +8,8 @@
  * Not board content — a fixed screen overlay, like the zoom controls or the status panel
  * (see this file's note history / HexPopup.tsx for why these moved out of board space).
  */
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { theme } from "../theme.js";
 
 /** corner points of a `w`×`h` hexagon, pointed left/right, cut at 60° from horizontal —
    same formula the old hexButtonPoints used, just driven by the element's real pixel size.
@@ -55,6 +56,14 @@ function useHexFrame<T extends HTMLElement>(minPad: number): HexFrame<T> {
 
 export function ActionBox({ children, className }: { children: ReactNode; className?: string }) {
   const { ref, size, padX } = useHexFrame<HTMLDivElement>(24);
+  // the box's own outline reuses the board grid's exact "metal rod" look — same gradient
+  // sweep + bevel shadow (theme.board.gridGradient/gridShadow*), just a bit heavier a
+  // stroke (theme.actionBox.borderStrokeWidth) — rather than the old flat gold edge.
+  // useId keeps these defs collision-safe if more than one ActionBox is ever mounted at
+  // once (combat box + a popup, say) since gradient/filter ids are page-global in SVG.
+  const gradId = useId();
+  const shadowId = useId();
+  const b = theme.board;
   return (
     <div ref={ref} className={`actionbox${className ? ` ${className}` : ""}`}>
       {size && (
@@ -63,7 +72,23 @@ export function ActionBox({ children, className }: { children: ReactNode; classN
         // render where `size` (from the previous measurement) is a beat behind the
         // padding it just caused — no gap/overflow between the fill and the real edges
         <svg className="actionbox-hex" viewBox={`0 0 ${size.w} ${size.h}`} preserveAspectRatio="none">
-          <polygon points={hexFramePoints(size.w, size.h)} />
+          <defs>
+            <linearGradient id={gradId} x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor={b.gridGradient[0]} />
+              <stop offset="45%" stopColor={b.gridGradient[1]} />
+              <stop offset="100%" stopColor={b.gridGradient[2]} />
+            </linearGradient>
+            <filter id={shadowId} x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow
+                dx="0"
+                dy={b.gridShadowOffset}
+                stdDeviation={b.gridShadowBlur}
+                floodColor="#000"
+                floodOpacity={b.gridShadowOpacity}
+              />
+            </filter>
+          </defs>
+          <polygon points={hexFramePoints(size.w, size.h)} stroke={`url(#${gradId})`} filter={`url(#${shadowId})`} />
         </svg>
       )}
       <div className="actionbox-content" style={{ paddingLeft: padX, paddingRight: padX }}>

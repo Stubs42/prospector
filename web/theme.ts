@@ -197,6 +197,32 @@ export interface Theme {
     /** expand/collapse transition duration, ms */
     animMs: number;
   };
+  /** the hex message-box family (ActionBox.tsx: guidance popups, ship picker, combat box,
+     equipment offers, confirm dialogs) and the HexButton controls inside them. Pushed as
+     CSS custom properties (applyTheme) since ActionBox/HexButton render their hex shape as
+     inline SVG but colour it entirely through CSS. */
+  actionBox: {
+    /** the box's own background alpha (0-1) — the RGB stays the app's fixed dark panel
+       tone; only the transparency is tunable, so the board/starfield shows faintly through
+       instead of the box reading as fully opaque */
+    bgOpacity: number;
+    /** hex outline stroke width, px — kept a bit heavier than the board grid's own 1.4
+       (theme.board) so the box frame still reads as a frame, not just more grid */
+    borderStrokeWidth: number;
+    /** the popup's own drop-shadow (elevation off the page) — separate from the grid-style
+       bevel shading on the stroke itself, which reuses theme.board.gridGradient/gridShadow*
+       directly rather than duplicating those numbers here */
+    dropShadow: string;
+    button: {
+      /** a plain (non-primary, non-danger) HexButton's fill + outline at rest */
+      bg: string;
+      border: string;
+      /** "primary" = the safe/default action (Cancel, Confirm) — a little emphasis at
+         rest, same idea as the app's rounded-rect `button.primary` */
+      primaryBg: string;
+      primaryBorder: string;
+    };
+  };
 }
 
 export const theme: Theme = {
@@ -342,6 +368,17 @@ export const theme: Theme = {
   handPanel: {
     animMs: 450,
   },
+  actionBox: {
+    bgOpacity: 0.88,
+    borderStrokeWidth: 2,
+    dropShadow: "0 10px 22px rgba(0, 0, 0, 0.55)",
+    button: {
+      bg: "#17251f",
+      border: "#3a444e",
+      primaryBg: "#26402f",
+      primaryBorder: "#3f6f4f",
+    },
+  },
 };
 
 /** pushes the theme's colour tokens onto <html> as CSS custom properties — call once,
@@ -376,4 +413,12 @@ export function applyTheme(t: Theme): void {
   root.setProperty("--danger", ui.danger);
   root.setProperty("--ok", ui.ok);
   root.setProperty("--handpanel-anim-ms", `${t.handPanel.animMs}ms`);
+  const ab = t.actionBox;
+  root.setProperty("--actionbox-bg-opacity", String(ab.bgOpacity));
+  root.setProperty("--actionbox-stroke-width", String(ab.borderStrokeWidth));
+  root.setProperty("--actionbox-drop-shadow", ab.dropShadow);
+  root.setProperty("--hexbutton-bg", ab.button.bg);
+  root.setProperty("--hexbutton-border", ab.button.border);
+  root.setProperty("--hexbutton-primary-bg", ab.button.primaryBg);
+  root.setProperty("--hexbutton-primary-border", ab.button.primaryBorder);
 }

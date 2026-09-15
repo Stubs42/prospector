@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 219.21 219.21">
 <g transform="translate(-234.330 -268.725)">
 <g transform="matrix(3.779513888888889 0 0 3.779513888888889 18.897697401543457 19.27747694086035)">
-<g id="g95" inkscape:label="icon-engine-2">
+<g id="g95">
       <path style="fill:#666666;fill-opacity:1;stroke:none;stroke-width:7.06197;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1" d="m 110,69.999998 -30.999982,18.00001 13,13.000002 z" id="path5-96-1" class="icon-ship-neutral-fill"></path>
       <g id="g71" class="icon-engine-fill">
         <path style="fill:#ff0000;fill-opacity:1;stroke:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1" d="m 81.000008,92.000008 3,3 -22,19.000012 z" id="path9-8"></path>

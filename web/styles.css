@@ -248,13 +248,14 @@ button.danger { border-color: #6a3a2f; }
      taller still and needs even more padding */
   min-width: 280px; max-width: min(560px, 92vw);
 }
-.actionbox-hex { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+/* the box's own elevation off the page (theme.actionBox.dropShadow) — separate from the
+   polygon's own SVG filter (ActionBox.tsx's shadowId), which is the small metal-rod bevel
+   shared with the board grid's stroke, not this outer "floating above the board" shadow */
+.actionbox-hex { position: absolute; inset: 0; pointer-events: none; overflow: visible; filter: var(--actionbox-drop-shadow); }
 .actionbox-hex polygon {
-  fill: rgba(12, 20, 16, 0.97);
-  stroke: var(--gold);
-  stroke-width: 2;
+  fill: rgba(12, 20, 16, var(--actionbox-bg-opacity));
+  stroke-width: var(--actionbox-stroke-width);
   stroke-linejoin: round;
-  filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.55));
 }
 .actionbox-content {
   position: relative;
@@ -293,9 +294,9 @@ button.hexbutton {
   outline: none;
 }
 .hexbutton-hex { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
-.hexbutton-hex polygon { fill: #17251f; stroke: var(--line-strong, #3a444e); stroke-width: 1.6; }
+.hexbutton-hex polygon { fill: var(--hexbutton-bg); stroke: var(--hexbutton-border); stroke-width: 1.6; }
 /* "primary" = the safe default (e.g. Cancel) — a little emphasis at rest, same as elsewhere */
-.hexbutton.primary .hexbutton-hex polygon { fill: #26402f; stroke: #3f6f4f; }
+.hexbutton.primary .hexbutton-hex polygon { fill: var(--hexbutton-primary-bg); stroke: var(--hexbutton-primary-border); }
 .hexbutton.danger .hexbutton-hex polygon { stroke: #6a3a2f; }
 .hexbutton.danger .hexbutton-content { color: #e08a7a; }
 .hexbutton:hover:not(:disabled) .hexbutton-hex polygon,
@@ -327,14 +328,6 @@ button.hexbutton {
 .combat-roll { display: flex; align-items: center; gap: 1.2rem; margin-top: 0.2rem; }
 .combat-die { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; font-size: 0.72rem; }
 
-/* a whole base region you can pick as your start base — one pulsing outline around the
-   4-cell cluster, not a fill on each cell */
-.base-pick { animation: base-pulse 1.6s ease-in-out infinite; }
-@keyframes base-pulse {
-  0%, 100% { stroke-opacity: 0.55; }
-  50% { stroke-opacity: 1; }
-}
-
 /* general "you can act on this" guide: anything clickable on the board (a loadable
    resource, an attackable ship, your own ship when it can end the turn, ...) breathes
    gently. Buttons are exempt — they're already self-explanatory as clickable. */
@@ -354,6 +347,17 @@ button.hexbutton {
 @keyframes ship-blink {
   0%, 49% { fill: var(--blink-normal); stroke: var(--blink-normal); }
   50%, 100% { fill: var(--blink-hi); stroke: var(--blink-hi); }
+}
+
+/* a whole board region (currently just a free base offered for pick) whose outline needs
+   to blink against a fill that's ALREADY its own base colour — swapping to a same-family
+   colour (like .ship-blink) would vanish into that fill for half the cycle, so this snaps
+   stroke-opacity hard on/off instead (still steps(1), no easing — a genuine blink, not the
+   old smooth pulse) against a single, already-different highlight colour. */
+.region-blink { animation: region-blink 1s steps(1, end) infinite; }
+@keyframes region-blink {
+  0%, 49% { stroke-opacity: 0; }
+  50%, 100% { stroke-opacity: 1; }
 }
 
 /* log / history overlay */
@@ -647,10 +651,10 @@ circle.cell-hit { pointer-events: all; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ore-chip, .base-pick, .pulse-avail, .ship-blink { animation: none; }
-  .base-pick { stroke-opacity: 1; }
+  .ore-chip, .pulse-avail, .ship-blink, .region-blink { animation: none; }
   .pulse-avail { opacity: 1; }
   .ship-blink { fill: var(--blink-normal); stroke: var(--blink-normal); }
+  .region-blink { stroke-opacity: 1; }
   .card.pulse-new, .card.pulse-urgent, .card.pulse-ready,
   .card-art-wrap.pulse-new, .card-art-wrap.pulse-urgent, .card-art-wrap.pulse-ready { animation: none; }
   .card.pulse-urgent, .card-art-wrap.pulse-urgent { border-color: #c1573c; }
