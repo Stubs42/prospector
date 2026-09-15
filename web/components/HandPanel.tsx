@@ -34,7 +34,9 @@ export interface HandPanelProps {
     clickable: boolean;
     selected: boolean;
     onClick?: (() => void) | undefined;
-    pulse?: "urgent" | "new" | "ready" | null;
+    pulse?: "urgent" | "new" | null;
+    /** can't be played right now, but something else in the hand can — see BoosterCardFace */
+    dimmed?: boolean;
   };
   /** over the hand limit — redden the frame and keep every card pulsing until resolved */
   urgent?: boolean;
@@ -74,6 +76,7 @@ export function HandPanel({ cards, cardHint, cardState, urgent, forceOpen, owner
                 selected={s.selected}
                 onClick={s.onClick}
                 pulse={s.pulse}
+                dimmed={s.dimmed}
               />
             );
           })}

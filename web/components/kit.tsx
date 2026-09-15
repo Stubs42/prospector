@@ -175,20 +175,26 @@ export function BoosterCardFace({
   clickable,
   selected,
   pulse,
+  dimmed,
 }: {
   card: BoosterCardT;
   onClick?: (() => void) | undefined;
   clickable?: boolean | undefined;
   selected?: boolean | undefined;
-  /** "new" = briefly highlight a just-drawn card; "urgent" = keep pulsing (over the hand limit);
-     "ready" = playable right now (armable this burn / usable in combat) */
-  pulse?: "urgent" | "new" | "ready" | null | undefined;
+  /** "new" = briefly highlight a just-drawn card; "urgent" = keep pulsing (over the hand limit).
+     A playable card no longer pulses ("ready" used to) — see `dimmed` instead. */
+  pulse?: "urgent" | "new" | null | undefined;
+  /** this card can't be played right now, but something else in the hand can — the card
+     itself dims rather than the playable ones pulsing for attention */
+  dimmed?: boolean | undefined;
 }) {
   const artStat = BOOSTER_ART_STAT[card.type];
+  const cls = (base: string) =>
+    `${base}${clickable ? " clickable" : ""}${selected ? " picked" : ""}${pulse ? ` pulse-${pulse}` : ""}${dimmed ? " dimmed" : ""}`;
   if (artStat && card.value != null) {
     return (
       <div
-        className={`card-art-wrap${clickable ? " clickable" : ""}${selected ? " picked" : ""}${pulse ? ` pulse-${pulse}` : ""}`}
+        className={cls("card-art-wrap")}
         style={{ cursor: clickable ? "pointer" : "default", color: ASPECT_FILL[artStat] }}
         onClick={onClick}
       >
@@ -197,11 +203,7 @@ export function BoosterCardFace({
     );
   }
   return (
-    <div
-      className={`card booster-${card.type}${clickable ? " clickable" : ""}${selected ? " picked" : ""}${pulse ? ` pulse-${pulse}` : ""}`}
-      style={{ cursor: clickable ? "pointer" : "default" }}
-      onClick={onClick}
-    >
+    <div className={cls(`card booster-${card.type}`)} style={{ cursor: clickable ? "pointer" : "default" }} onClick={onClick}>
       <CardIcon type={card.type} />
       <div className="cbadge">{card.value ?? "◇"}</div>
       <div className="ctype">{card.type}</div>
