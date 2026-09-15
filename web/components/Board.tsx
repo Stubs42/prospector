@@ -325,9 +325,8 @@ export function Board({
            a slightly raised, cast-metal feel without per-edge lighting math. Colours and
            the shadow's own numbers live in theme.ts (theme.board), not here. */}
         <linearGradient id="rodGrad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor={theme.board.gridGradient[0]} />
-          <stop offset="45%" stopColor={theme.board.gridGradient[1]} />
-          <stop offset="100%" stopColor={theme.board.gridGradient[2]} />
+          <stop offset="0%" stopColor={theme.board.gridBright} />
+          <stop offset="100%" stopColor={theme.board.gridDark} />
         </linearGradient>
         <filter id="rodDepth" x="-5%" y="-5%" width="110%" height="110%">
           <feDropShadow

@@ -79,8 +79,15 @@ export interface Theme {
     outerCellFillOpacity: number;
     innerFill: string;
     outerFill: string;
-    /** the plain grid edge's "metal rod" gradient, light to dark */
-    gridGradient: [string, string, string];
+    /** the plain grid edge's "metal rod" look — a diagonal (top-left to bottom-right)
+       sweep across each hex's own edges, from `gridBright` to `gridDark`, plus the bevel
+       shadow below. `gridDark` needs to stay visibly lighter than the board's own
+       innerFill/outerFill (and the page's --panel background) or the sweep's dark end
+       reads as barely-there against them — it's a shading effect, not meant to fade to
+       black. Shared with the hex message-box family's own outline (ActionBox.tsx), so a
+       new pair of colours here reshades both without touching either component. */
+    gridBright: string;
+    gridDark: string;
     gridShadowOffset: number;
     gridShadowBlur: number;
     gridShadowOpacity: number;
@@ -210,8 +217,8 @@ export interface Theme {
        (theme.board) so the box frame still reads as a frame, not just more grid */
     borderStrokeWidth: number;
     /** the popup's own drop-shadow (elevation off the page) — separate from the grid-style
-       bevel shading on the stroke itself, which reuses theme.board.gridGradient/gridShadow*
-       directly rather than duplicating those numbers here */
+       bevel shading on the stroke itself, which reuses theme.board.gridBright/gridDark/
+       gridShadow* directly rather than duplicating those numbers here */
     dropShadow: string;
     button: {
       /** a plain (non-primary, non-danger) HexButton's fill + outline at rest */
@@ -302,7 +309,10 @@ export const theme: Theme = {
     outerCellFillOpacity: 1.0,
     innerFill: "#0e1b15",
     outerFill: "#1c2b25",
-    gridGradient: ["#7c8f85", "#3c4f45", "#1a2620"],
+    gridBright: "#7c8f85",
+    // lighter than the old dark stop (#1a2620) — that was nearly the same tone as the
+    // board's own fill/background, so a cell's bottom-right edge all but disappeared
+    gridDark: "#3f544a",
     gridShadowOffset: 0.6,
     gridShadowBlur: 0.5,
     gridShadowOpacity: 0.45,

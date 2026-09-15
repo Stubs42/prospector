@@ -57,8 +57,8 @@ function useHexFrame<T extends HTMLElement>(minPad: number): HexFrame<T> {
 export function ActionBox({ children, className }: { children: ReactNode; className?: string }) {
   const { ref, size, padX } = useHexFrame<HTMLDivElement>(24);
   // the box's own outline reuses the board grid's exact "metal rod" look — same gradient
-  // sweep + bevel shadow (theme.board.gridGradient/gridShadow*), just a bit heavier a
-  // stroke (theme.actionBox.borderStrokeWidth) — rather than the old flat gold edge.
+  // sweep + bevel shadow (theme.board.gridBright/gridDark/gridShadow*), just a bit heavier
+  // a stroke (theme.actionBox.borderStrokeWidth) — rather than the old flat gold edge.
   // useId keeps these defs collision-safe if more than one ActionBox is ever mounted at
   // once (combat box + a popup, say) since gradient/filter ids are page-global in SVG.
   const gradId = useId();
@@ -74,9 +74,8 @@ export function ActionBox({ children, className }: { children: ReactNode; classN
         <svg className="actionbox-hex" viewBox={`0 0 ${size.w} ${size.h}`} preserveAspectRatio="none">
           <defs>
             <linearGradient id={gradId} x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor={b.gridGradient[0]} />
-              <stop offset="45%" stopColor={b.gridGradient[1]} />
-              <stop offset="100%" stopColor={b.gridGradient[2]} />
+              <stop offset="0%" stopColor={b.gridBright} />
+              <stop offset="100%" stopColor={b.gridDark} />
             </linearGradient>
             <filter id={shadowId} x="-20%" y="-20%" width="140%" height="140%">
               <feDropShadow
