@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createGame, applyAction, score, boardFor } from "./game.js";
+import { createGame, applyAction, score, boardFor, equipmentRerollEligible } from "./game.js";
 import { legalActions, randomBot } from "./index.js";
 import { makeRng } from "./rng.js";
 import type { Action, GameState, SeatKind } from "./types.js";
@@ -211,6 +211,61 @@ describe("homecoming upgrade pick", () => {
     // the choice resolved a real move — the turn can now end
     s = run(s, { type: "endTurn" });
     expect(s.activePlayerIndex).toBe(1);
+  });
+});
+
+describe("equipment reroll", () => {
+  it("offers a reroll only when all 3 offered cards are identical, and it's capped at 1 use", () => {
+    let s = createGame({ seed: 8, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "none" });
+    const Y = () => s.players[0]!;
+    Y().pose = { current: { q: -7, r: 7 }, previous: { q: -7, r: 7 }, atRest: true };
+    Y().cargo = ["red"];
+    s = run(s, { type: "drawBooster" });
+    while (Y().hand.length > 3) s = run(s, { type: "discardBooster", cardId: Y().hand[0]!.id });
+    s = run(s, { type: "drift" });
+    s = run(s, { type: "burn", path: [{ q: -8, r: 8 }] }); // onto a yellow base cell
+    s = run(s, { type: "endMove" });
+    expect(s.pendingEquipment).not.toBeNull();
+
+    // force the 3-card offer into 3 identical cards
+    const dupe = { ...s.pendingEquipment!.cards[0]!, stat: "cargo" as const, amount: 1 };
+    s = {
+      ...s,
+      pendingEquipment: {
+        ...s.pendingEquipment!,
+        cards: [dupe, { ...dupe, id: "dupe-2" }, { ...dupe, id: "dupe-3" }],
+      },
+    };
+    expect(equipmentRerollEligible(s.pendingEquipment!)).toBe(true);
+    expect(legalActions(s).some((a) => a.type === "rerollEquipment")).toBe(true);
+
+    const before = s.pendingEquipment!.cards.map((c) => c.id);
+    s = run(s, { type: "rerollEquipment" });
+    expect(s.pendingEquipment).not.toBeNull();
+    expect(s.pendingEquipment!.rerollsUsed).toBe(1);
+    // the 3 rejected duplicates went to the bottom of the deck
+    expect(s.decks.equipment.draw.slice(-3).map((c) => c.id)).toEqual(before);
+    // still a real 3-card choice
+    expect(legalActions(s).filter((a) => a.type === "chooseEquipment")).toHaveLength(3);
+
+    // even if the reroll also comes up identical, no second reroll is offered
+    const dupe2 = { ...s.pendingEquipment!.cards[0]! };
+    s = { ...s, pendingEquipment: { ...s.pendingEquipment!, cards: [dupe2, { ...dupe2, id: "d2" }, { ...dupe2, id: "d3" }] } };
+    expect(equipmentRerollEligible(s.pendingEquipment!)).toBe(false);
+    expect(legalActions(s).some((a) => a.type === "rerollEquipment")).toBe(false);
+    expect(applyAction(s, { type: "rerollEquipment" }).ok).toBe(false);
+  });
+
+  it("isn't offered when the 3 cards differ", () => {
+    let s = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0 });
+    const Y = () => s.players[0]!;
+    s = run(s, { type: "drawBooster" });
+    while (Y().hand.length > 3) s = run(s, { type: "discardBooster", cardId: Y().hand[0]!.id });
+    s = run(s, { type: "drift" });
+    expect(s.pendingEquipment).not.toBeNull();
+    // seed 3's start-equipment draw isn't 3 identical cards
+    expect(equipmentRerollEligible(s.pendingEquipment!)).toBe(false);
+    expect(legalActions(s).some((a) => a.type === "rerollEquipment")).toBe(false);
   });
 });
 

@@ -193,10 +193,16 @@ export interface PendingCombat {
    still available right after). `mode` only exists for "start": a GUI spins to a random
    card itself for "random" (the engine doesn't roll it — same as any other lucky-wheel
    pick in this game, the "randomness" is cosmetic/client-side), or lets the player choose
-   for "select"; a homecoming reward is always an interactive choice. */
+   for "select"; a homecoming reward is always an interactive choice.
+   `rerollsUsed` counts manual `rerollEquipment` actions — capped at 1, and only offered at
+   all when all 3 cards are identical (see legalActions): a real choice among 3 duplicates
+   isn't a choice. A separate, fully automatic reroll (up to 3 draws, not user-facing or
+   counted here) already runs before the offer is ever shown, for the rarer case where
+   every card is above the player's upgrade cap and thus useless regardless of which is
+   picked — see game.ts's drawEquipmentOffer. */
 export type PendingEquipment =
-  | { playerId: number; cards: EquipmentCard[]; reason: "start"; mode: "random" | "select" }
-  | { playerId: number; cards: EquipmentCard[]; reason: "homecoming" };
+  | { playerId: number; cards: EquipmentCard[]; reason: "start"; mode: "random" | "select"; rerollsUsed: number }
+  | { playerId: number; cards: EquipmentCard[]; reason: "homecoming"; rerollsUsed: number };
 
 export type TurnPhase = "start" | "moved" | "done";
 
@@ -295,6 +301,7 @@ export type Action =
   | { type: "combatResolve" }
   | { type: "declineCounter" }
   | { type: "chooseEquipment"; cardId: string }
+  | { type: "rerollEquipment" }
   | { type: "endTurn" };
 
 export interface StepResult {

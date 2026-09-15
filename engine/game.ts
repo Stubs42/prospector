@@ -33,7 +33,7 @@ function requireData(): { config: Config; boardJson: BoardJson; content: Content
 import { makeRng, type Rng } from "./rng.js";
 import { drawN, discardCards, bottomCards } from "./cards.js";
 import { drift, burn, atRestPose, straightPath, hyperspaceLand } from "./movement.js";
-import { resolveStats, movementInputs } from "./ship.js";
+import { resolveStats, movementInputs, canEquip } from "./ship.js";
 import { rollCoordinateUntil, rollCombat, type CoordinateRoll } from "./dice.js";
 import { resolveCombat, pickSpoil } from "./combat.js";
 import type {
@@ -44,6 +44,7 @@ import type {
   EquipmentCard,
   GameState,
   OreColour,
+  PendingEquipment,
   PlayerState,
   ProspectorConfig,
   SeatKind,
@@ -487,6 +488,44 @@ function loseShip(state: GameState, board: BoardModel, p: PlayerState, reason: s
 // home base arrival: brake, refuel, deliver, equip, seed
 // ---------------------------------------------------------------------------
 
+/** Sets state.pendingEquipment for `p` from `initialCards` — but first, silently redraws
+   (rejected cards go to the bottom of the deck, same as a declined chooseEquipment pick) up
+   to 2 more times if literally every offered card is already above `p`'s upgrade cap: a
+   choice among 3 useless cards isn't a choice. Gives up after 3 total attempts (astronomically
+   unlikely to still be all-maxed) and just shows them anyway. This auto-reroll is invisible
+   to the player — the offer they see has already been filtered — unlike the user-facing
+   `rerollEquipment` action (identical-cards case), which they trigger themselves. */
+function offerEquipment(
+  state: GameState,
+  rng: Rng,
+  p: PlayerState,
+  initialCards: EquipmentCard[],
+  rest: { reason: "homecoming" } | { reason: "start"; mode: "random" | "select" },
+): void {
+  const caps = state.config.modes.prospector.upgradeCaps;
+  let cards = initialCards;
+  for (let attempt = 0; attempt < 2 && cards.length > 0; attempt++) {
+    const stats = statsOf(state, p);
+    const allMaxed = cards.every((c) => !canEquip(stats, c.stat, caps));
+    if (!allMaxed) break;
+    state.decks.equipment = bottomCards(state.decks.equipment, cards);
+    const redrawn = drawN(state.decks.equipment, cards.length, rng, state.config.core.cards.reshuffleDiscardWhenEmpty);
+    state.decks.equipment = redrawn.deck;
+    cards = redrawn.cards;
+  }
+  state.pendingEquipment = { playerId: p.id, cards, ...rest, rerollsUsed: 0 };
+}
+
+/** Whether the player may reroll their pendingEquipment offer themselves — only when every
+   card offered is identical (same stat and amount): a real choice among 3 duplicates isn't a
+   choice, but this is a one-time courtesy, not a way to fish for a better upgrade, so it's
+   capped at 1 use and never offered again once that reroll also comes up identical. */
+export function equipmentRerollEligible(pe: PendingEquipment): boolean {
+  if (pe.rerollsUsed > 0 || pe.cards.length < 2) return false;
+  const first = pe.cards[0]!;
+  return pe.cards.every((c) => c.stat === first.stat && c.amount === first.amount);
+}
+
 function arriveHomeBaseIfAny(state: GameState, board: BoardModel, p: PlayerState): void {
   const mode = state.config.modes.prospector;
   if (board.baseOwnerAt(p.pose.current) !== p.homeBase) return;
@@ -519,7 +558,7 @@ function arriveHomeBaseIfAny(state: GameState, board: BoardModel, p: PlayerState
         );
         state.decks.equipment = deck;
         if (cards.length > 0) {
-          state.pendingEquipment = { playerId: p.id, cards, reason: "homecoming" };
+          offerEquipment(state, rng, p, cards, { reason: "homecoming" });
         }
       });
     }
@@ -582,7 +621,7 @@ export function applyAction(prev: GameState, action: Action): StepResult {
     return picked;
   };
 
-  if (state.pendingEquipment && action.type !== "chooseEquipment") {
+  if (state.pendingEquipment && action.type !== "chooseEquipment" && action.type !== "rerollEquipment") {
     return fail("choose an upgrade first");
   }
 
@@ -604,6 +643,20 @@ export function applyAction(prev: GameState, action: Action): StepResult {
       // a homecoming reward interrupts the post-move phase and resumes there; the
       // start-of-game upgrade interrupts "start" (right before a burn) and resumes there
       state.phase = pe.reason === "homecoming" ? "moved" : "start";
+      return done();
+    }
+
+    case "rerollEquipment": {
+      const pe = state.pendingEquipment;
+      if (!pe) return fail("no upgrade choice pending");
+      if (!equipmentRerollEligible(pe)) return fail("no reroll available");
+      withRng(state, (rng) => {
+        state.decks.equipment = bottomCards(state.decks.equipment, pe.cards);
+        const redrawn = drawN(state.decks.equipment, pe.cards.length, rng, state.config.core.cards.reshuffleDiscardWhenEmpty);
+        state.decks.equipment = redrawn.deck;
+        state.pendingEquipment = { ...pe, cards: redrawn.cards, rerollsUsed: pe.rerollsUsed + 1 };
+      });
+      log(state, "equipmentRerolled", { player: pe.playerId, reason: pe.reason });
       return done();
     }
 
@@ -668,7 +721,8 @@ export function applyAction(prev: GameState, action: Action): StepResult {
       // the one-time "upgrade at game start" draw (see populateGame) interrupts here,
       // right before this player would otherwise choose a burn target
       if (p.startEquipment) {
-        state.pendingEquipment = { playerId: p.id, cards: p.startEquipment.cards, reason: "start", mode: p.startEquipment.mode };
+        const { cards, mode: pickMode } = p.startEquipment;
+        withRng(state, (rng) => offerEquipment(state, rng, p, cards, { reason: "start", mode: pickMode }));
         p.startEquipment = null;
       }
       return done();

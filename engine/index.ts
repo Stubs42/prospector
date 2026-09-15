@@ -8,12 +8,13 @@ import {
   score,
   provideGameData,
   setupLegalActions,
+  equipmentRerollEligible,
   type CreateGameOptions,
 } from "./game.js";
 import { movementInputs } from "./ship.js";
 import type { Action, GameState, PlayerState } from "./types.js";
 
-export { createGame, applyAction, score, statsOf, boardFor, provideGameData };
+export { createGame, applyAction, score, statsOf, boardFor, provideGameData, equipmentRerollEligible };
 export type { Hex } from "./hex.js";
 export type { GameState, Action, PlayerState, CreateGameOptions };
 export * from "./types.js";
@@ -67,7 +68,9 @@ export function legalActions(state: GameState, opts?: LegalOpts): Action[] {
   }
 
   if (state.pendingEquipment) {
-    return state.pendingEquipment.cards.map((c) => ({ type: "chooseEquipment", cardId: c.id }));
+    const out: Action[] = state.pendingEquipment.cards.map((c) => ({ type: "chooseEquipment", cardId: c.id }));
+    if (equipmentRerollEligible(state.pendingEquipment)) out.push({ type: "rerollEquipment" });
+    return out;
   }
 
   const out: Action[] = [];

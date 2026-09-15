@@ -13,7 +13,7 @@
  * landing on the card it's about to dispatch itself.
  */
 import type { StatKey } from "../../engine/index.js";
-import { ActionBox } from "./ActionBox.js";
+import { ActionBox, HexButton } from "./ActionBox.js";
 import { UpgradeCardArt } from "./CardArt.js";
 
 export interface EquipmentOption {
@@ -29,9 +29,13 @@ export interface EquipmentPopupProps {
   spinningId?: string | null;
   /** absent while spinning: the popup is a pure reveal, nothing to click yet */
   onChoose?: ((id: string) => void) | undefined;
+  /** true when all 3 cards offered are identical — a real choice among duplicates isn't a
+     choice, so a one-time reroll is offered instead of (or alongside) picking one anyway */
+  canReroll?: boolean | undefined;
+  onReroll?: (() => void) | undefined;
 }
 
-export function EquipmentPopup({ title, options, spinningId = null, onChoose }: EquipmentPopupProps) {
+export function EquipmentPopup({ title, options, spinningId = null, onChoose, canReroll, onReroll }: EquipmentPopupProps) {
   return (
     <ActionBox className="equipbox-box">
       <div className="actionbox-title">{title}</div>
@@ -50,6 +54,11 @@ export function EquipmentPopup({ title, options, spinningId = null, onChoose }: 
           );
         })}
       </div>
+      {canReroll && onReroll && (
+        <div className="actionbox-buttons">
+          <HexButton onClick={onReroll}>🎲 Reroll</HexButton>
+        </div>
+      )}
     </ActionBox>
   );
 }

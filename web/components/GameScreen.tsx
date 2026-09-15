@@ -553,6 +553,11 @@ export function GameScreen({
             afford.equipmentChoice.reason === "start" && afford.equipmentChoice.mode === "random"
               ? undefined
               : (id: string) => dispatch({ type: "chooseEquipment", cardId: id }),
+          // same "no interaction while spinning" rule applies to the reroll button
+          canReroll:
+            afford.canRerollEquipment &&
+            !(afford.equipmentChoice.reason === "start" && afford.equipmentChoice.mode === "random"),
+          onReroll: () => dispatch({ type: "rerollEquipment" }),
         }
       : null;
 
