@@ -5,7 +5,8 @@
  * Every icon comes in 3 tiers (drawn at increasing size/complexity, not just recoloured) —
  * a ship stat of 0 shows no icon at all, 1-3 picks the matching tier.
  */
-import type { StatKey } from "../engine/index.js";
+import type { Colour, StatKey } from "../engine/index.js";
+import { theme } from "./theme.js";
 
 import iconShield1 from "../res/icon-shield-1.svg?raw";
 import iconShield2 from "../res/icon-shield-2.svg?raw";
@@ -75,11 +76,40 @@ export const CARD_ART = {
   upgradeBack: clean(upgradeBack),
   shipScreenBg: clean(shipScreenBg),
   shipCellBg: clean(shipCellBg),
-  /** the ship's own hull colour paints this via CSS `color` (fill:currentColor baked in) —
-     only one nose shape exists yet (measured off the Atlas example), reused for every ship
-     colour until each ship gets its own silhouette */
-  shipNose: clean(shipNose),
 };
+
+/** #rrggbb -> #rrggbb, mixed toward `toward` by `amt` (0 = unchanged, 1 = `toward`) */
+function mix(hex: string, toward: [number, number, number], amt: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  const ch = (c: number, t: number) => Math.round(c + (t - c) * amt);
+  return `#${[ch(r, toward[0]), ch(g, toward[1]), ch(b, toward[2])].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+}
+const lighten = (hex: string, amt: number) => mix(hex, [255, 255, 255], amt);
+const darken = (hex: string, amt: number) => mix(hex, [0, 0, 0], amt);
+
+/** the ship nose (only one silhouette exists yet, measured off the Atlas example, reused for
+   every ship colour), shaded per colour as a light-to-dark diagonal sweep instead of one flat
+   fill — the same "cast, beveled volume" convention as the board grid / hex message boxes
+   (theme.board.gridBright/gridDark), just derived per ship from theme.colors.ship instead of
+   one shared pair, so it reads as a lit 3D cone rather than a flat paper triangle. Baked as a
+   literal 2-stop <linearGradient> per colour (CSS `currentColor` can only ever be ONE shade,
+   not two), built once at module load — never hand-redrawn, still the same source path. */
+export const SHIP_NOSE_BY_COLOUR: Record<Colour, string> = Object.fromEntries(
+  (Object.keys(theme.colors.ship) as Colour[]).map((colour) => {
+    const base = theme.colors.ship[colour];
+    const gradId = `nose-grad-${colour}`;
+    const defs =
+      `<defs><linearGradient id="${gradId}" x1="0" y1="0" x2="1" y2="1">` +
+      `<stop offset="0%" stop-color="${lighten(base, 0.45)}"/>` +
+      `<stop offset="100%" stop-color="${darken(base, 0.4)}"/>` +
+      `</linearGradient></defs>`;
+    const withGrad = clean(shipNose)
+      .replace(/(<svg[^>]*>)/, `$1${defs}`)
+      .replace("fill:currentColor", `fill:url(#${gradId})`);
+    return [colour, withGrad];
+  }),
+) as Record<Colour, string>;
 
 /** the physical card's own aspect ratio (width / height) — booster and ship cards share the
    same portrait shape; upgrade cards are square. Baked into the art, not themeable. */

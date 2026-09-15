@@ -15,7 +15,7 @@
  */
 import type { CSSProperties, ReactNode } from "react";
 import type { Colour, ShipStats, StatKey } from "../../engine/index.js";
-import { CARD_ART, PORTRAIT_ASPECT, tierIconFor } from "../cardAssets.js";
+import { CARD_ART, PORTRAIT_ASPECT, SHIP_NOSE_BY_COLOUR, tierIconFor } from "../cardAssets.js";
 import { theme } from "../theme.js";
 import { ASPECT_TAG } from "./aspects.js";
 
@@ -231,9 +231,10 @@ export function ShipCardArt({ colour, name, stats }: ShipCardArtProps) {
           position: "absolute",
           left: `${SHIP_NOSE.x * 100}%`, top: `${SHIP_NOSE.y * 100}%`,
           width: `${SHIP_NOSE.w * 100}%`, height: `${SHIP_NOSE.h * 100}%`,
-          color: `var(--ship-${colour})`,
         }}
-        dangerouslySetInnerHTML={{ __html: CARD_ART.shipNose }}
+        // a per-colour gradient (light-to-dark, cone-like) baked in at module load, not
+        // CSS currentColor — see cardAssets.ts's SHIP_NOSE_BY_COLOUR for why
+        dangerouslySetInnerHTML={{ __html: SHIP_NOSE_BY_COLOUR[colour] }}
       />
       <CardText x={SHIP_NAME.x} y={SHIP_NAME.y + t.nameOffsetY} frac={t.nameFontSize} cardHeight={h} color="#000">
         {name}
