@@ -499,13 +499,10 @@ button.hexbutton {
   0%, 100% { border-color: #c1573c; }
   50% { border-color: #e8a458; }
 }
-/* playable right now: a quiet glow around the frame in the card's own aspect colour
-   (currentColor) — no size/box-shadow burst, just the frame */
-.card.pulse-ready, .card-art-wrap.pulse-ready { animation: card-ready-pulse 1.3s ease-in-out infinite; }
-@keyframes card-ready-pulse {
-  0%, 100% { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); }
-  50% { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35), 0 0 0 2px currentColor; }
-}
+/* can't be played right now, but something else in the hand can — dims instead of the
+   playable card(s) pulsing for attention (the old .pulse-ready); same "clickable" opacity
+   convention as .equip-card-wrap.disabled (EquipmentPopup) */
+.card.dimmed, .card-art-wrap.dimmed { opacity: 0.4; }
 
 /* real card artwork (res/cards-artwork.svg via cardAssets.ts/CardArt.tsx) — the frame/
    screen/icon layers are raw SVG files inlined via dangerouslySetInnerHTML, sized to fill
@@ -655,9 +652,8 @@ circle.cell-hit { pointer-events: all; }
   .pulse-avail { opacity: 1; }
   .ship-blink { fill: var(--blink-normal); stroke: var(--blink-normal); }
   .region-blink { stroke-opacity: 1; }
-  .card.pulse-new, .card.pulse-urgent, .card.pulse-ready,
-  .card-art-wrap.pulse-new, .card-art-wrap.pulse-urgent, .card-art-wrap.pulse-ready { animation: none; }
+  .card.pulse-new, .card.pulse-urgent,
+  .card-art-wrap.pulse-new, .card-art-wrap.pulse-urgent { animation: none; }
   .card.pulse-urgent, .card-art-wrap.pulse-urgent { border-color: #c1573c; }
-  .card.pulse-ready, .card-art-wrap.pulse-ready { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35), 0 0 0 2px currentColor; }
   * { transition: none !important; }
 }

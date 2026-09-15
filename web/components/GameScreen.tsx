@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { score } from "../../engine/index.js";
 import { boardFor } from "../../engine/game.js";
 import { add, hexKey, scale } from "../../engine/hex.js";
-import type { Colour, Hex } from "../../engine/index.js";
+import type { BoosterCard, Colour, Hex } from "../../engine/index.js";
 import { Board } from "./Board.js";
 import { HandPanel, type PanelButton } from "./HandPanel.js";
 import { CombatBox, type CombatBoxProps, type CombatCardChip } from "./CombatBox.js";
@@ -404,23 +404,28 @@ export function GameScreen({
   }, [state.turnNumber, state.activePlayerIndex, actionLabel]);
 
   const canRefuel = (id: string) => afford.legal.some((a) => a.type === "useReserveFuel" && a.cardId === id);
+  // the click handler a card WOULD get right now, if any — factored out of cardState so
+  // "is anything in this hand playable at all" (handHasPlayableCard below) can ask the same
+  // question without duplicating the rules
+  const clickableAction = (c: BoosterCard): (() => void) | undefined => {
+    if (overLimit) return () => dispatch({ type: "discardBooster", cardId: c.id });
+    // reserve fuel isn't armed for a later burn — it's used up the instant it's clicked
+    if (inBurnPhase && c.type === "reserveFuel" && canRefuel(c.id)) return () => dispatch({ type: "useReserveFuel", cardId: c.id });
+    if (inBurnPhase && c.type === "engine") return () => s.toggleArmed(c.id);
+    if (combatCardType && c.type === combatCardType) return () => s.toggleCombatSel(c.id);
+    return undefined;
+  };
   const cardState = (id: string) => {
     const c = handOwner.hand.find((x) => x.id === id)!;
-    let onClick: (() => void) | undefined;
-    if (overLimit) onClick = () => dispatch({ type: "discardBooster", cardId: id });
-    // reserve fuel isn't armed for a later burn — it's used up the instant it's clicked
-    else if (inBurnPhase && c.type === "reserveFuel" && canRefuel(id))
-      onClick = () => dispatch({ type: "useReserveFuel", cardId: id });
-    else if (inBurnPhase && c.type === "engine") onClick = () => s.toggleArmed(id);
-    else if (combatCardType && c.type === combatCardType) onClick = () => s.toggleCombatSel(id);
-    const pulse: "urgent" | "new" | "ready" | null = overLimit
-      ? "urgent"
-      : s.newCardIds.has(id)
-        ? "new"
-        : onClick
-          ? "ready"
-          : null;
-    return { clickable: !!onClick, selected: armed.has(id) || combatSel.has(id), onClick, pulse };
+    const onClick = clickableAction(c);
+    const clickable = !!onClick;
+    const pulse: "urgent" | "new" | null = overLimit ? "urgent" : s.newCardIds.has(id) ? "new" : null;
+    // a card that can't be played dims itself ONLY once something else in the hand can —
+    // no point graying out the whole hand when nothing is actionable at all (see
+    // handHasPlayableCard below); replaces the old "ready" pulse on the playable card(s)
+    // themselves — same information, the other way round
+    const dimmed = !clickable && handHasPlayableCard;
+    return { clickable, selected: armed.has(id) || combatSel.has(id), onClick, pulse, dimmed };
   };
   // NOT yet true while the start-of-game upgrade choice is pending: that interrupt sits
   // between drift (driftDone) and the player's first real chance to arm a burn booster —
@@ -441,6 +446,12 @@ export function GameScreen({
       : (pc?.awaiting === "counter" && seats[pc.defenderId] === "human") || (!pc && attackTarget !== null)
         ? "laser"
         : null;
+  // whether ANY card in this hand could actually be played right now — inBurnPhase/
+  // combatCardType being "the right phase" isn't enough on its own if the hand simply
+  // doesn't hold a matching card (no engine/reserveFuel during a burn, no laser/shield
+  // during combat); auto-expanding the hand for nothing to do there is just noise (see
+  // showCards below) and nothing needs dimming either (see cardState above)
+  const handHasPlayableCard = handOwner.hand.some((c) => !!clickableAction(c));
   const pickedIds = (type: "laser" | "shield") =>
     handOwner.hand.filter((c) => c.type === type && combatSel.has(c.id)).map((c) => c.id);
   const selSum = (type: "laser" | "shield") =>
@@ -468,7 +479,9 @@ export function GameScreen({
   const showCards =
     !handHidden &&
     handOwner.hand.length > 0 &&
-    (handOwnerOverLimit || inBurnPhase || combatCardType !== null || handHasNewCard);
+    (handOwnerOverLimit ||
+      ((inBurnPhase || combatCardType !== null) && handHasPlayableCard) ||
+      handHasNewCard);
   const cardHint = overLimit
     ? null // the centred hex popup carries this message instead
     : inBurnPhase && p.hand.some((c) => c.type === "engine" || c.type === "reserveFuel")
