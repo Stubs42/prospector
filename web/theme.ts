@@ -379,8 +379,8 @@ export const theme: Theme = {
     animMs: 450,
   },
   actionBox: {
-    bgOpacity: 0.88,
-    borderStrokeWidth: 2,
+    bgOpacity: 0.6,
+    borderStrokeWidth: 1,
     dropShadow: "0 10px 22px rgba(0, 0, 0, 0.55)",
     button: {
       bg: "#17251f",
