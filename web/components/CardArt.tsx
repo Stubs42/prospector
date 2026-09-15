@@ -13,7 +13,7 @@
  * `!important` (see styles.css's "card artwork theming" block), which is why every card
  * face here is wrapped in `.card-art`.
  */
-import type { CSSProperties, ReactNode } from "react";
+import { useRef, useState, type CSSProperties, type MouseEvent as RMouseEvent, type ReactNode } from "react";
 import type { Colour, ShipStats, StatKey } from "../../engine/index.js";
 import { CARD_ART, PORTRAIT_ASPECT, SHIP_NOSE_BY_COLOUR, tierIconFor } from "../cardAssets.js";
 import { theme } from "../theme.js";
@@ -37,15 +37,41 @@ function scaleBox(box: FracBox, scale: number): FracBox {
   return { x: cx - w / 2, y: cy - h / 2, w, h };
 }
 
-function Layer({ box, svg }: { box: FracBox; svg: string }) {
+/** `tip`: hover text for this layer, shown via the app's own floating tooltip (same idea as
+   Board.tsx's onTip/.board-tip — not the native `title` attribute, which turned out
+   unreliable here: a filled SVG <path> is its own hit-test target by default, so the raw
+   artwork nested inside the div kept winning native title's hit-test ahead of the div that
+   actually carried it, and no tooltip ever showed. A real mouse event on that same nested
+   path still bubbles up through the DOM to this div's own onMouseMove/onMouseLeave handler
+   regardless, which is what a `tip` here relies on instead. */
+function Layer({
+  box, svg, tip, onTip,
+}: {
+  box: FracBox;
+  svg: string;
+  tip?: string;
+  onTip?: (text: string | null, e: RMouseEvent) => void;
+}) {
   const style: CSSProperties = {
     position: "absolute",
     left: `${box.x * 100}%`,
     top: `${box.y * 100}%`,
     width: `${box.w * 100}%`,
     height: `${box.h * 100}%`,
+    // .card-art-layer is pointer-events:none by default (every other layer is purely
+    // decorative and must stay click-through) — a tip needs the opposite, or the hover
+    // never reaches this element at all
+    ...(tip ? { pointerEvents: "auto" } : undefined),
   };
-  return <div className="card-art-layer" style={style} dangerouslySetInnerHTML={{ __html: svg }} />;
+  return (
+    <div
+      className="card-art-layer"
+      style={style}
+      dangerouslySetInnerHTML={{ __html: svg }}
+      onMouseMove={tip ? (e) => onTip?.(tip, e) : undefined}
+      onMouseLeave={tip ? (e) => onTip?.(null, e) : undefined}
+    />
+  );
 }
 
 /** a label/value string drawn on top of the art, centred on one point — position comes from
@@ -195,6 +221,21 @@ function fuelIconBox(col: 0 | 1 | 2, row: 0 | 1, scale: number): FracBox {
   };
   return scaleBox(box, scale);
 }
+/** hover text for a stat cell — "Shields: 1" / "No Shields" at 0, not the board token's
+   terser ASPECT_LABEL/ASPECT_TAG (this is prose for a tooltip, not a printed chip) */
+const STAT_TOOLTIP_NAME: Record<StatKey, string> = {
+  shields: "Shields",
+  lasers: "Lasers",
+  engines: "Engines",
+  cargo: "Cargo Capacity",
+  fuelTanks: "Fuel Tanks",
+  booster: "Hand Limit",
+};
+function statTooltip(stat: StatKey, value: number): string {
+  const name = STAT_TOOLTIP_NAME[stat];
+  return value > 0 ? `${name}: ${value}` : `No ${name}`;
+}
+
 /** top row: shields, lasers, fuel (icon + printed number); bottom row: cargo, engines, hand
    limit (a star rating, not its own icon shape — see cardAssets.ts's tierIconFor) */
 const SHIP_GRID: { stat: StatKey; col: 0 | 1 | 2; row: 0 | 1 }[] = [
@@ -221,8 +262,24 @@ export function ShipCardArt({ colour, name, stats }: ShipCardArtProps) {
   const t = theme.cards.ship;
   const w = theme.cards.shipWidth;
   const h = w / PORTRAIT_ASPECT;
+  // the 6 stat cells' hover tooltip, positioned the same way Board.tsx's own onTip/.board-tip
+  // is: `position: absolute` relative to this card's own (position:relative, untransformed)
+  // container, converting the raw clientX/Y into card-local coordinates via its rect. NOT
+  // `position: fixed` with raw clientX/Y — that seemed simpler (no ref/rect needed) but a
+  // ship card always renders inside ActionBox's `.actionbox`, which has its own
+  // `transform: translate(-50%, -50%)` to center itself; any transformed ancestor becomes
+  // the containing block for a `position: fixed` descendant instead of the true viewport
+  // (a CSS-spec gotcha, not a bug in this component), so the tooltip rendered at a fixed
+  // — but wrong — offset from the cursor instead of following it.
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [tip, setTip] = useState<{ text: string; x: number; y: number } | null>(null);
+  const onTip = (text: string | null, e: RMouseEvent) => {
+    if (!text) { setTip(null); return; }
+    const r = cardRef.current?.getBoundingClientRect();
+    setTip({ text, x: e.clientX - (r?.left ?? 0), y: e.clientY - (r?.top ?? 0) });
+  };
   return (
-    <div className="card-art" style={{ position: "relative", width: w, height: h }}>
+    <div ref={cardRef} className="card-art" style={{ position: "relative", width: w, height: h }}>
       <Layer box={FULL} svg={CARD_ART.framePortraitOuter} />
       <Layer box={SHIP_SCREEN} svg={CARD_ART.shipScreenBg} />
       <div
@@ -245,7 +302,7 @@ export function ShipCardArt({ colour, name, stats }: ShipCardArtProps) {
         const icon = isFuel ? tierIconFor(stat, 1) : tierIconFor(stat, value);
         return (
           <div key={stat}>
-            <Layer box={shipCellBox(col, row)} svg={CARD_ART.shipCellBg} />
+            <Layer box={shipCellBox(col, row)} svg={CARD_ART.shipCellBg} tip={statTooltip(stat, value)} onTip={onTip} />
             {icon && (
               <Layer
                 box={isFuel ? fuelIconBox(col, row, t.iconScale[stat]) : scaleBox(shipIconBox(col, row), t.iconScale[stat])}
@@ -266,6 +323,11 @@ export function ShipCardArt({ colour, name, stats }: ShipCardArtProps) {
           </div>
         );
       })}
+      {tip && (
+        <div className="board-tip" style={{ left: tip.x, top: tip.y }}>
+          {tip.text}
+        </div>
+      )}
     </div>
   );
 }
