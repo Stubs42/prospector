@@ -386,11 +386,14 @@ export function Board({
       {/* base regions being picked: one blinking outline per free base (the whole region is
          the click target, not each of its 4 cells), plus a solid outline for the one region
          a "random base" spin is currently landing the pointer on. A hard on/off opacity
-         toggle (steps, no interpolation — see .region-blink), not the ship marker's colour
-         swap: the region is ALREADY solid-filled with its own base colour, so swapping the
-         outline between that same colour and a highlight (the ship-blink convention) would
-         make the outline vanish for half of every cycle. Using its highlight colour alone,
-         toggled fully off/on, stays visible against the fill throughout. */}
+         toggle (steps, no interpolation — see .region-blink), not a smooth pulse — but still
+         the same plain gold every free base used before, not each base's own SHIP_BASE_HI_VAR
+         (which is white for 5 of 6 colours and gold only for white's own base — different
+         colours per base read as a bug, not a blink). Not the ship marker's colour-swap
+         convention either: the region is already solid-filled with its own base colour once
+         assigned, so swapping the outline between that same colour and any per-base highlight
+         would vanish for half the cycle — one fixed gold, toggled fully off/on, stays visible
+         and matches every other base uniformly. */}
       {highlight.kind === "base" &&
         [...new Set(highlight.cells.map((h) => board.baseOwnerAt(h)))].map((baseId) => {
           if (!baseId) return null;
@@ -402,7 +405,7 @@ export function Board({
               key={`base-outline-${baseId}`}
               points={pointsAttr(loop)}
               fill="none"
-              stroke={SHIP_BASE_HI_VAR[baseId]}
+              stroke="var(--gold)"
               strokeWidth={3}
               strokeLinejoin="round"
               className="region-blink"
