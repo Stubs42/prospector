@@ -20,6 +20,11 @@ export interface EquipmentOption {
   id: string;
   stat: StatKey;
   amount: number;
+  /** true when this stat is already at its upgrade cap for the choosing player's ship — the
+     card is shown dimmed and isn't clickable; see game.ts's offerEquipment/chooseEquipment
+     doc comments for why (an all-maxed offer never reaches here at all, already filtered
+     before display, but a partial mix of maxed/usable cards still can) */
+  disabled?: boolean;
 }
 
 export interface EquipmentPopupProps {
@@ -42,12 +47,14 @@ export function EquipmentPopup({ title, options, spinningId = null, onChoose, ca
       <div className="equip-choice">
         {options.map((o) => {
           const spinningHere = spinningId === o.id;
+          const clickable = !!onChoose && !o.disabled;
           return (
             <div
               key={o.id}
-              className={`equip-card-wrap${spinningHere ? " spinning" : ""}`}
-              style={{ cursor: onChoose ? "pointer" : "default" }}
-              onClick={onChoose ? () => onChoose(o.id) : undefined}
+              className={`equip-card-wrap${spinningHere ? " spinning" : ""}${o.disabled ? " disabled" : ""}`}
+              style={{ cursor: clickable ? "pointer" : "default" }}
+              onClick={clickable ? () => onChoose!(o.id) : undefined}
+              title={o.disabled ? "Already at maximum for this stat" : undefined}
             >
               <UpgradeCardArt stat={o.stat} amount={o.amount} />
             </div>

@@ -546,7 +546,14 @@ export function GameScreen({
               : afford.equipmentChoice.mode === "random"
                 ? "Rolling for a starting upgrade…"
                 : "Choose a starting upgrade",
-          options: afford.equipmentChoice.cards.map((c) => ({ id: c.id, stat: c.stat, amount: c.amount })),
+          options: afford.equipmentChoice.cards.map((c) => ({
+            id: c.id,
+            stat: c.stat,
+            amount: c.amount,
+            // a maxed stat's card is filtered out of afford.legal (see legalActions) but
+            // still shown here, dimmed — the offer isn't rewritten to hide it
+            disabled: !afford.legal.some((a) => a.type === "chooseEquipment" && a.cardId === c.id),
+          })),
           spinningId: equipSpinId,
           // no onChoose while the random spin is animating — it's not clickable, just a reveal
           onChoose:

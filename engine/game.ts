@@ -491,10 +491,12 @@ function loseShip(state: GameState, board: BoardModel, p: PlayerState, reason: s
 /** Sets state.pendingEquipment for `p` from `initialCards` — but first, silently redraws
    (rejected cards go to the bottom of the deck, same as a declined chooseEquipment pick) up
    to 2 more times if literally every offered card is already above `p`'s upgrade cap: a
-   choice among 3 useless cards isn't a choice. Gives up after 3 total attempts (astronomically
-   unlikely to still be all-maxed) and just shows them anyway. This auto-reroll is invisible
-   to the player — the offer they see has already been filtered — unlike the user-facing
-   `rerollEquipment` action (identical-cards case), which they trigger themselves. */
+   choice among 3 useless cards isn't a choice. If it's STILL all-maxed after 3 total attempts
+   (astronomically unlikely), give up entirely — no pendingEquipment, no upgrade granted, per
+   spec ("the user cannot add an upgrade this way" is the accepted outcome for a thoroughly-
+   maxed ship, not a bug to route around). This auto-reroll is invisible to the player — the
+   offer they see has already been filtered — unlike the user-facing `rerollEquipment` action
+   (identical-cards case), which they trigger themselves. */
 function offerEquipment(
   state: GameState,
   rng: Rng,
@@ -503,15 +505,19 @@ function offerEquipment(
   rest: { reason: "homecoming" } | { reason: "start"; mode: "random" | "select" },
 ): void {
   const caps = state.config.modes.prospector.upgradeCaps;
+  const allMaxed = (cs: EquipmentCard[]) => cs.length > 0 && cs.every((c) => !canEquip(statsOf(state, p), c.stat, caps));
   let cards = initialCards;
-  for (let attempt = 0; attempt < 2 && cards.length > 0; attempt++) {
-    const stats = statsOf(state, p);
-    const allMaxed = cards.every((c) => !canEquip(stats, c.stat, caps));
-    if (!allMaxed) break;
+  for (let attempt = 0; attempt < 2 && allMaxed(cards); attempt++) {
     state.decks.equipment = bottomCards(state.decks.equipment, cards);
     const redrawn = drawN(state.decks.equipment, cards.length, rng, state.config.core.cards.reshuffleDiscardWhenEmpty);
     state.decks.equipment = redrawn.deck;
     cards = redrawn.cards;
+  }
+  if (cards.length === 0) return; // deck ran dry — nothing to offer
+  if (allMaxed(cards)) {
+    state.decks.equipment = bottomCards(state.decks.equipment, cards);
+    log(state, "equipmentDiscarded", { player: p.id, reason: rest.reason });
+    return;
   }
   state.pendingEquipment = { playerId: p.id, cards, ...rest, rerollsUsed: 0 };
 }
@@ -633,6 +639,12 @@ export function applyAction(prev: GameState, action: Action): StepResult {
       const keep = pe.cards.find((c) => c.id === action.cardId);
       if (!keep) return fail("not one of the offered upgrades");
       const pl = state.players[pe.playerId]!;
+      // defence-in-depth: offerEquipment already filters out all-maxed offers before they're
+      // ever shown, and the GUI dims individual maxed cards, but the reducer must still
+      // refuse this itself — a maxed stat's card is never a legal pick, full stop
+      if (!canEquip(statsOf(state, pl), keep.stat, state.config.modes.prospector.upgradeCaps)) {
+        return fail("that stat is already at its cap");
+      }
       equipCard(pl, keep);
       state.decks.equipment = bottomCards(
         state.decks.equipment,

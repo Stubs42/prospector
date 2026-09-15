@@ -227,6 +227,10 @@ button.danger { border-color: #6a3a2f; }
 .equip-card-wrap:hover { transform: translateY(-3px); }
 .equip-card-wrap.spinning { outline: 2px solid var(--gold); outline-offset: 2px; cursor: default; }
 .equip-card-wrap.spinning:hover { transform: none; }
+/* already at cap for this stat — same dimmed-and-inert treatment as a disabled button
+   (button:disabled's 0.4 opacity, styles.css ~L97) */
+.equip-card-wrap.disabled { opacity: 0.4; }
+.equip-card-wrap.disabled:hover { transform: none; }
 
 /* the "action box" family (guidance popup, ship picker, combat box, confirm dialog): a
    fixed overlay, like the zoom controls or the status panel — NOT board content, so

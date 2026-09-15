@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { createGame, applyAction, score, boardFor, equipmentRerollEligible } from "./game.js";
 import { legalActions, randomBot } from "./index.js";
 import { makeRng } from "./rng.js";
-import type { Action, GameState, SeatKind } from "./types.js";
+import type { Action, EquipmentCard, GameState, SeatKind } from "./types.js";
 
 function run(state: GameState, action: Action): GameState {
   const r = applyAction(state, action);
@@ -266,6 +266,55 @@ describe("equipment reroll", () => {
     // seed 3's start-equipment draw isn't 3 identical cards
     expect(equipmentRerollEligible(s.pendingEquipment!)).toBe(false);
     expect(legalActions(s).some((a) => a.type === "rerollEquipment")).toBe(false);
+  });
+
+  it("a maxed stat's card is excluded from legalActions and refused directly, even mixed in with usable ones", () => {
+    let s = createGame({ seed: 8, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "none" });
+    const Y = () => s.players[0]!;
+    Y().pose = { current: { q: -7, r: 7 }, previous: { q: -7, r: 7 }, atRest: true };
+    Y().cargo = ["red"];
+    // cargo is already at its cap (4, see default.config.json) before the offer is even drawn
+    Y().equipment = [{ id: "already-maxed", deck: "equipment", stat: "cargo", amount: 4, effect: "" }];
+    s = run(s, { type: "drawBooster" });
+    while (Y().hand.length > 3) s = run(s, { type: "discardBooster", cardId: Y().hand[0]!.id });
+    s = run(s, { type: "drift" });
+    s = run(s, { type: "burn", path: [{ q: -8, r: 8 }] });
+    s = run(s, { type: "endMove" });
+    expect(s.pendingEquipment).not.toBeNull();
+
+    // force a mixed offer: one maxed (cargo), two usable
+    const usable = s.pendingEquipment!.cards.filter((c) => c.stat !== "cargo").slice(0, 2);
+    const maxed = { ...s.pendingEquipment!.cards[0]!, id: "maxed-card", stat: "cargo" as const, amount: 1 };
+    s = { ...s, pendingEquipment: { ...s.pendingEquipment!, cards: [maxed, ...usable] } };
+
+    const acts = legalActions(s).filter((a) => a.type === "chooseEquipment") as Extract<Action, { type: "chooseEquipment" }>[];
+    expect(acts.map((a) => a.cardId).sort()).toEqual(usable.map((c) => c.id).sort());
+    // and the reducer refuses it directly too, not just via legalActions filtering
+    expect(applyAction(s, { type: "chooseEquipment", cardId: "maxed-card" }).ok).toBe(false);
+  });
+
+  it("gives up (no upgrade at all) when every reroll attempt is still all-maxed", () => {
+    let s = createGame({ seed: 8, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "none" });
+    const Y = () => s.players[0]!;
+    Y().pose = { current: { q: -7, r: 7 }, previous: { q: -7, r: 7 }, atRest: true };
+    Y().cargo = ["red"];
+    Y().equipment = [{ id: "already-maxed", deck: "equipment", stat: "cargo", amount: 4, effect: "" }];
+    // stack the draw pile with nothing but (now-useless) cargo cards, so all 3 attempts
+    // (initial + 2 auto-rerolls) draw only maxed-stat cards
+    const cargoCard = (id: string): EquipmentCard => ({ id, deck: "equipment", stat: "cargo", amount: 1, effect: "" });
+    s.decks.equipment.draw = Array.from({ length: 9 }, (_, i) => cargoCard(`stack-${i}`)).concat(s.decks.equipment.draw);
+
+    s = run(s, { type: "drawBooster" });
+    while (Y().hand.length > 3) s = run(s, { type: "discardBooster", cardId: Y().hand[0]!.id });
+    s = run(s, { type: "drift" });
+    s = run(s, { type: "burn", path: [{ q: -8, r: 8 }] });
+    s = run(s, { type: "endMove" });
+
+    // no choice was ever offered — the move resolved straight through
+    expect(s.pendingEquipment).toBeNull();
+    expect(s.log.some((e) => e.event === "equipmentDiscarded")).toBe(true);
+    expect(Y().equipment).toHaveLength(1); // still just the synthetic starting one
+    expect(applyAction(s, { type: "endTurn" }).ok).toBe(true);
   });
 });
 

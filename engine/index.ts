@@ -11,10 +11,10 @@ import {
   equipmentRerollEligible,
   type CreateGameOptions,
 } from "./game.js";
-import { movementInputs } from "./ship.js";
+import { movementInputs, canEquip } from "./ship.js";
 import type { Action, GameState, PlayerState } from "./types.js";
 
-export { createGame, applyAction, score, statsOf, boardFor, provideGameData, equipmentRerollEligible };
+export { createGame, applyAction, score, statsOf, boardFor, provideGameData, equipmentRerollEligible, canEquip };
 export type { Hex } from "./hex.js";
 export type { GameState, Action, PlayerState, CreateGameOptions };
 export * from "./types.js";
@@ -68,8 +68,16 @@ export function legalActions(state: GameState, opts?: LegalOpts): Action[] {
   }
 
   if (state.pendingEquipment) {
-    const out: Action[] = state.pendingEquipment.cards.map((c) => ({ type: "chooseEquipment", cardId: c.id }));
-    if (equipmentRerollEligible(state.pendingEquipment)) out.push({ type: "rerollEquipment" });
+    const pe = state.pendingEquipment;
+    const caps = state.config.modes.prospector.upgradeCaps;
+    const stats = statsOf(state, state.players[pe.playerId]!);
+    // a maxed stat's card is never a legal pick (offerEquipment already keeps an ALL-maxed
+    // offer from ever being shown at all, but a partial mix — e.g. 2 of 3 maxed — can still
+    // reach here, and each of those 2 must be excluded individually)
+    const out: Action[] = pe.cards
+      .filter((c) => canEquip(stats, c.stat, caps))
+      .map((c) => ({ type: "chooseEquipment", cardId: c.id }));
+    if (equipmentRerollEligible(pe)) out.push({ type: "rerollEquipment" });
     return out;
   }
 
