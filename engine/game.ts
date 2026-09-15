@@ -502,7 +502,7 @@ function offerEquipment(
   rng: Rng,
   p: PlayerState,
   initialCards: EquipmentCard[],
-  rest: { reason: "homecoming" } | { reason: "start"; mode: "random" | "select" },
+  rest: { reason: "homecoming"; seedCount: number } | { reason: "start"; mode: "random" | "select" },
 ): void {
   const caps = state.config.modes.prospector.upgradeCaps;
   const allMaxed = (cs: EquipmentCard[]) => cs.length > 0 && cs.every((c) => !canEquip(statsOf(state, p), c.stat, caps));
@@ -548,25 +548,27 @@ function arriveHomeBaseIfAny(state: GameState, board: BoardModel, p: PlayerState
     p.cargo = [];
     log(state, "delivered", { player: p.id, tiles: delivered });
 
-    // seed one new tile per tile delivered, while supply lasts
-    seedN(state, board, delivered.length);
-    checkEnd(state);
-
-    // homecoming reward: draw N equipment cards and let the player pick one
-    // (resolved by the `chooseEquipment` action). If the game just ended, skip it.
-    if (!state.gameOver) {
-      withRng(state, (rng) => {
-        const { cards, deck } = drawN(
-          state.decks.equipment,
-          mode.homeBase.equipmentDraw,
-          rng,
-          state.config.core.cards.reshuffleDiscardWhenEmpty,
-        );
-        state.decks.equipment = deck;
-        if (cards.length > 0) {
-          offerEquipment(state, rng, p, cards, { reason: "homecoming" });
-        }
-      });
+    // homecoming reward: draw N equipment cards and offer the pick FIRST — new resources
+    // are only seeded once this choice resolves (chooseEquipment's reducer case below), not
+    // before it's even shown, so the player finishes their turn (picks the upgrade) before
+    // watching new tiles appear, rather than the other way around. If there's nothing to
+    // offer at all (deck empty, or every card was already at the player's cap — see
+    // offerEquipment), seed right away instead since there's no choice left to interrupt on.
+    withRng(state, (rng) => {
+      const { cards, deck } = drawN(
+        state.decks.equipment,
+        mode.homeBase.equipmentDraw,
+        rng,
+        state.config.core.cards.reshuffleDiscardWhenEmpty,
+      );
+      state.decks.equipment = deck;
+      if (cards.length > 0) {
+        offerEquipment(state, rng, p, cards, { reason: "homecoming", seedCount: delivered.length });
+      }
+    });
+    if (!state.pendingEquipment) {
+      seedN(state, board, delivered.length);
+      checkEnd(state);
     }
     return;
   }
@@ -655,6 +657,12 @@ export function applyAction(prev: GameState, action: Action): StepResult {
       // a homecoming reward interrupts the post-move phase and resumes there; the
       // start-of-game upgrade interrupts "start" (right before a burn) and resumes there
       state.phase = pe.reason === "homecoming" ? "moved" : "start";
+      // the upgrade pick comes before the reward's own new resources appear — see
+      // arriveHomeBaseIfAny's own comment for why this is deferred to here
+      if (pe.reason === "homecoming") {
+        seedN(state, board, pe.seedCount);
+        checkEnd(state);
+      }
       return done();
     }
 
