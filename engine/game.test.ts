@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { createGame, applyAction, score, boardFor, equipmentRerollEligible } from "./game.js";
 import { legalActions, randomBot } from "./index.js";
 import { makeRng } from "./rng.js";
-import type { Action, EquipmentCard, GameState, SeatKind } from "./types.js";
+import type { Action, BoosterCard, EquipmentCard, GameState, SeatKind } from "./types.js";
 
 function run(state: GameState, action: Action): GameState {
   const r = applyAction(state, action);
@@ -243,6 +243,80 @@ describe("homecoming upgrade pick", () => {
     const totalBefore = Object.values(supplyBefore).reduce((a, b) => a + b, 0);
     const totalAfter = Object.values(s.supply).reduce((a, b) => a + b, 0);
     expect(totalAfter).toBe(totalBefore - 2);
+  });
+});
+
+describe("hyperspace", () => {
+  it("is offered as a legal action once drifted, for any hyperspace card in hand", () => {
+    let s = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "none" });
+    const Y = () => s.players[0]!;
+    const card: BoosterCard = { id: "test-hyperspace", deck: "booster", type: "hyperspace", value: null, effect: "" };
+    Y().hand = [card];
+    s = run(s, { type: "drawBooster" });
+    while (Y().hand.length > 3) s = run(s, { type: "discardBooster", cardId: Y().hand.find((c) => c.id !== card.id)!.id });
+    expect(legalActions(s).some((a) => a.type === "hyperspace")).toBe(false); // not yet — drift first
+    s = run(s, { type: "drift" });
+    const acts = legalActions(s).filter((a) => a.type === "hyperspace") as Extract<Action, { type: "hyperspace" }>[];
+    expect(acts.some((a) => a.via === "booster" && a.boosterId === card.id)).toBe(true);
+  });
+
+  it("always ends the turn immediately, never leaving the ordinary post-move phase reachable", () => {
+    let s = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "none" });
+    const Y = () => s.players[0]!;
+    const card: BoosterCard = { id: "test-hyperspace", deck: "booster", type: "hyperspace", value: null, effect: "" };
+    Y().hand = [card];
+    s = run(s, { type: "drawBooster" });
+    while (Y().hand.length > 3) s = run(s, { type: "discardBooster", cardId: Y().hand.find((c) => c.id !== card.id)!.id });
+    s = run(s, { type: "drift" });
+
+    s = run(s, { type: "hyperspace", via: "booster", boosterId: card.id });
+
+    // whatever the roll landed on (elsewhere, home, or lost) — never resumes the ordinary
+    // post-move phase (load/attack); either the turn has already fully advanced, or a
+    // homecoming upgrade choice is pending (itself guaranteed to advance the turn once
+    // resolved — see the next test)
+    expect(s.phase).not.toBe("moved");
+    expect(s.activePlayerIndex !== 0 || s.pendingEquipment !== null).toBe(true);
+    expect(Y().hand.some((c) => c.id === card.id)).toBe(false); // card consumed either way
+  });
+
+  it("a hyperspace-triggered homecoming still ends the turn once the upgrade is chosen", () => {
+    let s = createGame({ seed: 8, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "none" });
+    // fabricate the pending choice directly (isolates endTurnAfter's own effect on
+    // chooseEquipment from the hyperspace roll's randomness, already covered above)
+    s = {
+      ...s,
+      pendingEquipment: {
+        playerId: 0,
+        cards: [{ id: "c1", deck: "equipment", stat: "cargo", amount: 1, effect: "" }],
+        reason: "homecoming",
+        rerollsUsed: 0,
+        seedCount: 1,
+        endTurnAfter: true,
+      },
+    };
+    s = run(s, { type: "chooseEquipment", cardId: "c1" });
+    expect(s.pendingEquipment).toBeNull();
+    expect(s.phase).toBe("start"); // advanceTurn always resets phase to "start"
+    expect(s.activePlayerIndex).toBe(1);
+  });
+
+  it("an ordinary (non-hyperspace) homecoming still resumes the post-move phase as before", () => {
+    let s = createGame({ seed: 8, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "none" });
+    s = {
+      ...s,
+      pendingEquipment: {
+        playerId: 0,
+        cards: [{ id: "c1", deck: "equipment", stat: "cargo", amount: 1, effect: "" }],
+        reason: "homecoming",
+        rerollsUsed: 0,
+        seedCount: 0,
+        endTurnAfter: false,
+      },
+    };
+    s = run(s, { type: "chooseEquipment", cardId: "c1" });
+    expect(s.phase).toBe("moved");
+    expect(s.activePlayerIndex).toBe(0);
   });
 });
 

@@ -273,7 +273,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     }
     if (qs.get("equip") === "1" && s.decks.equipment.draw.length >= 3) {
       // preview the homecoming upgrade picker without playing a full delivery
-      s = { ...s, pendingEquipment: { playerId: s.activePlayerIndex, cards: s.decks.equipment.draw.slice(0, 3), reason: "homecoming", rerollsUsed: 0, seedCount: 0 } };
+      s = { ...s, pendingEquipment: { playerId: s.activePlayerIndex, cards: s.decks.equipment.draw.slice(0, 3), reason: "homecoming", rerollsUsed: 0, seedCount: 0, endTurnAfter: false } };
     }
     if (qs.get("postmove") === "1") {
       // preview the post-move board targets: a loadable resource, an attackable enemy,

@@ -144,6 +144,34 @@ export function BoosterCardArt({ stat, value, children }: BoosterCardArtProps) {
   );
 }
 
+// a one-shot hyperspace card isn't tied to a ship stat like the other 4 booster types (no
+// tierIconFor analog to pull from), so it draws its own small starburst directly instead —
+// same shape CardIcon used to draw for the old plain-card fallback, just now as a Layer so
+// it goes through the exact same positioning/scaling path as every other booster icon
+const HYPERSPACE_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">' +
+  '<path d="M20 6 L23.5 17 L34 20 L23.5 23 L20 34 L16.5 23 L6 20 L16.5 17 Z" fill="var(--card-hyperspace)" opacity="0.85"/>' +
+  "</svg>";
+
+/** the one-shot hyperspace card — same real frame/screen art as any other booster card
+   (BoosterCardArt), just with its own icon and no printed value (a hyperspace card is used
+   up, not stacked/amount-based, so there's nothing to print). */
+export function HyperspaceCardArt() {
+  const t = theme.cards.booster;
+  const w = theme.cards.boosterWidth;
+  const h = w / PORTRAIT_ASPECT;
+  return (
+    <div className="card-art" style={{ position: "relative", width: w, height: h }}>
+      <Layer box={FULL} svg={CARD_ART.framePortraitOuter} />
+      <Layer box={BOOSTER_SCREEN} svg={CARD_ART.framePortraitInner} />
+      <Layer box={scaleBox(BOOSTER_ICON, t.iconScale)} svg={HYPERSPACE_ICON} />
+      <CardText x={BOOSTER_LABEL.x} y={BOOSTER_LABEL.y + t.titleOffsetY} frac={t.titleFontSize} cardHeight={h} color="#000">
+        HYPERSPACE
+      </CardText>
+    </div>
+  );
+}
+
 export interface UpgradeCardArtProps {
   stat: StatKey;
   amount: number;

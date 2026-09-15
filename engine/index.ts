@@ -118,7 +118,17 @@ export function legalActions(state: GameState, opts?: LegalOpts): Action[] {
       return out;
     }
     if (!p.turn.moved) {
-      const cap = movementInputs(statsOf(state, p), mode).burnCap + Math.max(0, opts?.extraEngines ?? 0);
+      const stats = statsOf(state, p);
+      // hyperspace: an alternative to burning, offered at the same decision point — any
+      // hyperspace card in hand, or the engine-power jump if the ship qualifies outright
+      for (const c of p.hand) {
+        if (c.type === "hyperspace") out.push({ type: "hyperspace", via: "booster", boosterId: c.id });
+      }
+      const hs = state.config.core.movement.hyperspace;
+      if (stats.engines >= hs.engineThreshold && p.fuel >= hs.fuelCost) {
+        out.push({ type: "hyperspace", via: "engines" });
+      }
+      const cap = movementInputs(stats, mode).burnCap + Math.max(0, opts?.extraEngines ?? 0);
       const freeCells = Math.max(
         0,
         p.turn.moveStartedOnOwnBase

@@ -502,7 +502,9 @@ function offerEquipment(
   rng: Rng,
   p: PlayerState,
   initialCards: EquipmentCard[],
-  rest: { reason: "homecoming"; seedCount: number } | { reason: "start"; mode: "random" | "select" },
+  rest:
+    | { reason: "homecoming"; seedCount: number; endTurnAfter: boolean }
+    | { reason: "start"; mode: "random" | "select" },
 ): void {
   const caps = state.config.modes.prospector.upgradeCaps;
   const allMaxed = (cs: EquipmentCard[]) => cs.length > 0 && cs.every((c) => !canEquip(statsOf(state, p), c.stat, caps));
@@ -532,7 +534,7 @@ export function equipmentRerollEligible(pe: PendingEquipment): boolean {
   return pe.cards.every((c) => c.stat === first.stat && c.amount === first.amount);
 }
 
-function arriveHomeBaseIfAny(state: GameState, board: BoardModel, p: PlayerState): void {
+function arriveHomeBaseIfAny(state: GameState, board: BoardModel, p: PlayerState, endTurnAfter = false): void {
   const mode = state.config.modes.prospector;
   if (board.baseOwnerAt(p.pose.current) !== p.homeBase) return;
   // Only an *arrival* brakes the ship. A ship that began its move on its own base is
@@ -563,7 +565,7 @@ function arriveHomeBaseIfAny(state: GameState, board: BoardModel, p: PlayerState
       );
       state.decks.equipment = deck;
       if (cards.length > 0) {
-        offerEquipment(state, rng, p, cards, { reason: "homecoming", seedCount: delivered.length });
+        offerEquipment(state, rng, p, cards, { reason: "homecoming", seedCount: delivered.length, endTurnAfter });
       }
     });
     if (!state.pendingEquipment) {
@@ -654,15 +656,21 @@ export function applyAction(prev: GameState, action: Action): StepResult {
       );
       log(state, "equipped", { player: pe.playerId, card: keep.id, stat: keep.stat, amount: keep.amount, reason: pe.reason });
       state.pendingEquipment = null;
-      // a homecoming reward interrupts the post-move phase and resumes there; the
-      // start-of-game upgrade interrupts "start" (right before a burn) and resumes there
-      state.phase = pe.reason === "homecoming" ? "moved" : "start";
+      if (pe.reason !== "homecoming") {
+        // the start-of-game upgrade interrupts "start" (right before a burn) and resumes there
+        state.phase = "start";
+        return done();
+      }
       // the upgrade pick comes before the reward's own new resources appear — see
       // arriveHomeBaseIfAny's own comment for why this is deferred to here
-      if (pe.reason === "homecoming") {
-        seedN(state, board, pe.seedCount);
-        checkEnd(state);
-      }
+      seedN(state, board, pe.seedCount);
+      checkEnd(state);
+      if (state.gameOver) return done();
+      // a hyperspace-triggered homecoming still ends the turn immediately, same as any
+      // other hyperspace jump — only an ordinary burn-triggered homecoming resumes the
+      // post-move phase (load/attack)
+      if (pe.endTurnAfter) return advanceTurn(state, board);
+      state.phase = "moved";
       return done();
     }
 
@@ -835,7 +843,16 @@ export function applyAction(prev: GameState, action: Action): StepResult {
       });
       p.turn.moved = true;
       p.turn.mustBurn = false;
-      return p.eliminated || board.baseOwnerAt(p.pose.current) === p.homeBase ? advanceOrMoved(state, board) : done();
+      // hyperspace always ends the turn immediately — no post-move load/attack afterward,
+      // unlike a normal burn/coast, whatever the outcome (lost, home, or just landed
+      // somewhere else). Still delivers cargo/seeds/offers an upgrade if it happens to land
+      // exactly on the home base (see arriveHomeBaseIfAny's endTurnAfter) — that's an
+      // automatic consequence of arriving, not a player choice, so it isn't skipped.
+      if (p.eliminated) return advanceTurn(state, board);
+      arriveHomeBaseIfAny(state, board, p, true);
+      if (state.gameOver) return done();
+      if (state.pendingEquipment) return done(); // wait for the upgrade pick, then advance
+      return advanceTurn(state, board);
     }
 
     case "endMove": {
