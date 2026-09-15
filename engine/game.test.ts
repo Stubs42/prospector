@@ -212,6 +212,38 @@ describe("homecoming upgrade pick", () => {
     s = run(s, { type: "endTurn" });
     expect(s.activePlayerIndex).toBe(1);
   });
+
+  it("seeds new resources only once the upgrade is chosen, not before", () => {
+    let s = createGame({ seed: 8, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "none" });
+    const Y = () => s.players[0]!;
+    Y().pose = { current: { q: -7, r: 7 }, previous: { q: -7, r: 7 }, atRest: true };
+    Y().cargo = ["red", "green"];
+    s = run(s, { type: "drawBooster" });
+    while (Y().hand.length > 3) s = run(s, { type: "discardBooster", cardId: Y().hand[0]!.id });
+    s = run(s, { type: "drift" });
+    s = run(s, { type: "burn", path: [{ q: -8, r: 8 }] });
+    // snapshot right before the delivery-triggering endMove — createGame's own initial
+    // seeding already logged some resourceSeeded entries, unrelated to this delivery
+    const seededBefore = s.log.filter((e) => e.event === "resourceSeeded").length;
+    const supplyBefore = { ...s.supply };
+    s = run(s, { type: "endMove" });
+
+    // the choice is up, but no new tiles from THIS delivery are on the board yet and
+    // supply is untouched — the player finishes their turn (picks the upgrade) before
+    // watching resources appear
+    expect(s.pendingEquipment).not.toBeNull();
+    expect(s.pendingEquipment).toMatchObject({ reason: "homecoming", seedCount: 2 });
+    expect(s.log.filter((e) => e.event === "resourceSeeded")).toHaveLength(seededBefore);
+    expect(s.supply).toEqual(supplyBefore);
+
+    s = run(s, { type: "chooseEquipment", cardId: s.pendingEquipment!.cards[0]!.id });
+
+    // now the 2 delivered tiles' worth of new resources have been placed
+    expect(s.log.filter((e) => e.event === "resourceSeeded")).toHaveLength(seededBefore + 2);
+    const totalBefore = Object.values(supplyBefore).reduce((a, b) => a + b, 0);
+    const totalAfter = Object.values(s.supply).reduce((a, b) => a + b, 0);
+    expect(totalAfter).toBe(totalBefore - 2);
+  });
 });
 
 describe("equipment reroll", () => {

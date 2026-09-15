@@ -199,10 +199,15 @@ export interface PendingCombat {
    isn't a choice. A separate, fully automatic reroll (up to 3 draws, not user-facing or
    counted here) already runs before the offer is ever shown, for the rarer case where
    every card is above the player's upgrade cap and thus useless regardless of which is
-   picked — see game.ts's drawEquipmentOffer. */
+   picked — see game.ts's drawEquipmentOffer.
+   `seedCount` (homecoming only): new resources are seeded only once this choice resolves,
+   not before it's even shown — the player finishes their turn (picks the upgrade) first,
+   then watches new tiles appear, rather than the other way around. Carries the delivery's
+   own tile count across the pause so chooseEquipment's reducer case knows how many to
+   place; see arriveHomeBaseIfAny/chooseEquipment in game.ts. */
 export type PendingEquipment =
   | { playerId: number; cards: EquipmentCard[]; reason: "start"; mode: "random" | "select"; rerollsUsed: number }
-  | { playerId: number; cards: EquipmentCard[]; reason: "homecoming"; rerollsUsed: number };
+  | { playerId: number; cards: EquipmentCard[]; reason: "homecoming"; rerollsUsed: number; seedCount: number };
 
 export type TurnPhase = "start" | "moved" | "done";
 
