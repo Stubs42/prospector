@@ -36,6 +36,8 @@ export function formatLogEntry(state: GameState, e: Entry): string {
       }`;
     case "defenderFled":
       return `${col(d.defender)} flees through hyperspace`;
+    case "hyperspaceStayedInRange":
+      return `${col(d.defender)} jumps but stays in range — the attack is still live`;
     case "loaded":
       return `${col(d.player)} loads a ${d.colour}`;
     case "delivered":

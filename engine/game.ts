@@ -946,18 +946,36 @@ export function applyAction(prev: GameState, action: Action): StepResult {
       if (action.hyperspaceBoosterId && mode.combat.hyperspaceDefenceAutoEscape) {
         const card = defender.hand.find((c) => c.id === action.hyperspaceBoosterId && c.type === "hyperspace");
         if (!card) return fail("no hyperspace booster with that id");
+        const attacker = state.players[pc.attackerId]!;
         defender.hand = defender.hand.filter((c) => c.id !== card.id);
         state.decks.booster = discardCards(state.decks.booster, [card]);
-        withRng(state, (rng) => {
+        logBoosters(defender, [card], "defence");
+        // repositions exactly like any other hyperspace jump — same roll, same "occupied
+        // target scraps the ship" rule — it's not a guaranteed escape, just a reposition
+        const lost = withRng(state, (rng) => {
           const { roll, target } = rollCoordinateUntilSafeOrAny(state, board, rng);
           log(state, "hyperspaceRoll", { player: defender.id, dice: roll.dice, cell: target });
           const land = hyperspaceLand(target, board, freeFor(state, board, defender.id));
-          if (land.lost) loseShip(state, board, defender, "failed hyperspace flight");
-          else defender.pose = land.pose;
+          if (land.lost) {
+            loseShip(state, board, defender, "failed hyperspace flight");
+            return true;
+          }
+          defender.pose = land.pose;
+          return false;
         });
-        state.pendingCombat = null;
-        logBoosters(defender, [card], "defence");
-        log(state, "defenderFled", { defender: defender.id });
+        if (lost || !areNeighbours(attacker.pose.current, defender.pose.current)) {
+          // out of the attacker's reach (or gone entirely) — the fight ends like a failed
+          // attack, but with no counter-attack option: there's nothing left in range to
+          // counter, so this skips the usual awaiting:"counter" step outright regardless
+          // of mode.combat.counterattackOnFailedAttack
+          state.pendingCombat = null;
+          log(state, "defenderFled", { defender: defender.id });
+          return done();
+        }
+        // the jump landed the defender back within attack range — the flee attempt failed
+        // to actually escape (the card is still spent), so the SAME attack is still live
+        // and must be answered some other way; pendingCombat stays exactly as it was
+        log(state, "hyperspaceStayedInRange", { defender: defender.id, cell: defender.pose.current });
         return done();
       }
 
