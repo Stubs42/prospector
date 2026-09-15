@@ -1,6 +1,7 @@
+/* Every colour below is overwritten at startup by theme.ts's applyTheme() — these are
+   only the pre-JS fallback (and the type each var should hold). To actually change a
+   colour, edit theme.ts, not this file. */
 :root {
-  --felt: #10201a;
-  --felt-edge: #0a1712;
   --panel: #17251f;
   --panel-2: #1e2f28;
   --line: #2c4238;
@@ -21,16 +22,51 @@
   --ship-green: #3f9f63;
   --ship-yellow: #d9b53c;
 
+  /* the ship marker on the field (-board) and a home base region's own fill (-base) — each
+     with its own -hi variant to blink to (see theme.ts's shipBoard/shipBase) */
+  --ship-black-board: #3b3b3b; --ship-black-board-hi: #ffffff;
+  --ship-red-board: #c8483b; --ship-red-board-hi: #ffffff;
+  --ship-blue-board: #3f74c9; --ship-blue-board-hi: #ffffff;
+  --ship-white-board: #e9e9e9; --ship-white-board-hi: #e6b03c;
+  --ship-green-board: #3f9f63; --ship-green-board-hi: #ffffff;
+  --ship-yellow-board: #d9b53c; --ship-yellow-board-hi: #ffffff;
+  --ship-black-base: #3b3b3b; --ship-black-base-hi: #ffffff;
+  --ship-red-base: #c8483b; --ship-red-base-hi: #ffffff;
+  --ship-blue-base: #3f74c9; --ship-blue-base-hi: #ffffff;
+  --ship-white-base: #e9e9e9; --ship-white-base-hi: #e6b03c;
+  --ship-green-base: #3f9f63; --ship-green-base-hi: #ffffff;
+  --ship-yellow-base: #d9b53c; --ship-yellow-base-hi: #ffffff;
+
+  --aspect-engines: #c8483b;
+  --aspect-engines-ink: #ffffff;
+  --aspect-cargo: #3f9f63;
+  --aspect-cargo-ink: #08130c;
+  --aspect-lasers: #8a929b;
+  --aspect-lasers-ink: #0c1013;
+  --aspect-shields: #e9e9e9;
+  --aspect-shields-ink: #1a1a1a;
+  --aspect-fuelTanks: #3f74c9;
+  --aspect-fuelTanks-ink: #ffffff;
+  --aspect-booster: #d9b53c;
+  --aspect-booster-ink: #1a1400;
+  --card-hyperspace: #9a6fd0;
+
   font-family: "IBM Plex Sans", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
 }
 
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; overflow: hidden; }
 body {
-  background: radial-gradient(120% 100% at 50% 0%, var(--felt) 0%, var(--felt-edge) 100%);
+  /* a plain fallback colour underneath the starfield canvas — it paints over this the
+     instant it mounts, but this avoids a flash of white before that first frame */
+  background: #030705;
   color: var(--ink);
   font-size: 14px;
 }
+
+/* the window's backdrop: fixed to the viewport, entirely behind everything else, and
+   untouched by the board's own pan/zoom/rotate (see Starfield.tsx) */
+.starfield { position: fixed; inset: 0; z-index: -1; display: block; pointer-events: none; }
 
 .app { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
 
@@ -64,8 +100,9 @@ button.danger { border-color: #6a3a2f; }
 
 /* board-only layout: the board fills the stage; overlays float above it */
 .stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
-/* a little breathing room so the board never butts against the window frame */
-.stage > .boardwrap { position: absolute; inset: 14px; }
+/* the board's own "fit" viewBox already keeps a margin around the field (see Board.tsx's
+   `m`), so the viewport itself can fill the whole window — no extra CSS inset needed */
+.stage > .boardwrap { position: absolute; inset: 0; }
 .boardwrap > svg { display: block; width: 100%; height: 100%; }
 
 .zoomctl {
@@ -74,11 +111,41 @@ button.danger { border-color: #6a3a2f; }
 }
 .zoomctl button {
   width: 30px; height: 30px; padding: 0;
-  font-size: 1.05rem; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
   background: rgba(14, 24, 19, 0.9); border: 1px solid var(--line);
   color: var(--ink); border-radius: 7px;
 }
+/* the icon is a plain SVG shape now, not a text glyph fighting font baseline/descender
+   metrics to centre — display: block only avoids the few px of inline-image baseline gap
+   an <svg> otherwise gets by default, same as an <img> would */
+.zoomctl button svg { display: block; }
 .zoomctl button:hover { border-color: var(--gold); color: var(--gold); }
+
+/* top-left "who's doing what" — replaces the old topbar pill + bot toasts */
+.status-panel {
+  position: absolute; left: 12px; top: 12px; z-index: 20;
+  max-width: 220px;
+  background: rgba(10, 20, 15, 0.9); border: 1px solid var(--line);
+  border-radius: 8px; padding: 0.4rem 0.7rem;
+  display: flex; flex-direction: column; gap: 1px;
+  font-size: 0.82rem; pointer-events: none;
+}
+.status-id { display: flex; align-items: center; gap: 0.45rem; font-weight: 700; margin-bottom: 1px; }
+.status-dot {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  background: transparent; border: 1.5px solid var(--muted);
+}
+/* a running log of the current move — older lines dim so the latest still reads as "now" */
+.status-action { color: var(--muted); font-size: 0.72rem; padding-left: 1.05rem; opacity: 0.5; }
+.status-action.current { opacity: 1; color: var(--ink); }
+
+/* the 4 shared deck piles — fixed screen overlays (see DeckPanels.tsx), same family as
+   .status-panel: top-right mirrors its top-left identity panel (booster deck), lower-right
+   sits clear of both .zoomctl and .handpanel (bottom-left). */
+.deck-panel, .supply-panel { position: absolute; z-index: 20; display: flex; gap: 8px; pointer-events: none; }
+.deck-panel { right: 12px; top: 12px; }
+.supply-panel { right: 12px; bottom: 14px; }
+.deckcard-orerow { display: flex; gap: 0.4em; font-weight: 800; }
 
 .board-tip {
   position: absolute; z-index: 30; pointer-events: none;
@@ -97,44 +164,201 @@ button.danger { border-color: #6a3a2f; }
 }
 .board-toast.win { border-color: var(--gold); color: var(--gold); }
 
-.bottompanel {
-  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
-  z-index: 25; max-width: min(680px, 92vw);
-  background: rgba(14, 24, 19, 0.96);
-  border: 1px solid var(--line-strong, var(--line)); border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-  padding: 0.7rem 0.85rem;
-  display: flex; flex-direction: column; gap: 0.5rem; align-items: center;
+/* the hand — docked beside .zoomctl (bottom-left), matching its stacked-button height
+   (5 * 30px buttons + 4 * 4px gaps = 166px) so the two read as one control cluster. One
+   frame throughout (background+border live on .handpanel itself, not the toggle) that
+   actually widens to contain the revealed cards — .handpanel-body comes BEFORE
+   .handpanel-toggle in the DOM (see HandPanel.tsx) so the toggle always sits at the
+   frame's trailing edge: alone at the left when collapsed (the body occupies zero width),
+   pushed out to the right once the body's width reveals. */
+.handpanel {
+  position: absolute; left: 42px; bottom: 4px; z-index: 20;
+  display: flex; align-items: stretch; height: 166px;
+  background: rgba(14, 24, 19, 0.9); border: 1px solid var(--line); border-radius: 7px;
+  overflow: hidden; transition: border-color 0.15s ease;
 }
-.bottompanel .bp-title { font-weight: 700; }
-.bottompanel .hand { justify-content: center; }
-.bottompanel .actions { justify-content: center; }
+/* over the hand limit: a plain, steady red frame — not animated, so it doesn't fight with
+   the cards' own pulsing border once expanded */
+.handpanel.urgent { border-color: #c1573c; }
+/* width-only slide (max-width, not width — "auto" doesn't animate) so the frame widens to
+   reveal the cards instead of just popping in; overflow:hidden clips it while collapsed.
+   One shared duration (--handpanel-anim-ms, theme.ts handPanel.animMs) drives every animated
+   property here (max-width/opacity/padding on the body, the chevron's rotate below) so expand
+   and collapse always move in lockstep instead of drifting apart if tuned separately. */
+.handpanel-body {
+  overflow: hidden; max-width: 0; opacity: 0;
+  transition:
+    max-width var(--handpanel-anim-ms) ease,
+    opacity var(--handpanel-anim-ms) ease,
+    padding var(--handpanel-anim-ms) ease;
+  display: flex; flex-direction: column; justify-content: center; gap: 0.3rem;
+}
+.handpanel.open .handpanel-body { max-width: 900px; opacity: 1; padding: 0 0.5rem; }
+.handpanel-cards { display: flex; gap: 6px; flex-wrap: nowrap; align-items: center; }
+/* explicit reset against the global `button` rule (styles.css ~L87) — that rule's own
+   background/border would otherwise show through on this borderless, backgroundless toggle,
+   and its `button:hover:not(:disabled) { border-color: var(--gold) }` (specificity 0,2,1) was
+   winning a tie-break against the border this panel sets, flashing a stray gold/orange edge on
+   hover. outline:none + tabIndex=-1/preventDefault in HandPanel.tsx also keep it from ever
+   taking a native focus ring, matching the app's convention for non-primary buttons. */
+.handpanel-toggle {
+  flex: 0 0 auto; width: 26px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: none; border-left: 1px solid transparent;
+  color: var(--ink); cursor: pointer; outline: none;
+}
+.handpanel.open .handpanel-toggle { border-left-color: var(--line); }
+.handpanel.urgent.open .handpanel-toggle { border-left-color: #c1573c; }
+/* disabled while the hand is forced open (battle/discard/burn) — not the player's to
+   dismiss until that clears */
+.handpanel-toggle:disabled { cursor: default; opacity: 0.35; }
+.handpanel-toggle svg { transition: transform var(--handpanel-anim-ms) ease; }
+.handpanel.open .handpanel-toggle svg { transform: rotate(180deg); }
+/* declared last, self-contained (0,3,0) so it beats both the global button:hover rule and
+   .handpanel.open .handpanel-toggle above on source order — hovers the same gold as a zoom
+   button, border-left included, whether open or collapsed */
+.handpanel-toggle:hover:not(:disabled) { color: var(--gold); border-left-color: transparent; }
+.handpanel.open .handpanel-toggle:hover:not(:disabled) { border-left-color: var(--gold); }
 
-/* hex-shaped guidance popup, drawn in board space */
-.hexpopup polygon {
-  fill: rgba(12, 20, 16, 0.97);
-  stroke: var(--gold);
-  stroke-width: 2;
+.equip-choice { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+/* one offered card in EquipmentPopup — real square art (UpgradeCardArt), this is just the
+   interactive-state ring around it (same idea as .card-art-wrap) */
+.equip-card-wrap { position: relative; border-radius: 8px; transition: transform 0.15s ease; }
+.equip-card-wrap:hover { transform: translateY(-3px); }
+.equip-card-wrap.spinning { outline: 2px solid var(--gold); outline-offset: 2px; cursor: default; }
+.equip-card-wrap.spinning:hover { transform: none; }
+/* already at cap for this stat — same dimmed-and-inert treatment as a disabled button
+   (button:disabled's 0.4 opacity, styles.css ~L97) */
+.equip-card-wrap.disabled { opacity: 0.4; }
+.equip-card-wrap.disabled:hover { transform: none; }
+
+/* the "action box" family (guidance popup, ship picker, combat box, confirm dialog): a
+   fixed overlay, like the zoom controls or the status panel — NOT board content, so
+   panning/zooming the board never touches it (see HexPopup.tsx's note on why this moved
+   out of board space). Centred a little above true middle so it clears the bottom panel.
+   The hex silhouette itself is an SVG polygon (see ActionBox.tsx) sized to the box's real
+   pixels, reproducing the old SVG hex buttons' exact 60°-cut geometry — a plain CSS
+   clip-path's percentages warp that angle as content height changes, which varies a lot
+   here (a two-line message vs. the full combat box). */
+.actionbox {
+  position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%);
+  z-index: 22;
+  /* a regular hexagon's side padding grows with height (see ActionBox.tsx) — a tall box
+     (the full combat box) needs real headroom here, or squeezing the width just makes it
+     taller still and needs even more padding */
+  min-width: 280px; max-width: min(560px, 92vw);
+}
+/* the box's own elevation off the page (theme.actionBox.dropShadow) — separate from the
+   polygon's own SVG filter (ActionBox.tsx's shadowId), which is the small metal-rod bevel
+   shared with the board grid's stroke, not this outer "floating above the board" shadow */
+.actionbox-hex { position: absolute; inset: 0; pointer-events: none; overflow: visible; filter: var(--actionbox-drop-shadow); }
+.actionbox-hex polygon {
+  fill: rgba(12, 20, 16, var(--actionbox-bg-opacity));
+  stroke-width: var(--actionbox-stroke-width);
   stroke-linejoin: round;
-  filter: drop-shadow(0 10px 26px rgba(0, 0, 0, 0.55));
 }
-.hexpopup text { fill: var(--ink); font-size: 13px; font-weight: 600; letter-spacing: 0.01em; }
+.actionbox-content {
+  position: relative;
+  /* horizontal padding is set inline (ActionBox.tsx) — it depends on the box's own
+     height (a regular hexagon's point cuts in further on a taller box) */
+  padding-block: 1rem;
+  display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+  text-align: center; font-size: 0.85rem;
+}
+.actionbox-line { font-weight: 700; font-size: 0.95rem; }
+.actionbox-title { font-weight: 700; font-size: 0.95rem; }
+.actionbox-sub { color: var(--muted); font-size: 0.78rem; }
+.actionbox-outcome { font-weight: 700; margin-top: 0.15rem; }
+.actionbox-buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center; margin-top: 0.3rem; }
 
-/* a base cell you can pick as your start base */
-.base-pick { animation: base-pulse 1.6s ease-in-out infinite; }
-@keyframes base-pulse {
-  0%, 100% { fill-opacity: 0.7; }
-  50% { fill-opacity: 1; }
+/* every button inside an action box shares the box's own hex silhouette (see
+   ActionBox.tsx's HexButton) instead of the app's plain rounded-rect buttons.
+   `button.hexbutton`, not `.hexbutton` — a "primary"/"danger" HexButton carries BOTH
+   classes on the same element, and the plain `button.primary`/`button.danger` rules above
+   (element + class) are more specific than a lone `.hexbutton` class, so `background: none`
+   was losing to `button.primary`'s solid rectangular background showing right through the
+   hex's cut corners. Matching that specificity (and staying later in the file) wins it back. */
+button.hexbutton {
+  position: relative;
+  min-width: 44px; min-height: 30px;
+  /* the global `button` rule's rounded-rect background/border still painted underneath
+     the hex polygon (native button chrome, -webkit-appearance: button, isn't removed by
+     background/border alone) — appearance: none turns that off */
+  appearance: none; -webkit-appearance: none;
+  background: none; border: none; border-radius: 0; padding: 0; font: inherit; color: var(--ink);
+  cursor: pointer;
+  /* the browser's own default focus ring is a plain rectangle (sized/coloured by the
+     OS/browser theme, not us) sitting around this hex-shaped control, which is exactly a
+     "rectangle behind the button" artifact waiting to happen — replaced with our own
+     hex-shaped highlight below instead of just hiding focus feedback outright */
+  outline: none;
+}
+.hexbutton-hex { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+.hexbutton-hex polygon { fill: var(--hexbutton-bg); stroke: var(--hexbutton-border); stroke-width: 1.6; }
+/* "primary" = the safe default (e.g. Cancel) — a little emphasis at rest, same as elsewhere */
+.hexbutton.primary .hexbutton-hex polygon { fill: var(--hexbutton-primary-bg); stroke: var(--hexbutton-primary-border); }
+.hexbutton.danger .hexbutton-hex polygon { stroke: #6a3a2f; }
+.hexbutton.danger .hexbutton-content { color: #e08a7a; }
+.hexbutton:hover:not(:disabled) .hexbutton-hex polygon,
+.hexbutton:focus-visible .hexbutton-hex polygon { stroke: var(--gold); }
+.hexbutton:disabled { cursor: default; opacity: 0.4; }
+.hexbutton-content {
+  position: relative;
+  display: flex; align-items: center; justify-content: center; gap: 0.3rem;
+  padding-block: 0.35rem;
+  font-size: 0.78rem; font-weight: 700; white-space: nowrap;
 }
 
-/* radial action chips around the active ship (inside the board svg) */
-.radial .chip { cursor: pointer; }
-.radial .chip circle { fill: #17251f; stroke: var(--line-strong, #3a444e); stroke-width: 1.6; }
-.radial .chip:hover circle { stroke: var(--gold); }
-.radial .chip.primary circle { fill: #26402f; stroke: #3f6f4f; }
-.radial .chip.danger circle { stroke: #6a3a2f; }
-.radial .chip text { fill: var(--ink); font-size: 12px; font-weight: 600; pointer-events: none; }
-.radial .chip-stem { stroke: var(--line); stroke-width: 1.4; }
+/* confirm dialog: dims the board behind it; the actionbox re-centres itself on top */
+.board-scrim { position: absolute; inset: 0; z-index: 21; background: rgba(4, 10, 7, 0.55); }
+
+/* ship carousel (pickShip stage) — the card itself is real art now (ShipCardArt) */
+.shippicker-row { display: flex; align-items: center; gap: 0.6rem; }
+.hexbutton.ship-arrow { min-width: 36px; }
+
+/* combat box (attack/defend staging, dice reveal) */
+.combat-chips { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: center; }
+/* a staged laser/shield chip is a HexButton too, just with its tag+value stacked instead
+   of the usual single-line row of button text */
+.hexbutton.combat-chip { min-width: 34px; }
+.hexbutton.combat-chip .hexbutton-content { flex-direction: column; gap: 0.1rem; }
+.hexbutton.combat-chip:hover .hexbutton-hex polygon { fill: rgba(255, 255, 255, 0.08); }
+.combat-chip .cc-tag { font-size: 0.62rem; font-weight: 700; }
+.combat-chip .cc-val { font-size: 0.95rem; font-weight: 700; }
+.combat-roll { display: flex; align-items: center; gap: 1.2rem; margin-top: 0.2rem; }
+.combat-die { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; font-size: 0.72rem; }
+
+/* general "you can act on this" guide: anything clickable on the board (a loadable
+   resource, an attackable ship, your own ship when it can end the turn, ...) breathes
+   gently. Buttons are exempt — they're already self-explanatory as clickable. */
+.pulse-avail { animation: avail-pulse 1.1s ease-in-out infinite; }
+@keyframes avail-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+/* ship-coloured "you can act on this" markers (the ship marker itself, a launch cell)
+   blink between their own colour and a genuinely different highlight colour instead of
+   fading opacity — a hard on/off toggle (steps(1), no interpolation) reads as far more
+   noticeable, and doesn't rely on the surrounding fill being distinguishable at low
+   opacity. Each element sets --blink-normal/--blink-hi inline (see kit.tsx's
+   SHIP_BOARD_VAR/SHIP_BOARD_HI_VAR, theme.colors.shipBoard). */
+.ship-blink { animation: ship-blink 1s steps(1, end) infinite; }
+@keyframes ship-blink {
+  0%, 49% { fill: var(--blink-normal); stroke: var(--blink-normal); }
+  50%, 100% { fill: var(--blink-hi); stroke: var(--blink-hi); }
+}
+
+/* a whole board region (currently just a free base offered for pick) whose outline needs
+   to blink against a fill that's ALREADY its own base colour — swapping to a same-family
+   colour (like .ship-blink) would vanish into that fill for half the cycle, so this snaps
+   stroke-opacity hard on/off instead (still steps(1), no easing — a genuine blink, not the
+   old smooth pulse) against a single, already-different highlight colour. */
+.region-blink { animation: region-blink 1s steps(1, end) infinite; }
+@keyframes region-blink {
+  0%, 49% { stroke-opacity: 0; }
+  50%, 100% { stroke-opacity: 1; }
+}
 
 /* log / history overlay */
 .overlay-scrim {
@@ -231,28 +455,104 @@ button.danger { border-color: #6a3a2f; }
   font-size: 0.7rem; font-weight: 700; color: rgba(0,0,0,0.6);
 }
 
-.hand { display: flex; gap: 6px; flex-wrap: wrap; }
 .card {
+  position: relative;
   width: 82px; min-height: 104px;
-  background: linear-gradient(160deg, #26332c, #1a241f);
-  border: 1px solid var(--line); border-radius: 8px;
+  transition: transform 0.15s ease;
+  /* starfield/nebula backdrop, echoing the physical cards' photo background */
+  background:
+    radial-gradient(1px 1px at 12% 22%, #fff, transparent),
+    radial-gradient(1px 1px at 76% 15%, #fff, transparent),
+    radial-gradient(1px 1px at 32% 68%, #fff, transparent),
+    radial-gradient(1.4px 1.4px at 60% 78%, #fff, transparent),
+    radial-gradient(1px 1px at 88% 55%, #fff, transparent),
+    radial-gradient(1px 1px at 20% 90%, #fff, transparent),
+    radial-gradient(120% 90% at 30% 100%, rgba(255,255,255,0.06), transparent 60%),
+    linear-gradient(160deg, #26332c, #1a241f);
+  background-blend-mode: screen, screen, screen, screen, screen, screen, normal, normal;
+  border: 2px solid var(--line); border-radius: 10px;
   padding: 6px; display: flex; flex-direction: column; gap: 4px;
   box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+  overflow: hidden;
 }
-.card .ctype { font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
-.card .cval { font-size: 1.3rem; font-weight: 800; font-variant-numeric: tabular-nums; }
-.card .ceff { font-size: 0.56rem; color: var(--muted); line-height: 1.25; margin-top: auto; }
-/* card accent = the shared aspect palette (see aspects.ts) */
-.card.booster-shield { border-color: #e9e9e9; }
-.card.booster-shield .ctype, .card.booster-shield .cval { color: #e9e9e9; }
-.card.booster-laser { border-color: #8a929b; }
-.card.booster-laser .ctype, .card.booster-laser .cval { color: #aab2ba; }
-.card.booster-engine { border-color: #c8483b; }
-.card.booster-engine .ctype, .card.booster-engine .cval { color: #e0776b; }
-.card.booster-reserveFuel { border-color: #3f74c9; }
-.card.booster-reserveFuel .ctype, .card.booster-reserveFuel .cval { color: #7aa0e0; }
-.card.booster-hyperspace { border-color: #9a6fd0; }
-.card.booster-hyperspace .ctype, .card.booster-hyperspace .cval { color: #b394de; }
+.card .cicon { position: absolute; inset: 4px 4px auto 4px; width: 46px; height: 46px; opacity: 0.5; color: inherit; }
+.card .cbadge {
+  position: relative; z-index: 1;
+  align-self: flex-start;
+  min-width: 22px; height: 22px; padding: 0 4px;
+  border-radius: 999px; background: #f1efe9;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.78rem; font-weight: 800; color: #1a1a1a;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+.card .ctype { position: relative; z-index: 1; font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-top: auto; }
+.card .ceff { position: relative; z-index: 1; font-size: 0.56rem; color: var(--muted); line-height: 1.25; }
+@keyframes card-pulse {
+  0%, 100% { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); transform: scale(1); }
+  50% { box-shadow: 0 0 0 3px rgba(230, 176, 60, 0.55), 0 2px 10px rgba(0, 0, 0, 0.4); transform: scale(1.035); }
+}
+.card.pulse-new, .card-art-wrap.pulse-new { animation: card-pulse 0.8s ease-in-out 3; }
+/* over the hand limit: only the frame colour breathes — no size or glow change */
+.card.pulse-urgent, .card-art-wrap.pulse-urgent { animation: card-frame-pulse 1.1s ease-in-out infinite; }
+@keyframes card-frame-pulse {
+  0%, 100% { border-color: #c1573c; }
+  50% { border-color: #e8a458; }
+}
+/* playable right now: a quiet glow around the frame in the card's own aspect colour
+   (currentColor) — no size/box-shadow burst, just the frame */
+.card.pulse-ready, .card-art-wrap.pulse-ready { animation: card-ready-pulse 1.3s ease-in-out infinite; }
+@keyframes card-ready-pulse {
+  0%, 100% { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); }
+  50% { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35), 0 0 0 2px currentColor; }
+}
+
+/* real card artwork (res/cards-artwork.svg via cardAssets.ts/CardArt.tsx) — the frame/
+   screen/icon layers are raw SVG files inlined via dangerouslySetInnerHTML, sized to fill
+   their positioned wrapper div (see CardArt.tsx's Layer) */
+.card-art-layer { position: absolute; pointer-events: none; }
+.card-art-layer svg { display: block; width: 100%; height: 100%; }
+/* the booster/upgrade CARD FACE wrapper — a plain border here (invisible at rest) is what
+   the pulse/picked states above actually animate; the real card frame is drawn INTO the art
+   itself, this is purely the interactive-state ring around it */
+.card-art-wrap {
+  position: relative; display: inline-block;
+  border: 2px solid transparent; border-radius: 10px;
+  transition: transform 0.15s ease;
+}
+.card-art-wrap.picked { outline: 2px solid var(--gold); outline-offset: 1px; }
+/* same "lift on hover" affordance as EquipmentPopup's .equip-card-wrap — playable cards
+   only (a card you can't act on right now shouldn't invite a click) */
+.card-art-wrap.clickable:hover, .card.clickable:hover { transform: translateY(-3px); }
+/* every path in the art carries an inline style="fill:...;stroke:..." (always beats a CSS
+   class alone) — !important is required to theme it. Only the property each icon family
+   actually draws with is overridden, so a neutral ("any ship"/ore) accent living inside a
+   themed icon (e.g. an aspect-coloured icon's own centre dot) is never touched. */
+/* the class sometimes sits on the leaf path/rect itself, sometimes only on a wrapping <g> —
+   ", .icon-X path/rect" covers both without guessing which a given icon uses */
+.card-art .icon-shield-stroke, .card-art .icon-shield-stroke path { stroke: var(--aspect-shields) !important; }
+.card-art .icon-laser-stroke, .card-art .icon-laser-stroke path { fill: var(--aspect-lasers) !important; stroke: var(--aspect-lasers) !important; }
+.card-art .icon-engine-fill, .card-art .icon-engine-fill path { fill: var(--aspect-engines) !important; }
+.card-art .icon-cargo-stroke, .card-art .icon-cargo-stroke path { stroke: var(--aspect-cargo) !important; }
+.card-art .icon-fuel-fill, .card-art .icon-fuel-fill rect { fill: var(--aspect-fuelTanks) !important; }
+.card-art .icon-card-fill, .card-art .icon-card-fill path { fill: var(--gold) !important; }
+.card-art .icon-ore-red, .card-art .icon-ore-red path { fill: var(--ore-red) !important; }
+.card-art .icon-ore-yellow, .card-art .icon-ore-yellow path { fill: var(--ore-yellow) !important; }
+.card-art .icon-ore-green-fill, .card-art .icon-ore-green-fill path { fill: var(--ore-green) !important; }
+/* card accent = the shared aspect palette (colour values live in theme.ts, applied as
+   these --aspect-* custom properties); .cicon uses currentColor. The `color`/.ctype
+   values are a lighter hand-picked tint of each border colour for legibility on the
+   dark card face, not themeable on their own yet. */
+.card.booster-shield { border-color: var(--aspect-shields); color: #e9e9e9; }
+.card.booster-shield .ctype { color: #e9e9e9; }
+.card.booster-laser { border-color: var(--aspect-lasers); color: #aab2ba; }
+.card.booster-laser .ctype { color: #aab2ba; }
+.card.booster-engine { border-color: var(--aspect-engines); color: #e0776b; }
+.card.booster-engine .ctype { color: #e0776b; }
+.card.booster-reserveFuel { border-color: var(--aspect-fuelTanks); color: #7aa0e0; }
+.card.booster-reserveFuel .ctype { color: #7aa0e0; }
+.card.booster-hyperspace { border-color: var(--card-hyperspace); color: #b394de; }
+.card.booster-hyperspace .ctype { color: #b394de; }
 
 .actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .hint { color: var(--muted); font-size: 0.72rem; margin: 0.4rem 0 0; }
@@ -276,24 +576,16 @@ button.danger { border-color: #6a3a2f; }
 .pass .sub { color: var(--muted); }
 
 .pass.setup { gap: 1rem; padding: 2rem; top: 49px; } /* clear the topbar */
-.shipgrid {
-  display: grid; grid-template-columns: repeat(3, minmax(180px, 220px)); gap: 12px;
-}
-.shipcard {
-  display: flex; flex-direction: column; gap: 8px; align-items: flex-start;
-  padding: 12px; text-align: left;
-  background: var(--panel-2); border: 1px solid var(--line-strong, var(--line)); border-radius: 9px;
-}
-.shipcard:hover:not(:disabled) { border-color: var(--gold); }
-.shipcard:disabled { opacity: 0.35; }
-.shipcard .shipstats {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px;
-  font-size: 0.72rem; color: var(--muted); font-variant-numeric: tabular-nums;
-}
 
 /* board bits */
 .cell-hit { cursor: pointer; }
 .cell-hit:hover { stroke: var(--gold); stroke-width: 2.5; }
+/* stroke is an inherited SVG property — without this, hovering an .ore-chip's <g> (a
+   .cell-hit) paints its resource-count <text> with a gold outline too */
+.cell-hit:hover text { stroke: none; }
+/* a base-pick cell: clickable, but the region outline is the only visual cue — a
+   tooltip stands in for the per-cell hover highlight every other cell-hit gets */
+.cell-hit-quiet { cursor: pointer; }
 /* hollow markers (fill:none) only react on their thin stroke by default — make the
    whole disc clickable so a tap anywhere inside the ring registers */
 circle.cell-hit { pointer-events: all; }
@@ -304,6 +596,8 @@ circle.cell-hit { pointer-events: all; }
 
 /* a chip being placed on the board settles in (scale, no fade — a real chip has weight) */
 .ore-chip { transform-box: fill-box; transform-origin: center; animation: chip-place 220ms cubic-bezier(.3,1.3,.5,1); }
+/* a loadable chip needs both: the one-shot "just placed" pop and the ongoing "you can act" pulse */
+.ore-chip.pulse-avail { animation: chip-place 220ms cubic-bezier(.3,1.3,.5,1), avail-pulse 1.1s ease-in-out infinite; }
 @keyframes chip-place {
   from { transform: scale(0.6) translateY(-3px); }
   to { transform: scale(1) translateY(0); }
@@ -351,9 +645,19 @@ circle.cell-hit { pointer-events: all; }
 .settings-panel label input { margin-top: 2px; }
 .settings-panel label em { display: block; color: var(--muted); font-style: normal; font-size: 0.72rem; margin-top: 2px; }
 .settings-row { display: flex; align-items: center; justify-content: space-between; font-size: 0.82rem; }
+.settings-row input[type="text"] {
+  width: 120px; background: var(--panel-2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 5px; padding: 0.25rem 0.4rem; font: inherit;
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .ore-chip, .base-pick { animation: none; }
-  .base-pick { fill-opacity: 1; }
+  .ore-chip, .pulse-avail, .ship-blink, .region-blink { animation: none; }
+  .pulse-avail { opacity: 1; }
+  .ship-blink { fill: var(--blink-normal); stroke: var(--blink-normal); }
+  .region-blink { stroke-opacity: 1; }
+  .card.pulse-new, .card.pulse-urgent, .card.pulse-ready,
+  .card-art-wrap.pulse-new, .card-art-wrap.pulse-urgent, .card-art-wrap.pulse-ready { animation: none; }
+  .card.pulse-urgent, .card-art-wrap.pulse-urgent { border-color: #c1573c; }
+  .card.pulse-ready, .card-art-wrap.pulse-ready { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35), 0 0 0 2px currentColor; }
   * { transition: none !important; }
 }

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { createGame, applyAction } from "./game.js";
+import { legalActions } from "./index.js";
 import type { Action, GameState, OreColour } from "./types.js";
 
 /**
@@ -34,7 +35,7 @@ function fillerTurn(s: GameState): GameState {
 
 describe("worked example — yellow's out-and-back", () => {
   it("launches, coasts, loads a resource, and delivers it home", () => {
-    let s = createGame({ seed: 9, colours: ["yellow", "black"], startPlayer: 0 });
+    let s = createGame({ seed: 9, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "none" });
     // deterministic stage: clear the random seeding, keep supply for the reseed check
     s.board.resources = {};
     const Y = () => s.players[0]!;
@@ -86,11 +87,17 @@ describe("worked example — yellow's out-and-back", () => {
     s = run(s, { type: "burn", path: [{ q: -8, r: 8 }] }); // onto a yellow base cell
     s = run(s, { type: "endMove" });
 
+    // homecoming offers three upgrades — pick one
+    const offer = legalActions(s).filter((a) => a.type === "chooseEquipment");
+    expect(offer.length).toBe(3);
+    expect(s.pendingEquipment?.playerId).toBe(0);
+    s = run(s, offer[0]!);
+
     expect(Y().pose.atRest).toBe(true); // braked at base
     expect(Y().fuel).toBe(Y().fuelMax); // refuelled
     expect(Y().delivered).toEqual(["green"]);
     expect(Y().cargo).toEqual([]);
-    expect(Y().equipment.length).toBe(2); // 1 kept at setup + 1 chosen on delivery
+    expect(Y().equipment.length).toBe(1); // 1 chosen on delivery (upgradeAtStart is "none" here)
     // one tile reseeded for the one delivered (supply had plenty)
     expect(s.supply.green + s.supply.yellow + s.supply.red).toBe(supplyBefore - 1);
     expect(Object.keys(s.board.resources).length).toBe(1);

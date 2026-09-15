@@ -15,8 +15,10 @@ import type { BoardModel, BoardCell } from "../../engine/board.js";
 import { distance } from "../../engine/hex.js";
 import type { Seat } from "../../client/index.js";
 import { S } from "./geo.js";
+import { rotatePoint } from "./hexpx.js";
 import { SHIP_VAR, ORE_VAR } from "./kit.js";
 import { ASPECT_FILL, ASPECT_LABEL, ASPECT_TAG } from "./aspects.js";
+import { theme } from "../theme.js";
 
 const GOLD = "#e6b03c";
 const norm = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -31,8 +33,8 @@ function hexPts(cx: number, cy: number, size: number): string {
 }
 
 /** outer cells hugging a base: near (dist 10) & far (dist 11) arcs sorted left→right, plus each arc's corner index */
-function outerArcs(board: BoardModel, colour: Colour) {
-  const bc = board.baseCells(colour);
+function outerArcs(board: BoardModel, baseId: Colour) {
+  const bc = board.baseCells(baseId);
   const centres = bc.map((h) => board.cell(h)!).filter(Boolean);
   const base0 = Math.atan2(
     centres.reduce((a, c) => a + c.y, 0) / centres.length,
@@ -55,7 +57,7 @@ function outerArcs(board: BoardModel, colour: Colour) {
   return { near: arc(board.innerRadius + 1), far: arc(board.radius) };
 }
 
-const TOK = S * 0.72; // token hexagon radius — sits inside its board cell with a gap
+const TOK = S * theme.board.statTokenRadius; // token hexagon radius — sits inside its board cell
 const DARK = "#0a120e";
 
 export type TipFn = (text: string | null, e: RMouseEvent) => void;
@@ -84,32 +86,33 @@ function Shell({ x, y, col, ink, active }: {
   return (
     <>
       <polygon points={hexPts(x, y, TOK + 2.5)} fill={DARK} />
-      <polygon points={hexPts(x, y, TOK)} fill={ink ? col : DARK} stroke={col} strokeWidth={active ? 2.6 : 1.4} />
+      <polygon points={hexPts(x, y, TOK)} fill={ink ? col : DARK} stroke={col}
+        strokeWidth={active ? theme.board.statTokenActiveStrokeWidth : theme.board.statTokenStrokeWidth} />
     </>
   );
 }
 
 function Tag({ x, y, text, col }: { x: number; y: number; text: string; col: string }) {
   return (
-    <text x={x} y={y - TOK * 0.42} textAnchor="middle" fill={col} opacity={0.85}
-      fontSize={S * 0.23} fontWeight={700} style={{ letterSpacing: "0.04em" }}>
+    <text x={x} y={y + TOK * theme.board.statLabelOffsetY} textAnchor="middle" fill={col} opacity={0.85}
+      fontSize={S * theme.board.statLabelFontSize} fontWeight={700} style={{ letterSpacing: "0.04em" }}>
       {text}
     </text>
   );
 }
 
 /** a plain single-number stat token */
-function Token({ c, col, tag, value, ink, active, tip, onTip }: {
+function Token({ c, col, tag, value, ink, active, tip, onTip, rotation }: {
   c: BoardCell; col: string; tag: string; value: string; ink?: string; active: boolean; tip: string; onTip: TipFn;
+  rotation: number;
 }) {
-  const x = c.x * S;
-  const y = c.y * S;
+  const { x, y } = rotatePoint(c.x * S, c.y * S, rotation);
   return (
     <Hoverable tip={tip} onTip={onTip}>
       <Shell x={x} y={y} col={col} ink={ink} active={active} />
       <Tag x={x} y={y} text={tag} col={ink ?? col} />
-      <text x={x} y={y + TOK * 0.2} textAnchor="middle" dominantBaseline="central"
-        fill={ink ?? col} fontWeight={800} fontSize={value.length > 2 ? S * 0.44 : S * 0.6}>
+      <text x={x} y={y + TOK * theme.board.statValueOffsetY} textAnchor="middle" dominantBaseline="central"
+        fill={ink ?? col} fontWeight={800} fontSize={S * theme.board.statValueFontSize}>
         {value}
       </text>
     </Hoverable>
@@ -117,20 +120,18 @@ function Token({ c, col, tag, value, ink, active, tip, onTip }: {
 }
 
 /** a "have / max" token; the "have" digit is colour-graded when `gradeCur` */
-function RatioToken({ c, col, tag, cur, max, active, tip, onTip, gradeCur, warnOver }: {
+function RatioToken({ c, col, tag, cur, max, active, tip, onTip, gradeCur, warnOver, rotation }: {
   c: BoardCell; col: string; tag: string; cur: number; max: number; active: boolean;
-  tip: string; onTip: TipFn; gradeCur?: boolean; warnOver?: boolean;
+  tip: string; onTip: TipFn; gradeCur?: boolean; warnOver?: boolean; rotation: number;
 }) {
-  const x = c.x * S;
-  const y = c.y * S;
+  const { x, y } = rotatePoint(c.x * S, c.y * S, rotation);
   const curCol = warnOver && cur > max ? "#c1573c" : gradeCur ? grade(max ? cur / max : 0) : col;
-  const txt = `${cur}/${max}`;
   return (
     <Hoverable tip={tip} onTip={onTip}>
       <Shell x={x} y={y} col={col} active={active} />
       <Tag x={x} y={y} text={tag} col={col} />
-      <text x={x} y={y + TOK * 0.2} textAnchor="middle" dominantBaseline="central"
-        fontWeight={800} fontSize={txt.length > 3 ? S * 0.38 : S * 0.5}>
+      <text x={x} y={y + TOK * theme.board.statValueOffsetY} textAnchor="middle" dominantBaseline="central"
+        fontWeight={800} fontSize={S * theme.board.statValueFontSize}>
         <tspan fill={curCol}>{cur}</tspan>
         <tspan fill={col} opacity={0.6}>/{max}</tspan>
       </text>
@@ -138,34 +139,44 @@ function RatioToken({ c, col, tag, cur, max, active, tip, onTip, gradeCur, warnO
   );
 }
 
-function OreHex({ c, ores, tag, tip, onTip }: {
-  c: BoardCell; ores: OreColour[]; tag: string; tip: string; onTip: TipFn;
+/** the fixed left-to-right order for the 3 per-colour counts below — cheapest to priciest */
+const ORE_ORDER: OreColour[] = ["green", "yellow", "red"];
+
+function OreHex({ c, ores, tag, tip, onTip, rotation }: {
+  c: BoardCell; ores: OreColour[]; tag: string; tip: string; onTip: TipFn; rotation: number;
 }) {
-  const x = c.x * S;
-  const y = c.y * S;
-  const n = Math.min(ores.length, 6);
+  const { x, y } = rotatePoint(c.x * S, c.y * S, rotation);
+  // always all 3 colours (even at 0) as small counts, not one chip per tile — a chip row
+  // used to spill past the hex once there was more than a handful of ore of one colour
+  const counts: Record<OreColour, number> = { green: 0, yellow: 0, red: 0 };
+  for (const o of ores) counts[o]++;
   return (
     <Hoverable tip={`${tip}: ${ores.length ? ores.join(", ") : "none"}`} onTip={onTip}>
       <polygon points={hexPts(x, y, TOK + 2.5)} fill={DARK} />
-      <polygon points={hexPts(x, y, TOK)} fill={DARK} stroke="#3a4a41" strokeWidth={1.3} />
+      <polygon points={hexPts(x, y, TOK)} fill={DARK} stroke="#3a4a41" strokeWidth={theme.board.statTokenStrokeWidth} />
       <Tag x={x} y={y} text={tag} col="#8b9a91" />
-      {n === 0 ? (
-        <text x={x} y={y + TOK * 0.2} textAnchor="middle" fill="#4b574f" fontSize={S * 0.34}>–</text>
-      ) : (
-        ores.slice(0, 6).map((o, i) => (
-          <circle key={i} cx={x + (i - (n - 1) / 2) * S * 0.32} cy={y + TOK * 0.18}
-            r={S * 0.14} fill={ORE_VAR[o]} stroke="#000" strokeOpacity={0.3} />
-        ))
-      )}
+      {ORE_ORDER.map((o, i) => (
+        <text
+          key={o}
+          x={x + (i - 1) * S * theme.board.statValueFontSize}
+          y={y + TOK * theme.board.statValueOffsetY}
+          textAnchor="middle"
+          dominantBaseline="central"
+          fontWeight={800}
+          fontSize={S * theme.board.statValueFontSize}
+          fill={counts[o] > 0 ? ORE_VAR[o] : "#4b574f"}
+        >
+          {counts[o]}
+        </text>
+      ))}
     </Hoverable>
   );
 }
 
-function IdentityHex({ c, name, seat, colour, active, onTip }: {
-  c: BoardCell; name: string; seat: Seat; colour: Colour; active: boolean; onTip: TipFn;
+function IdentityHex({ c, name, seat, colour, active, onTip, rotation }: {
+  c: BoardCell; name: string; seat: Seat; colour: Colour; active: boolean; onTip: TipFn; rotation: number;
 }) {
-  const x = c.x * S;
-  const y = c.y * S;
+  const { x, y } = rotatePoint(c.x * S, c.y * S, rotation);
   return (
     <Hoverable tip={`${name} — ${seat === "bot" ? "bot" : "you"}${active ? " · to move" : ""}`} onTip={onTip}>
       <polygon points={hexPts(x, y, S * 0.92)} fill={DARK}
@@ -182,8 +193,9 @@ function IdentityHex({ c, name, seat, colour, active, onTip }: {
   );
 }
 
-export function BaseInfo({ board, state, seats, scores, onTip }: {
+export function BaseInfo({ board, state, seats, scores, onTip, rotation }: {
   board: BoardModel; state: GameState; seats: readonly Seat[]; scores: readonly number[]; onTip: TipFn;
+  rotation: number;
 }) {
   const mode = state.config.modes.prospector;
 
@@ -192,7 +204,7 @@ export function BaseInfo({ board, state, seats, scores, onTip }: {
       {state.players
         .filter((p) => !p.eliminated)
         .map((p) => {
-          const { near, far } = outerArcs(board, p.colour);
+          const { near, far } = outerArcs(board, p.homeBase);
           if (near.cells.length < 7 || far.cells.length < 5) return null;
           const active = p.id === state.activePlayerIndex;
           const stats = statsOf(state, p);
@@ -217,66 +229,45 @@ export function BaseInfo({ board, state, seats, scores, onTip }: {
             if (stat === "fuelTanks")
               return (
                 <RatioToken key={stat} c={cell} col={col} tag="FUEL" cur={p.fuel} max={p.fuelMax}
-                  active={active} onTip={onTip} gradeCur
+                  active={active} onTip={onTip} gradeCur rotation={rotation}
                   tip={`fuel — ${p.fuel} of ${p.fuelMax}${up ? ` (tank ${total}, +${up} upgrade)` : ""}`} />
               );
             if (stat === "cargo")
               return (
                 <RatioToken key={stat} c={cell} col={col} tag="CARGO" cur={p.cargo.length} max={total}
-                  active={active} onTip={onTip}
+                  active={active} onTip={onTip} rotation={rotation}
                   tip={`cargo — ${p.cargo.length} of ${total} held${up ? ` (+${up} upgrade)` : ""}`} />
               );
             if (stat === "booster")
               return (
-                <RatioToken key={stat} c={cell} col={col} tag="CARDS" cur={p.hand.length} max={total}
-                  active={active} onTip={onTip} warnOver
+                <RatioToken key={stat} c={cell} col={col} tag="HAND" cur={p.hand.length} max={total}
+                  active={active} onTip={onTip} warnOver rotation={rotation}
                   tip={`cards — ${p.hand.length} in hand of ${total} limit${up ? ` (+${up} upgrade)` : ""}`} />
               );
             return (
-              <Token key={stat} c={cell} col={col} tag={ASPECT_TAG[stat]} value={`${total}`} active={active} onTip={onTip}
+              <Token key={stat} c={cell} col={col} tag={ASPECT_TAG[stat]} value={`${total}`} active={active} onTip={onTip} rotation={rotation}
                 tip={`${ASPECT_LABEL[stat]} — ${total}${up ? ` (${baseShip[stat]} + ${up} upgrade)` : ""}`} />
             );
           };
 
           return (
             <g key={`bi-${p.id}`}>
-              <IdentityHex c={near.cells[nm]!} name={baseShip.name} seat={seats[p.id]!} colour={p.colour} active={active} onTip={onTip} />
+              <IdentityHex c={near.cells[nm]!} name={baseShip.name} seat={seats[p.id]!} colour={p.colour} active={active} onTip={onTip} rotation={rotation} />
 
               {FREIGHT_GROUP.map((s, i) => aspect(leftBranch[i], s))}
               {DRIVE_GROUP.map((s, i) => aspect(rightBranch[i], s))}
 
               {/* far ring: PTS at the corner, an ore token on each side for symmetry —
                  FREIGHT (carried) outside the cargo cell, SAVED (delivered) opposite */}
-              {far.cells[fm - 1] && <OreHex c={far.cells[fm - 1]!} ores={p.cargo} tag="FREIGHT" tip="freight in hold" onTip={onTip} />}
+              {far.cells[fm - 1] && <OreHex c={far.cells[fm - 1]!} ores={p.cargo} tag="LOAD" tip="freight in hold" onTip={onTip} rotation={rotation} />}
               {far.cells[fm] && (
-                <Token c={far.cells[fm]!} col={GOLD} ink="#1a1400" tag="PTS" active={active} onTip={onTip}
+                <Token c={far.cells[fm]!} col={GOLD} ink="#1a1400" tag="PTS" active={active} onTip={onTip} rotation={rotation}
                   value={`${scoreVal}`} tip={`score — ${scoreVal}`} />
               )}
-              {far.cells[fm + 1] && <OreHex c={far.cells[fm + 1]!} ores={p.delivered} tag="SAVED" tip="delivered to base" onTip={onTip} />}
+              {far.cells[fm + 1] && <OreHex c={far.cells[fm + 1]!} ores={p.delivered} tag="SAVED" tip="delivered to base" onTip={onTip} rotation={rotation} />}
             </g>
           );
         })}
-
-      {/* shared supply / deck counts — small text block in the bottom-centre gap */}
-      <g pointerEvents="none">
-      {(() => {
-        const y0 = 1.5 * board.innerRadius * S * 0.62;
-        const rows = [
-          `booster deck ${state.decks.booster.draw.length}`,
-          `equipment deck ${state.decks.equipment.draw.length}`,
-          `supply  ${state.supply.green} / ${state.supply.yellow} / ${state.supply.red}`,
-        ];
-        return (
-          <g>
-            {rows.map((t, i) => (
-              <text key={i} x={0} y={y0 + i * 15} textAnchor="middle" fontSize={11} fill="#7c8b83">
-                {t}
-              </text>
-            ))}
-          </g>
-        );
-      })()}
-      </g>
     </g>
   );
 }

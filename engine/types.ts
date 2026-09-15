@@ -31,6 +31,7 @@ export interface CoreConfig {
     hyperspace: { engineThreshold: number; fuelCost: number };
   };
   fuel: { model: "pool"; refuelAtBase: "toMax" | "none"; reserveMayExceedMax: boolean };
+  /** allowScrapBeforeDraw: the name is legacy — it now gates voluntary scrap for the whole move */
   turn: { boostersDrawnPerTurn: number; allowScrapBeforeDraw: boolean };
   cards: { reshuffleDiscardWhenEmpty: boolean };
 }
@@ -136,7 +137,12 @@ export interface ShipPose {
 
 export interface PlayerState {
   id: number;
+  /** ship type — drives stats (mode.ships[colour]) and visual identity everywhere */
   colour: Colour;
+  /** which of the board's six base regions this player's home is — a separate choice from
+     `colour` when base and ship are picked independently; defaults to the same value as
+     `colour` for the classic fixed pairing (see createGame's `bases` option) */
+  homeBase: Colour;
   eliminated: boolean;
   /** false until the player has taken their one-time launch base-cell choice */
   placed: boolean;
@@ -144,6 +150,11 @@ export interface PlayerState {
   fuel: number;
   fuelMax: number;
   equipment: EquipmentCard[];
+  /** an unresolved "upgrade at game start" draw (see CreateGameOptions.upgradeAtStart) —
+     3 candidates and which mode picked them, surfaced as pendingEquipment the moment this
+     player finishes their first drift (i.e. right before they'd choose a burn target).
+     Null once resolved, or from the start if upgradeAtStart is "none". */
+  startEquipment: { cards: EquipmentCard[]; mode: "random" | "select" } | null;
   hand: BoosterCard[];
   cargo: OreColour[];
   delivered: OreColour[];
@@ -176,7 +187,57 @@ export interface PendingCombat {
   autoRepel?: boolean;
 }
 
+/** why a chooseEquipment choice is pending, and what phase to resume once it resolves —
+   a homecoming reward interrupts the post-move phase (resumes "moved"); the start-of-game
+   upgrade interrupts the pre-burn moment of the "start" phase (resumes "start", so burn is
+   still available right after). `mode` only exists for "start": a GUI spins to a random
+   card itself for "random" (the engine doesn't roll it — same as any other lucky-wheel
+   pick in this game, the "randomness" is cosmetic/client-side), or lets the player choose
+   for "select"; a homecoming reward is always an interactive choice.
+   `rerollsUsed` counts manual `rerollEquipment` actions — capped at 1, and only offered at
+   all when all 3 cards are identical (see legalActions): a real choice among 3 duplicates
+   isn't a choice. A separate, fully automatic reroll (up to 3 draws, not user-facing or
+   counted here) already runs before the offer is ever shown, for the rarer case where
+   every card is above the player's upgrade cap and thus useless regardless of which is
+   picked — see game.ts's drawEquipmentOffer. */
+export type PendingEquipment =
+  | { playerId: number; cards: EquipmentCard[]; reason: "start"; mode: "random" | "select"; rerollsUsed: number }
+  | { playerId: number; cards: EquipmentCard[]; reason: "homecoming"; rerollsUsed: number };
+
 export type TurnPhase = "start" | "moved" | "done";
+
+export type SeatKind = "human" | "bot";
+
+/**
+ * Game start as a real, driven sequence instead of createGame resolving everything at once:
+ * each seat, in turn, picks a free base and then immediately a free ship (so a player's
+ * base and ship are settled back-to-back, not in two separate all-players passes). Once the
+ * last seat picks its ship, the engine decides the start player itself (one RNG draw — no
+ * per-seat action, nothing to resolve a tie for) and parks in stage "rollOff" holding that
+ * result; a `finishSetup` action (whenever the GUI is done showing it) does the same finalize
+ * work createGame always did (decks, equipment, initial resource seeding) and clears this
+ * field. `state.players` stays empty the entire time.
+ *
+ * The engine only ever hands back the *result* of a random pick, never how to animate it — a
+ * GUI is free to show the start-player choice as a spinning wheel landing on `startSeat`
+ * before ever calling `finishSetup`.
+ */
+export interface SetupState {
+  /** fixed at creation; index = the eventual player id */
+  seats: SeatKind[];
+  variant?: "standard" | "short" | "long" | undefined;
+  /** whether each player gets a random draw-3-keep-1 upgrade before their first burn;
+     see CreateGameOptions.upgradeAtStart. Default (also the type's default): "select" */
+  upgradeAtStart?: "none" | "random" | "select" | undefined;
+  stage: "pickBase" | "pickShip" | "rollOff";
+  /** per seat index; null until that seat has picked */
+  bases: (Colour | null)[];
+  colours: (Colour | null)[];
+  /** the seat currently picking (its base, then its ship) — irrelevant once stage is "rollOff" */
+  turnIndex: number;
+  /** the start player; null until stage is "rollOff" */
+  startSeat: number | null;
+}
 
 export interface GameState {
   config: Config;
@@ -185,6 +246,8 @@ export interface GameState {
   turnNumber: number;
   activePlayerIndex: number;
   players: PlayerState[];
+  /** non-null while start-of-game picks are still in progress; see SetupState */
+  setup: SetupState | null;
   /** ore tiles on the board, by hex key */
   board: {
     resources: Record<string, OreColour>;
@@ -197,6 +260,10 @@ export interface GameState {
   };
   phase: TurnPhase;
   pendingCombat: PendingCombat | null;
+  /** one must be chosen from `cards` before anything else can happen — either a homecoming
+     delivery reward (always an interactive choice) or the start-of-game upgrade (whose
+     `mode` tells a GUI whether to auto-spin to a random one or let the player pick) */
+  pendingEquipment: PendingEquipment | null;
   log: LogEntry[];
   gameOver: boolean;
   winnerIds: number[] | null;
@@ -214,11 +281,17 @@ export interface LogEntry {
 // ---------------------------------------------------------------------------
 
 export type Action =
+  // --- setup: per seat, base -> ship; then the engine picks the start player and parks in
+  // stage "rollOff" until finishSetup, before any turn begins ---
+  | { type: "pickBase"; base: Colour }
+  | { type: "pickShip"; colour: Colour }
+  | { type: "finishSetup" }
   | { type: "placeShip"; cell: Hex }
   | { type: "scrapShip" }
   | { type: "drawBooster" }
   | { type: "discardBooster"; cardId: string }
   | { type: "drift" }
+  | { type: "useReserveFuel"; cardId: string }
   | { type: "burn"; path: Hex[]; engineBoosters?: string[]; reserveFuelBoosters?: string[] }
   | { type: "hyperspace"; via: "booster" | "engines"; boosterId?: string }
   | { type: "endMove" }
@@ -227,6 +300,8 @@ export type Action =
   | { type: "combatDefend"; shieldBoosters?: string[]; hyperspaceBoosterId?: string }
   | { type: "combatResolve" }
   | { type: "declineCounter" }
+  | { type: "chooseEquipment"; cardId: string }
+  | { type: "rerollEquipment" }
   | { type: "endTurn" };
 
 export interface StepResult {

@@ -1,22 +1,37 @@
-import { useCallback, useEffect, useReducer, useRef, useState, type PointerEvent as RPointerEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as RPointerEvent,
+  type ReactNode,
+} from "react";
 import { boardFor } from "../../engine/game.js";
 import { hexKey } from "../../engine/hex.js";
 import type { GameState, Hex, Colour, OreColour } from "../../engine/index.js";
-import { SHIP_VAR, ORE_VAR } from "./kit.js";
+import { SHIP_BOARD_VAR, SHIP_BOARD_HI_VAR, SHIP_BASE_VAR, SHIP_BASE_HI_VAR, ORE_VAR } from "./kit.js";
 import { BaseInfo, type TipFn } from "./BaseInfo.js";
-import { HexPopup } from "./HexPopup.js";
 import { ShipMarker } from "./ShipMarker.js";
 import { moveFrame, animDone, type MoveAnim } from "../anim.js";
 import type { Seat } from "../../client/index.js";
+import { clusterOutline, pointsAttr } from "./hexOutline.js";
+import { rotatePoint } from "./hexpx.js";
+import { theme } from "../theme.js";
 
 export { S } from "./geo.js";
 import { S } from "./geo.js";
 
-export interface RadialAction {
-  id: string;
-  label: string;
-  kind?: "primary" | "danger" | undefined;
-  onClick: () => void;
+/** the zoom/pan/rotate control icons — a plain shape in a fixed viewBox, so flex centring
+   in the button lands exactly on it (unlike a text glyph, whose position within its own
+   line box depends on the current font's baseline/descender metrics) */
+function CtlIcon({ children }: { children: ReactNode }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+      {children}
+    </svg>
+  );
 }
 
 function hexPoints(cx: number, cy: number, size: number): string {
@@ -32,15 +47,31 @@ export interface BoardProps {
   state: GameState;
   seats: readonly Seat[];
   scores: readonly number[];
-  highlight: { cells: Hex[]; kind: "load" | "place" | "base" | null };
+  highlight: { cells: Hex[]; kind: "place" | "base" | null };
+  /** during a "pick a random base" spin: the one base region to trace solid (not pulsing) */
+  spinHighlight?: Colour | null;
+  /** a single-cell marker for the coordinate-dice spin (initial resource seeding, hyperspace) —
+     a ring "landing" on a cell, narrowing in step by step */
+  spinPoint?: Hex | null;
+  /** the "3 nested wheels" coordinate-dice spin: a dot per settled round-center, the line
+     path connecting them so far, and (while a round is still spinning) a rotating mark
+     cycling live around the last dot before it settles into the next dot */
+  spinPath?: { dots: Hex[]; live: Hex | null } | null;
+  /** resource cells the active player can load from right now — the ore chip itself pulses */
+  loadCells: readonly Hex[];
   burnTargets: { cell: Hex; cost: number }[];
   driftGhost: { at: Hex; from: Hex } | null;
   burnPreview: { path: Hex[]; cost: number } | null;
-  radial: RadialAction[];
   onCoast: (() => void) | null;
-  /** guidance popup drawn in board space; null when no action is pending */
-  popup: { center: Hex; lines: string[] } | null;
-  /** false during base selection: draw only the empty field + highlights + popup */
+  /** the active player's own base cells — clicking one (off a burn target) asks to scrap */
+  scrapCells: readonly Hex[];
+  /** enemy players the active player can attack right now — their ship ring pulses */
+  attackTargets: readonly number[];
+  onAttackTarget: (id: number) => void;
+  /** the active player's own ship can be clicked to end the turn (post-move, nothing else pending) */
+  endTurnReady: boolean;
+  onEndTurn: (() => void) | null;
+  /** false during base selection: draw only the empty field + highlights */
   world: boolean;
   reducedMotion: boolean;
   /** an in-flight move to play out; null when the board is settled */
@@ -48,6 +79,10 @@ export interface BoardProps {
   onMoveAnimEnd: () => void;
   onCell: (h: Hex) => void;
   onCellHover: (h: Hex | null) => void;
+  /** non-null while a "purely cosmetic, already-decided" animation is playing (a spin, a
+     dice reveal) — a click anywhere on the board fast-forwards it to the result instead of
+     hitting whatever's normally under the cursor */
+  onSkipAnimation?: (() => void) | null;
 }
 
 /** cost 0 = free (green), 1 = yellow, 2 = orange, 3 = red */
@@ -58,21 +93,40 @@ export function Board({
   seats,
   scores,
   highlight,
+  spinHighlight = null,
+  spinPoint = null,
+  spinPath = null,
+  loadCells,
   burnTargets,
   driftGhost,
   burnPreview,
-  radial,
   onCoast,
-  popup,
+  scrapCells,
+  attackTargets,
+  onAttackTarget,
+  endTurnReady,
+  onEndTurn,
   world,
   reducedMotion,
   moveAnim,
   onMoveAnimEnd,
   onCell,
   onCellHover,
+  onSkipAnimation = null,
 }: BoardProps) {
   const board = boardFor(state);
   const cells = board.allCells();
+  // a base region is only coloured once its ship is known — base and ship are picked
+  // independently, so the six board positions carry no inherent colour of their own.
+  const baseColourOf = new Map<Colour, Colour>();
+  if (state.setup) {
+    state.setup.bases.forEach((b, seat) => {
+      const c = state.setup!.colours[seat];
+      if (b && c) baseColourOf.set(b, c);
+    });
+  } else {
+    for (const pl of state.players) baseColourOf.set(pl.homeBase, pl.colour);
+  }
   const xs = cells.map((c) => c.x * S);
   const ys = cells.map((c) => c.y * S);
   // "fit" viewBox: the whole field + a margin so nothing hugs the frame. Pan/zoom rides on top.
@@ -83,6 +137,13 @@ export function Board({
   const h = Math.max(...ys) - Math.min(...ys) + m * 2;
   const fitCx = minx + w / 2;
   const fitCy = miny + h / 2;
+
+  // --- board rotation -----------------------------------------------------
+  // logical, not graphical: a hex tile is unchanged by a 60° turn, so this just relabels
+  // which screen position each cell's centre lands on — every tile still draws upright, so
+  // text/tooltips/popups never need to know rotation happened (see hexpx.ts's rotatePoint).
+  const [rotation, setRotation] = useState(0); // 0..5, each step = 60°
+  const rotate = (p: { x: number; y: number }) => rotatePoint(p.x, p.y, rotation);
 
   // --- board pan / zoom -------------------------------------------------
   const MIN_Z = 0.6;
@@ -165,16 +226,47 @@ export function Board({
     const r = svgRef.current?.getBoundingClientRect();
     setTip({ text, x: e.clientX - (r?.left ?? 0), y: e.clientY - (r?.top ?? 0) });
   };
+  /** clicking a tipped target can remove it from the DOM before onMouseLeave ever
+     fires (chip consumed, ship un-attackable, cell no longer pickable) — clear
+     the tooltip explicitly at the click site instead of relying on mouseleave */
+  const clicked = (fn: () => void) => () => { setTip(null); fn(); };
 
   const hi = new Set(highlight.cells.map(hexKey));
+  const scrapSet = new Set(scrapCells.map(hexKey));
+  const loadSet = new Set(loadCells.map(hexKey));
   const px = (hx: Hex) => {
     const c = board.cell(hx);
-    if (c) return { x: c.x * S, y: c.y * S };
-    return { x: S * Math.sqrt(3) * (hx.q + hx.r / 2), y: S * 1.5 * hx.r };
+    if (c) return rotate({ x: c.x * S, y: c.y * S });
+    return rotate({ x: S * Math.sqrt(3) * (hx.q + hx.r / 2), y: S * 1.5 * hx.r });
   };
 
-  const active = state.players[state.activePlayerIndex]!;
-  const activeAt = px(active.pose.current);
+  // per-cell values shared by the fill layer and the grid layer below — computed once so
+  // the two rendering passes agree on exactly which cells are highlighted/clickable/etc.
+  const cellViews = cells.map((c) => {
+    const { x: cx, y: cy } = rotate({ x: c.x * S, y: c.y * S });
+    const key = hexKey(c);
+    const isHi = hi.has(key);
+    const assigned = c.base ? baseColourOf.get(c.base) : undefined;
+    // an unassigned field cell is mostly transparent — the starfield behind the board
+    // shows through its interior, with only a faint tint left to tell inner from outer
+    const fill = assigned ? SHIP_BASE_VAR[assigned] : c.region === "outer" ? theme.board.outerFill : theme.board.innerFill;
+    const fillOpacity = assigned
+      ? 0.85
+      : c.region === "outer"
+        ? theme.board.outerCellFillOpacity
+        : theme.board.innerCellFillOpacity;
+    const clickable = isHi || scrapSet.has(key);
+    // a base-pick cell shows a tooltip, not its own hover highlight — the region
+    // outline (below) is the only visual indicator for "you can pick this"
+    const isBaseCell = isHi && highlight.kind === "base";
+    return { c, cx, cy, key, fill, fillOpacity, clickable, isBaseCell };
+  });
+
+  // players are empty during interactive setup's pickBase/pickShip stages — everything that
+  // dereferences `active` below is itself gated on state only ever being non-empty there
+  // (onCoast, highlight.kind === "place")
+  const active = state.players[state.activePlayerIndex] ?? null;
+  const activeAt = active ? px(active.pose.current) : { x: 0, y: 0 };
 
   // drive the slide animation with rAF; end it (and let the timers resume) when done.
   // a held "drift" has no motion — it just sits there, so it needs no loop.
@@ -213,53 +305,224 @@ export function Board({
       onPointerCancel={endPan}
       onDoubleClick={fit}
       onClickCapture={(e) => {
+        // an "everything here is already decided" animation is running (a lucky-wheel
+        // spin, a dice reveal) — a click anywhere fast-forwards straight to its result,
+        // taking priority over (and pre-empting) whatever that click would otherwise hit
+        if (onSkipAnimation) {
+          e.stopPropagation();
+          onSkipAnimation();
+          return;
+        }
         if (pannedRef.current) {
           e.stopPropagation();
           pannedRef.current = false;
         }
       }}
     >
-      {cells.map((c) => {
-        const cx = c.x * S;
-        const cy = c.y * S;
-        const key = hexKey(c);
-        const isHi = hi.has(key);
-        const fill = c.base
-          ? SHIP_VAR[c.base as Colour]
-          : c.region === "outer"
-            ? "#1c2b25"
-            : "#0e1b15";
-        const stroke = c.origin
-          ? "var(--gold)"
-          : isHi
-            ? "var(--gold)"
-            : c.base
-              ? SHIP_VAR[c.base as Colour]
-              : "#2b4034";
-        const baseHi = isHi && highlight.kind === "base";
-        return (
+      <defs>
+        {/* the grid's own edges read as a metal rod, not a flat painted line — a light-to-
+           dark sweep across the stroke plus a soft drop-shadow on the whole grid gives it
+           a slightly raised, cast-metal feel without per-edge lighting math. Colours and
+           the shadow's own numbers live in theme.ts (theme.board), not here. */}
+        <linearGradient id="rodGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor={theme.board.gridBright} />
+          <stop offset="100%" stopColor={theme.board.gridDark} />
+        </linearGradient>
+        <filter id="rodDepth" x="-5%" y="-5%" width="110%" height="110%">
+          <feDropShadow
+            dx="0"
+            dy={theme.board.gridShadowOffset}
+            stdDeviation={theme.board.gridShadowBlur}
+            floodColor="#000"
+            floodOpacity={theme.board.gridShadowOpacity}
+          />
+        </filter>
+      </defs>
+      {/* two layers, deliberately not one polygon with both fill and stroke: the grid
+         (metal rods) must read as one uniform mesh sitting *on top of* every cell alike,
+         including a coloured base region — drawing fill+stroke together per cell let a
+         base's own colour override (and visually blend into) its share of the grid. */}
+      {cellViews.map(({ c, cx, cy, key, fill, fillOpacity, clickable, isBaseCell }) => (
+        <polygon
+          key={key}
+          // full size (no gap) — every edge is shared with its neighbour, one continuous
+          // hex grid rather than separated tiles floating with a gap between them
+          points={hexPoints(cx, cy, S)}
+          fill={fill}
+          fillOpacity={fillOpacity}
+          stroke="none"
+          // a click target must stay clickable even though its fill is almost fully
+          // transparent now (the starfield shows through) — visiblePainted (the SVG
+          // default) can miss a very low fillOpacity in some browsers
+          pointerEvents={clickable ? "all" : undefined}
+          className={clickable ? (isBaseCell ? "cell-hit-quiet" : "cell-hit") : undefined}
+          onClick={clickable ? clicked(() => onCell({ q: c.q, r: c.r })) : undefined}
+          onMouseEnter={clickable && !isBaseCell ? () => onCellHover({ q: c.q, r: c.r }) : undefined}
+          onMouseMove={isBaseCell ? (e) => onTip("Select this base", e) : undefined}
+          onMouseLeave={
+            isBaseCell ? (e) => onTip(null, e) : clickable ? () => onCellHover(null) : undefined
+          }
+        />
+      ))}
+
+      <g filter="url(#rodDepth)" pointerEvents="none">
+        {cellViews.map(({ cx, cy, key }) => (
           <polygon
             key={key}
-            points={hexPoints(cx, cy, S * 0.94)}
-            fill={fill}
-            fillOpacity={baseHi ? 1 : c.base ? 0.85 : 1}
-            stroke={stroke}
-            strokeWidth={c.origin ? 2.5 : isHi ? (baseHi ? 3 : 2.5) : c.base ? 1.6 : 1}
-            strokeOpacity={c.base ? 0.9 : 1}
-            className={isHi ? (baseHi ? "cell-hit base-pick" : "cell-hit") : undefined}
-            onClick={isHi ? () => onCell({ q: c.q, r: c.r }) : undefined}
-            onMouseEnter={isHi ? () => onCellHover({ q: c.q, r: c.r }) : undefined}
-            onMouseLeave={isHi ? () => onCellHover(null) : undefined}
+            points={hexPoints(cx, cy, S)}
+            fill="none"
+            // the plain grid edge reads as a metal rod (a gradient stroke, see <defs>) —
+            // uniform everywhere now. Launch-cell picks used to also gold-edge each of the
+            // 4 base cells here, redundant with (and visually competing against) the
+            // pulsing ship-coloured ring already drawn on each one; a base cell doesn't
+            // get its own coloured edge either — its fill alone already says whose it is.
+            stroke="url(#rodGrad)"
+            strokeWidth={1.4}
           />
-        );
-      })}
+        ))}
+      </g>
 
-      {/* resources */}
+      {/* base regions being picked: one blinking outline per free base (the whole region is
+         the click target, not each of its 4 cells), plus a solid outline for the one region
+         a "random base" spin is currently landing the pointer on. A hard on/off opacity
+         toggle (steps, no interpolation — see .region-blink), not a smooth pulse — but still
+         the same plain gold every free base used before, not each base's own SHIP_BASE_HI_VAR
+         (which is white for 5 of 6 colours and gold only for white's own base — different
+         colours per base read as a bug, not a blink). Not the ship marker's colour-swap
+         convention either: the region is already solid-filled with its own base colour once
+         assigned, so swapping the outline between that same colour and any per-base highlight
+         would vanish for half the cycle — one fixed gold, toggled fully off/on, stays visible
+         and matches every other base uniformly. */}
+      {highlight.kind === "base" &&
+        [...new Set(highlight.cells.map((h) => board.baseOwnerAt(h)))].map((baseId) => {
+          if (!baseId) return null;
+          const region = board.baseCells(baseId);
+          const loop = clusterOutline(region.map((h) => px(h)), S);
+          if (loop.length === 0) return null;
+          return (
+            <polygon
+              key={`base-outline-${baseId}`}
+              points={pointsAttr(loop)}
+              fill="none"
+              stroke="var(--gold)"
+              strokeWidth={3}
+              strokeLinejoin="round"
+              className="region-blink"
+              pointerEvents="none"
+            />
+          );
+        })}
+      {spinHighlight &&
+        (() => {
+          const region = board.baseCells(spinHighlight);
+          const loop = clusterOutline(region.map((h) => px(h)), S);
+          if (loop.length === 0) return null;
+          return (
+            <polygon
+              points={pointsAttr(loop)}
+              // during the roll-off reveal a base is already solid-filled with this exact
+              // colour (fillOpacity 0.85), so tinting it with more of the SAME colour used
+              // to be nearly invisible — theme.colors.shipBase's highlight is a genuinely
+              // different colour instead
+              fill={SHIP_BASE_HI_VAR[spinHighlight]}
+              fillOpacity={0.35}
+              stroke="var(--gold)"
+              strokeWidth={3.5}
+              strokeLinejoin="round"
+              pointerEvents="none"
+            />
+          );
+        })()}
+
+      {spinPoint &&
+        (() => {
+          const { x, y } = px(spinPoint);
+          return (
+            <circle
+              cx={x}
+              cy={y}
+              r={S * 0.5}
+              fill="var(--gold)"
+              fillOpacity={0.22}
+              stroke="var(--gold)"
+              strokeWidth={2.5}
+              pointerEvents="none"
+            />
+          );
+        })()}
+
+      {/* the "3 nested wheels" coordinate-dice spin: one rotating mark cycling around the
+         current center (never all 6 candidates at once), a dot pinning each round's center,
+         and a line tracing the path so far — the whole path disappears once the final cell
+         is reached and the resource is actually placed */}
+      {spinPath &&
+        (() => {
+          const dotPts = spinPath.dots.map((h) => px(h));
+          const livePt = spinPath.live ? px(spinPath.live) : null;
+          const lastDot = dotPts[dotPts.length - 1];
+          return (
+            <>
+              {dotPts.slice(1).map((p, i) => (
+                <line
+                  key={`spin-seg-${i}`}
+                  x1={dotPts[i]!.x}
+                  y1={dotPts[i]!.y}
+                  x2={p.x}
+                  y2={p.y}
+                  stroke={theme.board.spinPathColor}
+                  strokeWidth={theme.board.spinPathStrokeWidth}
+                  strokeOpacity={0.8}
+                  pointerEvents="none"
+                />
+              ))}
+              {livePt && lastDot && (
+                <line
+                  x1={lastDot.x}
+                  y1={lastDot.y}
+                  x2={livePt.x}
+                  y2={livePt.y}
+                  stroke={theme.board.spinPathColor}
+                  strokeWidth={theme.board.spinPathStrokeWidth}
+                  strokeOpacity={0.55}
+                  pointerEvents="none"
+                />
+              )}
+              {dotPts.map((p, i) => (
+                <circle
+                  key={`spin-dot-${i}`}
+                  cx={p.x}
+                  cy={p.y}
+                  r={S * theme.board.spinPathDotRadius}
+                  fill={theme.board.spinPathColor}
+                  pointerEvents="none"
+                />
+              ))}
+              {livePt && (
+                <circle
+                  cx={livePt.x}
+                  cy={livePt.y}
+                  r={S * 0.35}
+                  fill="var(--gold)"
+                  fillOpacity={0.25}
+                  stroke="var(--gold)"
+                  strokeWidth={2.5}
+                  pointerEvents="none"
+                />
+              )}
+            </>
+          );
+        })()}
+
+      {/* resources — a loadable one pulses and is the click target itself (no separate ring) */}
       {world && Object.entries(state.board.resources).map(([k, colour]) => {
         const [q, r] = k.split(",").map(Number) as [number, number];
         const { x, y } = px({ q, r });
+        const loadable = loadSet.has(k);
         return (
-          <g key={`res-${k}`} className="ore-chip">
+          <g key={`res-${k}`} className={`ore-chip${loadable ? " cell-hit pulse-avail" : ""}`}
+             onClick={loadable ? clicked(() => onCell({ q, r })) : undefined}
+             onMouseMove={loadable ? (e) => onTip("Load cargo", e) : undefined}
+             onMouseLeave={loadable ? (e) => onTip(null, e) : undefined}>
             <circle cx={x} cy={y} r={S * 0.42} fill={ORE_VAR[colour as OreColour]} stroke="rgba(0,0,0,0.4)" />
             <text x={x} y={y + 4} textAnchor="middle" fontSize={11} fontWeight={700} fill="rgba(0,0,0,0.55)">
               {state.config.modes.prospector.resources.values[colour as OreColour]}
@@ -297,16 +560,25 @@ export function Board({
         </g>
       )}
 
-      {/* ships — abstract marker: ring at current, dot at previous, line while in flight */}
+      {/* ships — abstract marker: ring at current, dot at previous, line while in flight.
+         attackable enemies and (post-move) your own ship pulse and are click targets. */}
       {world && state.players
-        .filter((p) => !p.eliminated)
+        .filter((p) => !p.eliminated && p.placed)
         .map((p) => {
           const isActive = p.id === state.activePlayerIndex;
+          const isAttackable = attackTargets.includes(p.id);
+          const isEndTurnShip = isActive && endTurnReady;
+          const interact = isAttackable
+            ? { tip: "Attack", onClick: clicked(() => onAttackTarget(p.id)) }
+            : isEndTurnShip
+              ? { tip: "End turn (own ship)", onClick: clicked(onEndTurn!) }
+              : null;
+          const pulse = isAttackable || isEndTurnShip;
           if (moveAnim && moveAnim.playerId === p.id) {
             const f = moveFrame(moveAnim, performance.now(), px);
             return (
               <ShipMarker key={`ship-${p.id}`} colour={p.colour} ring={f.ring} dot={f.dot}
-                tether={f.tether} active={isActive} />
+                tether={f.tether} active={isActive} pulse={pulse} interact={interact} onTip={onTip} />
             );
           }
           const ring = px(p.pose.current);
@@ -314,7 +586,7 @@ export function Board({
           const moving = !p.pose.atRest && !(dot.x === ring.x && dot.y === ring.y);
           return (
             <ShipMarker key={`ship-${p.id}`} colour={p.colour} ring={ring} dot={dot}
-              tether={moving ? [dot, ring] : null} active={isActive} />
+              tether={moving ? [dot, ring] : null} active={isActive} pulse={pulse} interact={interact} onTip={onTip} />
           );
         })}
 
@@ -348,56 +620,27 @@ export function Board({
         );
       })}
 
-      {/* load / launch markers (base picks are shown by the glowing hex itself) */}
-      {highlight.kind !== "base" && highlight.cells.map((hx) => {
+      {/* launch-cell markers: a blinking ship-coloured ring on each of the 4 base cells —
+         the ship itself isn't drawn anywhere until one is picked */}
+      {highlight.kind === "place" && highlight.cells.map((hx) => {
         const { x, y } = px(hx);
+        // "place" only ever shows once real players exist
+        const col = SHIP_BOARD_VAR[active!.colour];
+        const hi = SHIP_BOARD_HI_VAR[active!.colour];
         return (
-          <circle
-            key={`hi-${hexKey(hx)}`}
-            cx={x}
-            cy={y}
-            r={S * 0.5}
-            fill="none"
-            stroke={highlight.kind === "load" ? "var(--ok)" : "var(--gold)"}
-            strokeWidth={2}
-            strokeDasharray={highlight.kind === "load" ? "4 3" : "3 3"}
-            className="cell-hit"
-            onClick={() => onCell(hx)}
-            onMouseEnter={() => onCellHover(hx)}
-            onMouseLeave={() => onCellHover(null)}
-          />
+          <g key={`hi-${hexKey(hx)}`} className="cell-hit"
+             onClick={clicked(() => onCell(hx))}
+             onMouseMove={(e) => onTip("Launch here", e)}
+             onMouseLeave={(e) => onTip(null, e)}>
+            <circle cx={x} cy={y} r={S * 0.42} fillOpacity={0.12} strokeWidth={2.4}
+              className="ship-blink" style={{ "--blink-normal": col, "--blink-hi": hi } as CSSProperties} />
+          </g>
         );
       })}
 
-      {/* table furniture (ship panels, deck counts) — drawn on top so text stays legible */}
-      {world && <BaseInfo board={board} state={state} seats={seats} scores={scores} onTip={onTip} />}
+      {/* table furniture (ship panels) — drawn on top so text stays legible */}
+      {world && <BaseInfo board={board} state={state} seats={seats} scores={scores} onTip={onTip} rotation={rotation} />}
 
-      {/* guidance popup — what to do next, anchored in board space */}
-      {popup && <HexPopup center={popup.center} lines={popup.lines} />}
-
-      {/* radial action menu around the active ship */}
-      {radial.length > 0 && (
-        <g className="radial">
-          {radial.map((a, i) => {
-            // fan the chips across the top-right quadrant so they clear the piece & trail
-            const n = radial.length;
-            const spread = Math.min(150, 44 * Math.max(1, n - 1));
-            const ang = (-90 - (n > 1 ? spread / 2 : 0) + (n > 1 ? (spread * i) / (n - 1) : 0)) * (Math.PI / 180);
-            const R = S * 2.7;
-            const cx = activeAt.x + R * Math.cos(ang);
-            const cy = activeAt.y + R * Math.sin(ang);
-            return (
-              <g key={a.id} className={`chip ${a.kind ?? ""}`} onClick={a.onClick}>
-                <line x1={activeAt.x} y1={activeAt.y} x2={cx} y2={cy} className="chip-stem" />
-                <circle cx={cx} cy={cy} r={S * 0.92} />
-                <text x={cx} y={cy + 4} textAnchor="middle">
-                  {a.label}
-                </text>
-              </g>
-            );
-          })}
-        </g>
-      )}
     </svg>
       {tip && (
         <div className="board-tip" style={{ left: tip.x, top: tip.y }}>
@@ -405,9 +648,29 @@ export function Board({
         </div>
       )}
       <div className="zoomctl">
-        <button type="button" aria-label="zoom out" onClick={() => zoomBy(1 / 1.3)}>–</button>
-        <button type="button" aria-label="fit board" onClick={fit}>⤢</button>
-        <button type="button" aria-label="zoom in" onClick={() => zoomBy(1.3)}>+</button>
+        {/* real SVG icons, not text glyphs — a font's glyph sits wherever that font's own
+           baseline/descender metrics put it (never quite centred, and inconsistently so
+           across fonts/browsers); a plain shape in a fixed viewBox centres exactly */}
+        <button type="button" aria-label="rotate left" onClick={() => setRotation((r) => (r + 5) % 6)}>
+          <CtlIcon><path d="M3 12a9 9 0 1 0 3-6.7" /><polyline points="3 3 3 8 8 8" /></CtlIcon>
+        </button>
+        <button type="button" aria-label="rotate right" onClick={() => setRotation((r) => (r + 1) % 6)}>
+          <CtlIcon><path d="M21 12a9 9 0 1 1-3-6.7" /><polyline points="21 3 21 8 16 8" /></CtlIcon>
+        </button>
+        <button type="button" aria-label="zoom out" onClick={() => zoomBy(1 / 1.3)}>
+          <CtlIcon><line x1="5" y1="12" x2="19" y2="12" /></CtlIcon>
+        </button>
+        <button type="button" aria-label="fit board" onClick={fit}>
+          <CtlIcon>
+            <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+            <path d="M16 3h3a2 2 0 0 1 2 2v3" />
+            <path d="M21 16v3a2 2 0 0 1-2 2h-3" />
+            <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+          </CtlIcon>
+        </button>
+        <button type="button" aria-label="zoom in" onClick={() => zoomBy(1.3)}>
+          <CtlIcon><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></CtlIcon>
+        </button>
       </div>
     </div>
   );

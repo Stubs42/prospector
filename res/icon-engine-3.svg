@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 219.21 219.21">
+<g transform="translate(-457.321 -268.725)">
+<g transform="matrix(3.779513888888889 0 0 3.779513888888889 18.897697401543457 19.27747694086035)">
+<g id="g96">
+      <path style="fill:#666666;fill-opacity:1;stroke:none;stroke-width:7.06197;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1" d="m 170,69.999998 -30.99999,18.00001 13,13.000002 z" id="path5-96" class="icon-ship-neutral-fill"></path>
+      <g id="g72" class="icon-engine-fill">
+        <path style="fill:#ff0000;fill-opacity:1;stroke:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1" d="m 139.00001,90.000008 3,3 -22,19.000012 z" id="path9"></path>
+        <path style="fill:#ff0000;fill-opacity:1;stroke:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1" d="m 143.00001,94.000008 3,3 L 120,120 Z" id="path9-9"></path>
+        <path style="fill:#ff0000;fill-opacity:1;stroke:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1" d="m 147.00001,98.000008 3,3.000002 -22,19.00001 z" id="path9-65"></path>
+      </g>
+    </g>
+</g>
+</g>
+</svg>

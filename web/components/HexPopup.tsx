@@ -1,32 +1,37 @@
 /**
- * A hex-shaped guidance popup drawn in board space: a region of "radius 2" hexes,
- * so its six corners land exactly on cell centres and each edge spans two cells.
- * Position is caller-chosen (centre cell), so it can follow the action around the
- * board. Non-interactive — it only tells the player what to do next.
+ * A guidance popup: usually just a message (non-interactive) — pass `actions` to turn it
+ * into a small confirm dialog instead. A fixed screen overlay (see `.actionbox` in
+ * styles.css), not board content — it used to be drawn in board space, anchored to a cell
+ * near the ship/base it was about, but that put it inside the same pan/zoom transform as
+ * the board itself: zooming in or out inflated or shrank it right along with the cells, and
+ * panning could carry it out of view entirely. Living outside that transform, like the
+ * zoom controls or the status panel, is what actually fixes it.
  */
-import { add, scale, DIRECTIONS } from "../../engine/hex.js";
-import type { Hex } from "../../engine/index.js";
-import { axialToPixel } from "./hexpx.js";
+import { ActionBox, HexButton } from "./ActionBox.js";
 
-export function HexPopup({ center, lines }: { center: Hex; lines: string[] }) {
-  const pts = DIRECTIONS.map((d) => {
-    const p = axialToPixel(add(center, scale(d, 2)));
-    return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;
-  }).join(" ");
-  const o = axialToPixel(center);
-  const lh = 17;
-  const y0 = o.y - ((lines.length - 1) * lh) / 2;
+export interface HexPopupAction {
+  label: string;
+  kind?: "primary" | "danger";
+  onClick: () => void;
+}
 
+export function HexPopup({ lines, actions }: { lines: string[]; actions?: HexPopupAction[] | undefined }) {
   return (
-    <g className="hexpopup" pointerEvents="none">
-      <polygon points={pts} />
-      <text x={o.x} y={y0} textAnchor="middle" dominantBaseline="middle">
-        {lines.map((ln, i) => (
-          <tspan key={i} x={o.x} dy={i === 0 ? 0 : lh}>
-            {ln}
-          </tspan>
-        ))}
-      </text>
-    </g>
+    <ActionBox>
+      {lines.map((ln, i) => (
+        <div key={i} className="actionbox-line">
+          {ln}
+        </div>
+      ))}
+      {!!actions?.length && (
+        <div className="actionbox-buttons">
+          {actions.map((a, i) => (
+            <HexButton key={i} kind={a.kind} onClick={a.onClick}>
+              {a.label}
+            </HexButton>
+          ))}
+        </div>
+      )}
+    </ActionBox>
   );
 }

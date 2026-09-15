@@ -41,7 +41,9 @@ export function formatLogEntry(state: GameState, e: Entry): string {
     case "delivered":
       return `${col(d.player)} delivers ${(d.tiles as string[]).join(", ")}`;
     case "equipped":
-      return `${col(d.player)} installs equipment`;
+      return d.stat
+        ? `${col(d.player)} installs +${d.amount} ${d.stat}`
+        : `${col(d.player)} installs equipment`;
     case "shipLost":
       return `${col(d.player)} loses the ship (${d.reason})`;
     case "shipEliminated":

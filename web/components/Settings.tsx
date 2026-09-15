@@ -25,6 +25,16 @@ export function Settings({ prefs, onChange }: { prefs: Prefs; onChange: (p: Pref
       </button>
       {open && (
         <div className="settings-panel" role="menu">
+          <div className="settings-row">
+            <span>Your name</span>
+            <input
+              type="text"
+              maxLength={16}
+              placeholder="Player"
+              value={prefs.playerName}
+              onChange={(e) => set("playerName", e.target.value)}
+            />
+          </div>
           <label>
             <input
               type="checkbox"

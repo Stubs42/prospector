@@ -55,7 +55,7 @@ function run(s: GameState, a: Action): GameState {
 
 describe("full attack through the reducer", () => {
   it("adjacent ships fight and the winner takes a resource", () => {
-    let s = createGame({ seed: 2, colours: ["black", "white"], startPlayer: 0 });
+    let s = createGame({ seed: 2, colours: ["black", "white"], startPlayer: 0, upgradeAtStart: "none" });
     // stage: put black (attacker) next to white (defender); white carries red; black lasers=2.
     s.players[0]!.pose = { current: { q: 0, r: 0 }, previous: { q: 0, r: 0 }, atRest: true };
     s.players[1]!.pose = { current: { q: 1, r: 0 }, previous: { q: 1, r: 0 }, atRest: true };

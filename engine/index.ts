@@ -7,12 +7,14 @@ import {
   statsOf,
   score,
   provideGameData,
+  setupLegalActions,
+  equipmentRerollEligible,
   type CreateGameOptions,
 } from "./game.js";
-import { movementInputs } from "./ship.js";
+import { movementInputs, canEquip } from "./ship.js";
 import type { Action, GameState, PlayerState } from "./types.js";
 
-export { createGame, applyAction, score, statsOf, boardFor, provideGameData };
+export { createGame, applyAction, score, statsOf, boardFor, provideGameData, equipmentRerollEligible, canEquip };
 export type { Hex } from "./hex.js";
 export type { GameState, Action, PlayerState, CreateGameOptions };
 export * from "./types.js";
@@ -39,6 +41,7 @@ export interface LegalOpts {
 }
 
 export function legalActions(state: GameState, opts?: LegalOpts): Action[] {
+  if (state.setup) return setupLegalActions(state);
   if (state.gameOver) return [];
   const board = boardFor(state);
   const p = state.players[state.activePlayerIndex]!;
@@ -64,6 +67,20 @@ export function legalActions(state: GameState, opts?: LegalOpts): Action[] {
     return out2;
   }
 
+  if (state.pendingEquipment) {
+    const pe = state.pendingEquipment;
+    const caps = state.config.modes.prospector.upgradeCaps;
+    const stats = statsOf(state, state.players[pe.playerId]!);
+    // a maxed stat's card is never a legal pick (offerEquipment already keeps an ALL-maxed
+    // offer from ever being shown at all, but a partial mix — e.g. 2 of 3 maxed — can still
+    // reach here, and each of those 2 must be excluded individually)
+    const out: Action[] = pe.cards
+      .filter((c) => canEquip(stats, c.stat, caps))
+      .map((c) => ({ type: "chooseEquipment", cardId: c.id }));
+    if (equipmentRerollEligible(pe)) out.push({ type: "rerollEquipment" });
+    return out;
+  }
+
   const out: Action[] = [];
   const resources = new Set(Object.keys(state.board.resources));
   const otherCurrents = state.players
@@ -76,13 +93,19 @@ export function legalActions(state: GameState, opts?: LegalOpts): Action[] {
   };
 
   if (state.phase === "start") {
+    if (!p.turn.boosterDrawn && !p.placed) {
+      // all four base cells are genuine choices — the ship isn't shown anywhere until one is picked
+      for (const c of board.baseCells(p.homeBase)) out.push({ type: "placeShip", cell: c });
+    }
+    // voluntary scrap is available any time during the move, once the ship is launched
+    if (p.placed && state.config.core.turn.allowScrapBeforeDraw) out.push({ type: "scrapShip" });
+    // a reserve-fuel card can be played the instant it's useful — any time before this
+    // turn's move is settled, not staged/armed like an engine booster
+    if (p.placed && !p.turn.moved && p.fuel < p.fuelMax) {
+      for (const c of p.hand) if (c.type === "reserveFuel") out.push({ type: "useReserveFuel", cardId: c.id });
+    }
+
     if (!p.turn.boosterDrawn) {
-      if (!p.placed) {
-        for (const c of board.baseCells(p.colour)) {
-          if (!hexEq(c, p.pose.current)) out.push({ type: "placeShip", cell: c });
-        }
-      }
-      if (state.config.core.turn.allowScrapBeforeDraw) out.push({ type: "scrapShip" });
       out.push({ type: "drawBooster" });
       return out;
     }
@@ -106,9 +129,12 @@ export function legalActions(state: GameState, opts?: LegalOpts): Action[] {
       const stepBudget = Math.min(cap, hardCap) + freeCells;
       const fuelBudget = Math.min(p.fuel + Math.max(0, opts?.extraFuel ?? 0), p.fuelMax);
 
-      // A burn may turn. BFS over inner cells for the shortest (= cheapest) path to each;
-      // it flies OVER other ships, so they don't block the path — only the destination
-      // must be a clear cell. Resources and the field edge still wall it off.
+      // A burn may turn and may pass through outer cells — and resource/ship-occupied
+      // cells — on its way in; only the destination must be inner and clear (matches
+      // movement.ts's burn(), which only checks offField for intermediate cells, and inner
+      // + isFreeAt for the LAST path cell only). Flying over an obstacle instead of being
+      // walled off by it means a target's reachability is just its real hex distance, never
+      // inflated by however many extra steps a detour around that obstacle would need.
       const startKey = hexKey(p.pose.current);
       const depth = new Map<string, number>([[startKey, 0]]);
       const parent = new Map<string, Hex>();
@@ -119,7 +145,7 @@ export function legalActions(state: GameState, opts?: LegalOpts): Action[] {
         if (d >= stepBudget) continue;
         for (const nb of board.neighbours(cell)) {
           const k = hexKey(nb);
-          if (depth.has(k) || !board.isInner(nb) || resources.has(k)) continue;
+          if (depth.has(k) || board.offField(nb)) continue;
           depth.set(k, d + 1);
           parent.set(k, cell);
           queue.push(nb);
@@ -127,17 +153,19 @@ export function legalActions(state: GameState, opts?: LegalOpts): Action[] {
       }
       for (const [k, d] of depth) {
         if (d === 0) continue;
+        const cell = parseHexKey(k);
+        if (!board.isInner(cell)) continue; // a burn must end on an inner cell
         if (d - Math.min(d, freeCells) > fuelBudget) continue; // can't fuel it
-        if (!isFree(parseHexKey(k))) continue; // can't come to rest on another ship
+        if (!isFree(cell)) continue; // can't come to rest on another ship
         const path: Hex[] = [];
-        for (let node: Hex | undefined = parseHexKey(k); node && hexKey(node) !== startKey; node = parent.get(hexKey(node))) {
+        for (let node: Hex | undefined = cell; node && hexKey(node) !== startKey; node = parent.get(hexKey(node))) {
           path.unshift(node);
         }
         out.push({ type: "burn", path });
       }
       // endMove is legal when the move settled cleanly, OR as the "ship lost" escape when a
       // mandatory burn cannot be afforded / reached.
-      if (!p.turn.mustBurn || out.length === 0) out.push({ type: "endMove" });
+      if (!p.turn.mustBurn || !out.some((a) => a.type === "burn")) out.push({ type: "endMove" });
       return out;
     }
     out.push({ type: "endMove" });
@@ -197,8 +225,23 @@ export const greedyBot: Bot = (state, rng) => {
   const board = boardFor(state);
   const byType = (t: Action["type"]) => acts.filter((a) => a.type === t);
 
+  // homecoming upgrade pick: take the biggest bump, avoiding a stat already at its cap
+  const eq = byType("chooseEquipment") as Extract<Action, { type: "chooseEquipment" }>[];
+  if (eq.length && state.pendingEquipment) {
+    const caps = state.config.modes.prospector.upgradeCaps;
+    const cur = statsOf(state, p);
+    const cardOf = (id: string) => state.pendingEquipment!.cards.find((c) => c.id === id)!;
+    const worth = (id: string) => {
+      const c = cardOf(id);
+      const cap = caps[c.stat];
+      const room = cap === undefined ? c.amount : Math.max(0, cap - cur[c.stat]);
+      return Math.min(c.amount, room);
+    };
+    return eq.reduce((b, a) => (worth(a.cardId) > worth(b.cardId) ? a : b));
+  }
+
   const carrying = p.cargo.length > 0;
-  const onOwnBase = board.baseOwnerAt(p.pose.current) === p.colour;
+  const onOwnBase = board.baseOwnerAt(p.pose.current) === p.homeBase;
   const stranded =
     p.pose.atRest && p.fuel === 0 && !onOwnBase && !p.hand.some((c) => c.type === "reserveFuel");
 
@@ -225,7 +268,7 @@ export const greedyBot: Bot = (state, rng) => {
   const reserveFuelIds =
     p.fuel <= 3 ? p.hand.filter((c) => c.type === "reserveFuel").map((c) => c.id) : [];
 
-  const baseCells = board.baseCells(p.colour);
+  const baseCells = board.baseCells(p.homeBase);
   const baseKeys = new Set(baseCells.map(hexKey));
   const home = baseCells[0]!;
   const resourceCells = Object.keys(state.board.resources).map(parseHexKey);

@@ -1,0 +1,798 @@
+/**
+ * The real, in-progress game — everything App.tsx used to render once state.setup is null.
+ * Split out (same reason as SetupScreen) so its hooks (notably the move-log below) can run
+ * unconditionally: a component only mounts once state.players is actually populated, so
+ * there's no nullable-`p` juggling to do here at all.
+ */
+import { useEffect, useRef, useState } from "react";
+import { score } from "../../engine/index.js";
+import { boardFor } from "../../engine/game.js";
+import { add, hexKey, scale } from "../../engine/hex.js";
+import type { Colour, Hex } from "../../engine/index.js";
+import { Board } from "./Board.js";
+import { HandPanel, type PanelButton } from "./HandPanel.js";
+import { CombatBox, type CombatBoxProps, type CombatCardChip } from "./CombatBox.js";
+import { EquipmentPopup } from "./EquipmentPopup.js";
+import { HexPopup } from "./HexPopup.js";
+import { LogOverlay } from "./LogOverlay.js";
+import { Settings } from "./Settings.js";
+import { StatusPanel } from "./StatusPanel.js";
+import { DeckPanels } from "./DeckPanels.js";
+import type { Prefs } from "../prefs.js";
+import { buildSpinSchedule, runSpinSchedule, SkipGate } from "../spin.js";
+import { theme } from "../theme.js";
+import type { Session } from "../useSession.js";
+
+/** how many lines of "what happened this move" the status panel keeps before trimming */
+const MOVE_LOG_CAP = 10;
+
+/** the 6 coordinate-die colours, in the fixed order the wheel-spin candidates are laid out */
+const ALL_COLOURS: Colour[] = ["black", "red", "blue", "white", "green", "yellow"];
+
+export function GameScreen({
+  s,
+  prefs,
+  setPrefs,
+  reducedMotion,
+}: {
+  s: Session;
+  prefs: Prefs;
+  setPrefs: (p: Prefs) => void;
+  reducedMotion: boolean;
+}) {
+  const [hoverCell, setHoverCell] = useState<Hex | null>(null);
+  const [logOpen, setLogOpen] = useState(false);
+  const [scrapConfirmOpen, setScrapConfirmOpen] = useState(
+    () => typeof location !== "undefined" && new URLSearchParams(location.search).get("scrap") === "1",
+  );
+
+  const { state, seats, afford, activeIsBot, isWaitingOnBot, needPassGate, driftGhost } = s;
+  const { armed, combatSel, attackTarget } = s.staging;
+  const dispatch = s.dispatch;
+
+  const pc = state.pendingCombat;
+  const p = state.players[state.activePlayerIndex]!;
+  const board = boardFor(state);
+  const mode = state.config.modes.prospector;
+  const sc = score(state);
+
+  // whichever "everything's already decided, this is just cosmetic suspense" animation is
+  // currently playing (resource placement, the combat dice reveal) — clicking anywhere on
+  // the board fast-forwards it straight to its already-known result, see spin.ts's SkipGate
+  const skipGateRef = useRef<SkipGate | null>(null);
+  const onSkipAnimation = () => skipGateRef.current?.skip();
+
+  // --- resource placement reveal: initial game-open seeding AND every later re-seed -------
+  // (a homecoming delivery seeds one new tile per resource delivered — see arriveHomeBaseIfAny
+  // in engine/game.ts) share the exact same "system is placing a tile" animation. The engine
+  // already placed each tile atomically the instant it happened; this only replays its own
+  // coordinate-dice roll (resourceSeeded log entries) as three separate spins: a rotating
+  // mark cycles around the origin and settles on a point (a dot), then cycles around THAT dot
+  // and settles on a second dot, then cycles around THAT dot and settles on the final cell —
+  // never showing all 6 candidates at once, just the live mark, a line back to its round's
+  // center, and the growing dot-and-line path behind it. The whole path disappears the
+  // instant the tile is actually placed. Detected by watching state.log.length grow (like the
+  // combat-dice reveal below), not just once at mount, so it also fires for a mid-game
+  // re-seed — nobody's turn while it plays — "the system" is doing this — so the normal
+  // auto-draw/bot timers are held off the whole time (see useSession's holdAdvance) and the
+  // status panel shows a placeholder identity.
+  // how much of the log has already been turned into a finished reveal — React STATE, not a
+  // ref: a ref would advance the instant the effect body below runs, even if that particular
+  // run gets torn down right away (react-strict-mode's dev-only double-invoke of a fresh
+  // effect does exactly this) — leaving the *next* (kept) run seeing nothing left to animate
+  // and the whole reveal stuck on whatever single tick the aborted run managed to draw. State
+  // only advances once a run actually finishes uncancelled, so a StrictMode remount just
+  // replays the same batch from scratch instead of silently dropping it.
+  const [seedProcessed, setSeedProcessed] = useState(0);
+  // cells that are ALREADY placed in real engine state but not yet revealed on screen —
+  // hidden from `displayState` below until their own spin lands (initial seeding hides
+  // every starting tile at once; a homecoming re-seed only ever hides the 1-2 new ones,
+  // every pre-existing tile on the board stays visible the whole time)
+  const [hiddenSeeds, setHiddenSeeds] = useState<Set<string>>(new Set());
+  const [spinPath, setSpinPath] = useState<{ dots: Hex[]; live: Hex | null } | null>(null);
+  const [placing, setPlacing] = useState(() => state.log.some((l) => l.event === "resourceSeeded"));
+  useEffect(() => {
+    const newEntries = state.log.slice(seedProcessed).filter((l) => l.event === "resourceSeeded");
+    if (newEntries.length === 0) return;
+    setHiddenSeeds(
+      new Set(newEntries.map((e) => hexKey((e.detail as { cell: Hex }).cell))),
+    );
+    setPlacing(true);
+    s.setHoldAdvance(true);
+    let cancelled = false;
+    const gate = new SkipGate();
+    skipGateRef.current = gate;
+    // spins all 3 rounds (ring 3, 2, 1) for one tile, each round taking the same real time
+    // (theme.spin.resourceDurationMs split evenly in 3) and each independently decelerating
+    // fast-to-slow — see spin.ts's buildSpinSchedule, shared with every other lucky-wheel
+    // spin in the app. Every wait goes through `gate`, so a click anywhere on the board
+    // (see onSkipAnimation) jumps straight through the rest of it to the real result.
+    const spinAllThree = async (dice: { step: number; colour: Colour }[]): Promise<void> => {
+      // the 3 rounds' candidates/target/center are already fully determined (the dice
+      // are the real, already-decided result) — precompute them all up front so the
+      // animation is just replaying a known sequence
+      let pt: Hex = { q: 0, r: 0 };
+      let dotsSoFar: Hex[] = [pt];
+      const rounds = dice.map((die) => {
+        const candidates = ALL_COLOURS.map((c) => add(pt, scale(board.directionOf(c), die.step)));
+        const targetIndex = ALL_COLOURS.indexOf(die.colour);
+        const dotsPrefix = dotsSoFar;
+        pt = candidates[targetIndex]!;
+        dotsSoFar = [...dotsSoFar, pt];
+        return { candidates, targetIndex, dotsPrefix };
+      });
+      if (reducedMotion) {
+        setSpinPath({ dots: dotsSoFar, live: null });
+        await gate.wait(40);
+        return;
+      }
+      const n = ALL_COLOURS.length;
+      const perRoundMs = theme.spin.resourceDurationMs / rounds.length;
+      // one continuous fast->slow curve spans all 3 rounds — round i covers the slice of
+      // that curve from t=i/3 to t=(i+1)/3, so round 2 picks up exactly as fast/slow as
+      // round 1 left off (no reset to fast at each round's start), while each round still
+      // gets an equal time share (perRoundMs) by deriving its own tick count to fit it
+      const delayAt = (t: number) => theme.spin.startIntervalMs + t * t * (theme.spin.endIntervalMs - theme.spin.startIntervalMs);
+      for (let roundIdx = 0; roundIdx < rounds.length; roundIdx++) {
+        if (cancelled) return;
+        const { candidates, targetIndex, dotsPrefix } = rounds[roundIdx]!;
+        const schedule = buildSpinSchedule(n, targetIndex, {
+          startMs: delayAt(roundIdx / rounds.length),
+          endMs: delayAt((roundIdx + 1) / rounds.length),
+          totalMs: perRoundMs,
+        });
+        await runSpinSchedule(schedule, (i) => setSpinPath({ dots: dotsPrefix, live: candidates[i]! }), () => cancelled, gate);
+        if (cancelled) return;
+        const landed = candidates[targetIndex]!;
+        const isLastRound = roundIdx + 1 >= rounds.length;
+        // no pause here at all — the next round's own spin starts immediately, right from
+        // the point this one just landed on, so the whole 3-round reveal reads as one
+        // unbroken motion. The very last round clears the live mark, since nothing spins
+        // again after it.
+        setSpinPath({ dots: [...dotsPrefix, landed], live: isLastRound ? null : landed });
+      }
+    };
+    (async () => {
+      for (const entry of newEntries) {
+        const d = entry.detail as { cell: Hex; dice: { step: number; colour: Colour }[] };
+        const dice = [...d.dice].sort((a, b) => b.step - a.step); // coarse to fine: ring 3, 2, 1
+        await spinAllThree(dice);
+        if (cancelled) return;
+        await gate.wait(reducedMotion ? 20 : 250); // let the finished path linger a beat
+        setHiddenSeeds((h) => {
+          const n = new Set(h);
+          n.delete(hexKey(d.cell));
+          return n;
+        });
+        setSpinPath(null);
+        await gate.wait(reducedMotion ? 20 : 200);
+      }
+      if (!cancelled) {
+        setPlacing(false);
+        setSeedProcessed(state.log.length);
+        s.setHoldAdvance(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (skipGateRef.current === gate) skipGateRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.log.length, seedProcessed]);
+  const displayState = hiddenSeeds.size
+    ? {
+        ...state,
+        board: {
+          resources: Object.fromEntries(Object.entries(state.board.resources).filter(([k]) => !hiddenSeeds.has(k))),
+        },
+      }
+    : state;
+
+  // --- combat: animated dice reveal ---------------------------------------------------
+  // combatResolve already rolled both dice atomically (see engine/game.ts's combatResolve)
+  // — this only stages their *reveal*, one at a time (attack settles, then defence), off
+  // the exact numbers already logged (attackSucceeded/attackFailed). Nothing about the
+  // outcome changes here; holdAdvance just stops the bot timer / auto-actions from racing
+  // past the animation once pendingCombat has already moved on (cleared, or to "counter").
+  interface CombatReveal {
+    attackerId: number;
+    defenderId: number;
+    attackDie: number;
+    defenceDie: number;
+    attackTotal: number;
+    defenceTotal: number;
+    attackerWins: boolean;
+    spoil: string | null;
+    attackFace: number;
+    attackSettled: boolean;
+    defenceFace: number;
+    defenceSettled: boolean;
+    showOutcome: boolean;
+  }
+  const [combatReveal, setCombatReveal] = useState<CombatReveal | null>(null);
+  const combatLogLen = useRef(state.log.length);
+  useEffect(() => {
+    if (state.log.length <= combatLogLen.current) {
+      combatLogLen.current = state.log.length;
+      return;
+    }
+    const entry = state.log[state.log.length - 1]!;
+    combatLogLen.current = state.log.length;
+    if (entry.event !== "attackSucceeded" && entry.event !== "attackFailed") return;
+    const d = entry.detail as {
+      attacker: number;
+      defender: number;
+      attackDie: number;
+      defenceDie: number;
+      attackTotal: number;
+      defenceTotal: number;
+      spoil?: string | null;
+    };
+    s.setHoldAdvance(true);
+    let cancelled = false;
+    const gate = new SkipGate();
+    skipGateRef.current = gate;
+    setCombatReveal({
+      attackerId: d.attacker,
+      defenderId: d.defender,
+      attackDie: d.attackDie,
+      defenceDie: d.defenceDie,
+      attackTotal: d.attackTotal,
+      defenceTotal: d.defenceTotal,
+      attackerWins: entry.event === "attackSucceeded",
+      spoil: d.spoil ?? null,
+      attackFace: 1,
+      attackSettled: false,
+      defenceFace: 1,
+      defenceSettled: false,
+      showOutcome: false,
+    });
+    // cycles random faces, ease-out deceleration, landing on `real` on the last tick —
+    // same shape as every other lucky-wheel spin, just over 1-6 faces instead of cells.
+    // Every wait goes through `gate`, so a click anywhere on the board (onSkipAnimation)
+    // jumps straight to the real roll — it was already decided the instant combat
+    // resolved, this is purely the reveal.
+    const spin = async (real: number, apply: (face: number, settled: boolean) => void): Promise<void> => {
+      if (reducedMotion) {
+        apply(real, true);
+        await gate.wait(40);
+        return;
+      }
+      const ticks = 14;
+      for (let k = 0; k < ticks; k++) {
+        if (cancelled) return;
+        const last = k === ticks - 1;
+        apply(last ? real : 1 + Math.floor(Math.random() * 6), last);
+        const t = k / (ticks - 1);
+        await gate.wait(last ? 400 : 40 + t * t * 160);
+      }
+    };
+    (async () => {
+      await spin(d.attackDie, (face, settled) =>
+        setCombatReveal((cr) => (cr ? { ...cr, attackFace: face, attackSettled: settled } : cr)),
+      );
+      if (cancelled) return;
+      await spin(d.defenceDie, (face, settled) =>
+        setCombatReveal((cr) => (cr ? { ...cr, defenceFace: face, defenceSettled: settled } : cr)),
+      );
+      if (cancelled) return;
+      setCombatReveal((cr) => (cr ? { ...cr, showOutcome: true } : cr));
+      await gate.wait(reducedMotion ? 30 : 1100);
+      if (cancelled) return;
+      setCombatReveal(null);
+      s.setHoldAdvance(false);
+    })();
+    return () => {
+      cancelled = true;
+      if (skipGateRef.current === gate) skipGateRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.log.length]);
+
+  const anim = s.animLive; // a move is actively playing — hold back prompts/targets
+  const suppress = anim || scrapConfirmOpen || placing; // also true while placing / the scrap dialog is up
+  const interactive = !activeIsBot && !needPassGate;
+  const overLimit = afford.overLimit;
+  // turn 1: the ship must be placed on a base cell before anything else
+  const launchPhase = interactive && !pc && afford.placeCells.length > 0;
+
+  // --- start-of-game "random" upgrade: auto-spin, then dispatch chooseEquipment ---------
+  // Same "already decided, just cosmetic suspense" lucky-wheel as SetupScreen's own "Random"
+  // base/ship picks: cycles the highlight through the 3 candidates, decelerating, and lands
+  // on whichever one it's about to dispatch itself — a bot's own "random" (or "select") draw
+  // never reaches here at all, it resolves invisibly via the existing stepBot policy, same as
+  // any homecoming choice a bot makes today.
+  const [equipSpinId, setEquipSpinId] = useState<string | null>(null);
+  const equipSpinStarted = useRef(false);
+  useEffect(() => {
+    const pe = state.pendingEquipment;
+    if (!pe || pe.reason !== "start" || pe.mode !== "random" || !interactive) {
+      equipSpinStarted.current = false;
+      return;
+    }
+    if (equipSpinStarted.current) return;
+    equipSpinStarted.current = true;
+    s.setHoldAdvance(true);
+    let cancelled = false;
+    const gate = new SkipGate();
+    skipGateRef.current = gate;
+    (async () => {
+      const cards = pe.cards;
+      const targetIdx = Math.floor(Math.random() * cards.length);
+      const ticks = cards.length * 2 + 6; // a couple of laps, then a settling lap onto target
+      for (let k = 0; k < ticks; k++) {
+        if (cancelled) return;
+        const stepsFromEnd = ticks - 1 - k;
+        const idx = ((targetIdx - stepsFromEnd) % cards.length + cards.length) % cards.length;
+        setEquipSpinId(cards[idx]!.id);
+        const last = k === ticks - 1;
+        const t = k / (ticks - 1);
+        await gate.wait(last ? 450 : 70 + t * t * 260); // ease-out: fast, then slow to a stop
+      }
+      if (cancelled) return;
+      if (skipGateRef.current === gate) skipGateRef.current = null;
+      setEquipSpinId(null);
+      dispatch({ type: "chooseEquipment", cardId: cards[targetIdx]!.id });
+      s.setHoldAdvance(false);
+    })();
+    return () => {
+      cancelled = true;
+      if (skipGateRef.current === gate) skipGateRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.pendingEquipment, interactive]);
+
+  // --- hand / combat card helpers -----------------------------------
+  // whoever is actually making the current decision — the attacker/mover normally, the
+  // *defender* while combat is waiting on them (their shields, their counter-attack call),
+  // or the attacker again while the dice reveal plays out (pendingCombat may have already
+  // moved on by then, so the reveal snapshot takes priority). Drives the status panel's
+  // identity/log — that must always reflect whoever is actually acting, bot included.
+  const activeMover = combatReveal
+    ? state.players[combatReveal.attackerId]!
+    : pc && (pc.awaiting === "defend" || pc.awaiting === "counter")
+      ? state.players[pc.defenderId]!
+      : p;
+  // the hand PANEL's owner: activeMover, unless that's a bot and we're playing solo (one
+  // human, the rest bots) — solo, your own hand stays visible the whole time (a real board
+  // game's hand doesn't vanish while the other players take their turns), so it falls back
+  // to the sole human's hand instead of hiding outright while a bot acts. In real hot-seat
+  // (2+ humans) this never applies — another human's hand must stay hidden on a bot's turn
+  // exactly like before.
+  const soloHumanId = s.humans === 1 ? seats.indexOf("human") : -1;
+  const handOwner = seats[activeMover.id] === "bot" && soloHumanId >= 0 ? state.players[soloHumanId]! : activeMover;
+  const handHidden = seats[handOwner.id] === "bot";
+
+  // --- status panel: who's doing what, and a running log of their move ---------------
+  const actionLabel: string =
+    state.gameOver ? "Game over"
+    : combatReveal ? "Rolling for combat"
+    : pc?.awaiting === "defend" ? "Defending"
+    : pc?.awaiting === "resolve" ? "Rolling for combat"
+    : pc?.awaiting === "counter" ? "Deciding a counter-attack"
+    : attackTarget !== null ? "Attacking"
+    : afford.equipmentChoice ? "Choosing an upgrade"
+    : overLimit ? "Discarding a card"
+    : launchPhase ? "Picking a launch cell"
+    : !p.turn.boosterDrawn ? "Drawing a card"
+    : !p.turn.driftDone ? "Drifting"
+    : !p.turn.moved ? "Deciding a burn"
+    : !p.turn.postMoveActionTaken ? "Deciding next move"
+    : "Ending turn";
+
+  // a "move" is one player's whole turn, start to end — combat sub-decisions (the defender's
+  // shields, their counter-attack call) happen *within* it, so the log key is the turn owner
+  // (activePlayerIndex), not `handOwner`, even though the identity line above can briefly
+  // switch to the defender while it's their call
+  const [moveLog, setMoveLog] = useState<string[]>([actionLabel]);
+  const moveKey = useRef(`${state.turnNumber}-${state.activePlayerIndex}`);
+  useEffect(() => {
+    const key = `${state.turnNumber}-${state.activePlayerIndex}`;
+    if (moveKey.current !== key) {
+      moveKey.current = key;
+      setMoveLog([actionLabel]);
+    } else {
+      setMoveLog((log) => (log[log.length - 1] === actionLabel ? log : [...log, actionLabel].slice(-MOVE_LOG_CAP)));
+    }
+  }, [state.turnNumber, state.activePlayerIndex, actionLabel]);
+
+  const canRefuel = (id: string) => afford.legal.some((a) => a.type === "useReserveFuel" && a.cardId === id);
+  const cardState = (id: string) => {
+    const c = handOwner.hand.find((x) => x.id === id)!;
+    let onClick: (() => void) | undefined;
+    if (overLimit) onClick = () => dispatch({ type: "discardBooster", cardId: id });
+    // reserve fuel isn't armed for a later burn — it's used up the instant it's clicked
+    else if (inBurnPhase && c.type === "reserveFuel" && canRefuel(id))
+      onClick = () => dispatch({ type: "useReserveFuel", cardId: id });
+    else if (inBurnPhase && c.type === "engine") onClick = () => s.toggleArmed(id);
+    else if (combatCardType && c.type === combatCardType) onClick = () => s.toggleCombatSel(id);
+    const pulse: "urgent" | "new" | "ready" | null = overLimit
+      ? "urgent"
+      : s.newCardIds.has(id)
+        ? "new"
+        : onClick
+          ? "ready"
+          : null;
+    return { clickable: !!onClick, selected: armed.has(id) || combatSel.has(id), onClick, pulse };
+  };
+  const inBurnPhase =
+    !activeIsBot && !pc && state.phase === "start" && p.turn.driftDone && !p.turn.moved && !overLimit;
+  const combatCardType: "laser" | "shield" | null =
+    pc?.awaiting === "defend" && seats[pc.defenderId] === "human"
+      ? "shield"
+      : (pc?.awaiting === "counter" && seats[pc.defenderId] === "human") || (!pc && attackTarget !== null)
+        ? "laser"
+        : null;
+  const pickedIds = (type: "laser" | "shield") =>
+    handOwner.hand.filter((c) => c.type === type && combatSel.has(c.id)).map((c) => c.id);
+  const selSum = (type: "laser" | "shield") =>
+    handOwner.hand
+      .filter((c) => c.type === type && combatSel.has(c.id))
+      .reduce((a, c) => a + (c.value ?? 0), 0);
+  const hyperspaceId = state.players[pc?.defenderId ?? -1]?.hand.find((c) => c.type === "hyperspace")?.id;
+
+  // whether THIS hand (not just any hand) has a freshly-drawn card — matters now that
+  // handOwner can be the solo human while a bot (whose own draw also touches newCardIds) is
+  // the one actually acting; a bot's own new card must never force the human's hand open
+  const handHasNewCard = handOwner.hand.some((c) => s.newCardIds.has(c.id));
+  // `overLimit` (afford.overLimit) is only ever meaningful for state.activePlayerIndex — a
+  // bot's own over-limit moment (before its auto-discard resolves) must never force the
+  // solo human's collapsed hand open, same reasoning as handHasNewCard above
+  const handOwnerOverLimit = overLimit && handOwner.id === state.activePlayerIndex;
+  const showCards =
+    !handHidden &&
+    handOwner.hand.length > 0 &&
+    (handOwnerOverLimit || inBurnPhase || combatCardType !== null || handHasNewCard);
+  const cardHint = overLimit
+    ? null // the centred hex popup carries this message instead
+    : inBurnPhase && p.hand.some((c) => c.type === "engine" || c.type === "reserveFuel")
+      ? "Tap an engine card to arm it for this burn, or a reserve-fuel card to refuel now."
+      : combatCardType === "shield"
+        ? "Tap shield cards to add to your defence."
+        : combatCardType === "laser"
+          ? "Tap laser cards to add to your attack."
+          : null;
+
+  // --- combat / bottom-panel buttons -------------------------------
+  const combatTitle = pc
+    ? `${pc.round > 1 ? "Counter-attack — " : ""}${mode.ships[state.players[pc.attackerId]!.colour].name} attacks ${
+        mode.ships[state.players[pc.defenderId]!.colour].name
+      }`
+    : attackTarget !== null
+      ? `Attacking ${mode.ships[state.players[attackTarget]!.colour].name}`
+      : null;
+  const combatSub = pc
+    ? `attack ${afford.combat?.attackLasers} laser + d6  vs  defence ${afford.combat?.defenceShields} shield + d6`
+    : attackTarget !== null
+      ? "Pick laser boosters, then declare."
+      : null;
+
+  const buttons: PanelButton[] = [];
+  if (pc && pc.awaiting === "defend" && seats[pc.defenderId] === "human") {
+    buttons.push({
+      label: `Stand${pickedIds("shield").length ? ` (+${selSum("shield")})` : ""}`,
+      kind: "primary",
+      onClick: () => dispatch({ type: "combatDefend", shieldBoosters: pickedIds("shield") }),
+    });
+    if (hyperspaceId)
+      buttons.push({ label: "Flee (hyperspace)", onClick: () => dispatch({ type: "combatDefend", hyperspaceBoosterId: hyperspaceId }) });
+  } else if (pc && pc.awaiting === "resolve" && (seats[pc.attackerId] === "human" || seats[pc.defenderId] === "human")) {
+    buttons.push({ label: "Roll the dice", kind: "primary", onClick: () => dispatch({ type: "combatResolve" }) });
+  } else if (pc && pc.awaiting === "counter" && seats[pc.defenderId] === "human") {
+    if (afford.counterAttack)
+      buttons.push({
+        label: `Counter-attack${pickedIds("laser").length ? ` (+${selSum("laser")})` : ""}`,
+        kind: "danger",
+        onClick: () => dispatch({ ...afford.counterAttack!, laserBoosters: pickedIds("laser") }),
+      });
+    buttons.push({ label: "Decline", onClick: () => dispatch({ type: "declineCounter" }) });
+  } else if (!pc && attackTarget !== null) {
+    buttons.push({
+      label: `Declare attack${pickedIds("laser").length ? ` (+${selSum("laser")})` : ""}`,
+      kind: "danger",
+      onClick: () =>
+        dispatch({ type: "attack", targetPlayerId: attackTarget, laserBoosters: pickedIds("laser") }),
+    });
+    buttons.push({ label: "Cancel", onClick: () => s.setAttackTarget(null) });
+  }
+
+  // a staged laser/shield leaves the hand row entirely and shows up here instead — clicking
+  // it here (instead of in hand) is the undo: back into combatSel-less, back into the hand row
+  const combatCards: CombatCardChip[] = combatCardType
+    ? handOwner.hand
+        .filter((c) => c.type === combatCardType && combatSel.has(c.id))
+        .map((c) => ({ id: c.id, type: combatCardType, value: c.value ?? 0, onClick: () => s.toggleCombatSel(c.id) }))
+    : [];
+
+  // the combat box replaces the plain guidance popup while a fight is staging, resolving,
+  // or being revealed — a fixed overlay (see HexPopup's note), not anchored to any ship
+  const combatBox: CombatBoxProps | null = combatReveal
+    ? {
+        title: `${mode.ships[state.players[combatReveal.attackerId]!.colour].name} attacks ${
+          mode.ships[state.players[combatReveal.defenderId]!.colour].name
+        }`,
+        cards: [],
+        buttons: [],
+        roll: {
+          attack: { value: combatReveal.attackFace, settled: combatReveal.attackSettled, total: combatReveal.attackTotal },
+          defence: combatReveal.attackSettled
+            ? { value: combatReveal.defenceFace, settled: combatReveal.defenceSettled, total: combatReveal.defenceTotal }
+            : null,
+          outcome: combatReveal.showOutcome
+            ? combatReveal.attackerWins
+              ? `Hit! Takes${combatReveal.spoil ? ` a ${combatReveal.spoil} resource` : " nothing (empty hold)"}`
+              : "Missed!"
+            : null,
+        },
+      }
+    : combatTitle
+      ? {
+          title: combatTitle,
+          sub: combatSub,
+          cards: combatCards,
+          buttons,
+        }
+      : null;
+
+  // the equipment popup replaces the plain guidance popup while a choice (homecoming, or the
+  // start-of-game upgrade) is pending for the deciding human — a bot's own pending choice of
+  // either kind never reaches here, it resolves invisibly via stepBot's greedy policy
+  const equipBox =
+    interactive && afford.equipmentChoice
+      ? {
+          title:
+            afford.equipmentChoice.reason === "homecoming"
+              ? "Delivered — choose an upgrade"
+              : afford.equipmentChoice.mode === "random"
+                ? "Rolling for a starting upgrade…"
+                : "Choose a starting upgrade",
+          options: afford.equipmentChoice.cards.map((c) => ({
+            id: c.id,
+            stat: c.stat,
+            amount: c.amount,
+            // a maxed stat's card is filtered out of afford.legal (see legalActions) but
+            // still shown here, dimmed — the offer isn't rewritten to hide it
+            disabled: !afford.legal.some((a) => a.type === "chooseEquipment" && a.cardId === c.id),
+          })),
+          spinningId: equipSpinId,
+          // no onChoose while the random spin is animating — it's not clickable, just a reveal
+          onChoose:
+            afford.equipmentChoice.reason === "start" && afford.equipmentChoice.mode === "random"
+              ? undefined
+              : (id: string) => dispatch({ type: "chooseEquipment", cardId: id }),
+          // same "no interaction while spinning" rule applies to the reroll button
+          canReroll:
+            afford.canRerollEquipment &&
+            !(afford.equipmentChoice.reason === "start" && afford.equipmentChoice.mode === "random"),
+          onReroll: () => dispatch({ type: "rerollEquipment" }),
+        }
+      : null;
+
+  // --- board-native action targets ---------------------------------
+  // Every clickable option is shown on the thing it acts on, pulsing gently, rather than as
+  // a separate button: a resource pulses when loadable, an enemy ship pulses when attackable,
+  // and your own ship pulses to end the turn. An action about to auto-fire on its own
+  // (drawBooster, drift, a forced endTurn, ...) never gets a pulse first — that would just be
+  // a flash before it vanishes again.
+  const autoPendingType = s.autoAction?.type ?? null;
+  const noStagingPending = !pc && attackTarget === null;
+
+  // "coast" (endMove) is the green circle on the ship's own cell, mid-move
+  const coastAction =
+    interactive && noStagingPending && !overLimit && autoPendingType !== "endMove"
+      ? afford.plainActions.find((a) => a.type === "endMove") ?? null
+      : null;
+  const onCoast = coastAction ? () => dispatch(coastAction) : null;
+
+  // post-move: load a resource (pulses the ore chip), attack (pulses the enemy ring),
+  // end turn (pulses your own ring) — all can be available at once
+  const boardActive = interactive && noStagingPending && !suppress;
+  const endTurnAction = boardActive ? afford.plainActions.find((a) => a.type === "endTurn") ?? null : null;
+  const endTurnReady = !!endTurnAction && autoPendingType !== "endTurn";
+  const onEndTurn = endTurnAction ? () => dispatch(endTurnAction) : null;
+
+  // --- board affordances ------------------------------------------
+  const highlight: { cells: Hex[]; kind: "place" | "base" | null } = afford.placeCells.length
+    ? { cells: afford.placeCells, kind: "place" }
+    : { cells: [], kind: null };
+  // loadable resources pulse the ore chip itself instead of a separate ring
+  const loadCellsForBoard = boardActive ? afford.loadCells : [];
+  const attackTargets = boardActive ? afford.attackTargetIds : [];
+  const onAttackTarget = (id: number) => s.setAttackTarget(id);
+
+  // guidance popup: where the next action is, and what it is — a fixed overlay (see
+  // HexPopup's note), not anchored to any board cell any more
+  const popup: { lines: string[] } | null = launchPhase
+    ? { lines: ["Select your", "launch cell"] }
+    : interactive && overLimit
+      ? { lines: ["Too many cards!", "Discard one to continue"] }
+      : null;
+
+  // clicking your own base (off a burn target) asks to scrap — available any time during the move
+  const scrapCells = interactive && !pc && attackTarget === null && !launchPhase ? board.baseCells(p.homeBase) : [];
+  const scrapConfirm =
+    scrapConfirmOpen && scrapCells.length
+      ? {
+          lines: ["So you really want to", "scrap your ship?"],
+          onYes: () => {
+            dispatch({ type: "scrapShip" });
+            setScrapConfirmOpen(false);
+          },
+          onCancel: () => setScrapConfirmOpen(false),
+        }
+      : null;
+
+  // space cancels the scrap confirm — Cancel is the safe default
+  useEffect(() => {
+    if (!scrapConfirm) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code === "Space" || e.key === " ") {
+        e.preventDefault();
+        scrapConfirm.onCancel();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [scrapConfirm]);
+
+  const burnPreview = s.burnPreviewFor(hoverCell);
+  function onCell(h: Hex) {
+    const k = hexKey(h);
+    if (afford.placeCells.some((c) => hexKey(c) === k)) return dispatch({ type: "placeShip", cell: h });
+    if (afford.loadCells.some((c) => hexKey(c) === k)) return dispatch({ type: "loadResource", from: h });
+    const bt = afford.burnTargets.find((b) => hexKey(b.cell) === k);
+    if (bt) return s.dispatchBurn({ type: "burn", path: bt.path });
+    // your own base, and not a burn target right now (arriving home is not scrapping)
+    if (scrapCells.some((c) => hexKey(c) === k)) setScrapConfirmOpen(true);
+  }
+
+  return (
+    <div className="app board-only">
+      <div className="topbar">
+        <h1>Prospector</h1>
+        <span className="turn">turn {state.turnNumber}</span>
+        <span className="spacer" />
+        <button className="ghost" onClick={() => setLogOpen(true)} title="History">
+          🕘 log
+        </button>
+        <label className="turn">
+          humans{" "}
+          <select
+            value={s.humans}
+            onChange={(e) => {
+              const h = Number(e.target.value);
+              s.openSetup(h, Math.min(s.bots, 6 - h));
+            }}
+          >
+            {[1, 2, 3, 4, 5, 6].map((n) => (
+              <option key={n} value={n} disabled={n + s.bots > 6 || n + s.bots < 2}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="turn">
+          bots{" "}
+          <select value={s.bots} onChange={(e) => s.openSetup(s.humans, Number(e.target.value))}>
+            {[0, 1, 2, 3, 4, 5].map((n) => (
+              <option key={n} value={n} disabled={s.humans + n < 2 || s.humans + n > 6}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="turn">
+          upgrade at start{" "}
+          <select
+            value={s.upgradeAtStart}
+            onChange={(e) => s.openSetup(s.humans, s.bots, e.target.value as "none" | "random" | "select")}
+          >
+            <option value="none">NONE</option>
+            <option value="random">RANDOM</option>
+            <option value="select">SELECT</option>
+          </select>
+        </label>
+        <Settings prefs={prefs} onChange={setPrefs} />
+        <button onClick={() => s.openSetup()}>New game</button>
+      </div>
+
+      <div className="stage">
+        <Board
+          state={displayState}
+          seats={seats}
+          scores={sc.byPlayer}
+          highlight={suppress ? { cells: [], kind: null } : interactive ? highlight : { cells: [], kind: null }}
+          spinPath={spinPath}
+          loadCells={loadCellsForBoard}
+          burnTargets={interactive && !suppress ? afford.burnTargets : []}
+          driftGhost={interactive && !suppress ? driftGhost : null}
+          burnPreview={interactive && !suppress ? burnPreview : null}
+          onCoast={suppress ? null : onCoast}
+          scrapCells={anim ? [] : scrapCells}
+          attackTargets={attackTargets}
+          onAttackTarget={onAttackTarget}
+          endTurnReady={endTurnReady}
+          onEndTurn={onEndTurn}
+          world
+          reducedMotion={reducedMotion}
+          moveAnim={s.moveAnim}
+          onMoveAnimEnd={s.endMoveAnim}
+          onCell={onCell}
+          onCellHover={setHoverCell}
+          onSkipAnimation={placing || combatReveal || equipSpinId ? onSkipAnimation : null}
+        />
+
+        {/* guidance popup / combat box: fixed overlays, like the zoom controls or the status
+           panel — outside the board's own pan/zoom transform, so they never collide with it */}
+        {!suppress && popup && <HexPopup lines={popup.lines} />}
+        {!suppress && combatBox && <CombatBox {...combatBox} />}
+        {!suppress && !combatBox && equipBox && <EquipmentPopup {...equipBox} />}
+        {scrapConfirm && (
+          <div className="board-scrim" onClick={scrapConfirm.onCancel}>
+            <div onClick={(e) => e.stopPropagation()}>
+              <HexPopup
+                lines={scrapConfirm.lines}
+                actions={[
+                  { label: "Cancel", kind: "primary", onClick: scrapConfirm.onCancel },
+                  { label: "Yes", kind: "danger", onClick: scrapConfirm.onYes },
+                ]}
+              />
+            </div>
+          </div>
+        )}
+
+        {placing ? (
+          <StatusPanel colour={null} name="⚙ System" bot={false} log={["Placing resources"]} system />
+        ) : (
+          <StatusPanel
+            colour={activeMover.colour}
+            name={s.names[activeMover.id] ?? "?"}
+            bot={seats[activeMover.id] === "bot"}
+            log={moveLog}
+          />
+        )}
+        <DeckPanels state={state} />
+        {isWaitingOnBot && !activeIsBot && <div className="board-toast">🤖 waiting on the bot…</div>}
+        {state.gameOver && (
+          <div className="board-toast win">
+            Game over — winner: <b>{sc.winnerIds.map((i) => state.players[i]!.colour).join(", ")}</b>
+          </div>
+        )}
+
+        <HandPanel
+          // a staged laser/shield moved into the combat box above — it no longer shows here
+          cards={
+            handHidden
+              ? []
+              : handOwner.hand.filter((c) => !(combatCardType && c.type === combatCardType && combatSel.has(c.id)))
+          }
+          cardHint={cardHint}
+          cardState={cardState}
+          urgent={handOwnerOverLimit}
+          forceOpen={showCards}
+          ownerId={handOwner.id}
+        />
+      </div>
+
+      {logOpen && <LogOverlay state={state} onClose={() => setLogOpen(false)} />}
+
+      {needPassGate && (
+        <div className="pass">
+          <div className="sub">pass the device to</div>
+          <div className="who">
+            <span className="pill">
+              <i
+                className="swatch"
+                style={{ background: `var(--ship-${p.colour})`, width: "1.4rem", height: "1.4rem" }}
+              />
+              {s.names[p.id] ?? "?"} · {p.colour}
+            </span>
+          </div>
+          <button className="primary" onClick={s.revealTurn}>
+            Start turn {state.turnNumber}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}

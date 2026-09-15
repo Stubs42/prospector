@@ -1,28 +1,23 @@
 /**
  * One colour per ship aspect, shared everywhere the aspect shows up: the base
  * info-cells on the board, booster cards, and (later) equipment/upgrade cards.
- * Keep these hexes in sync with the `.card.booster-*` borders in styles.css.
+ * The actual colour values live in theme.ts (edit them there) — the `.card.booster-*`
+ * borders in styles.css read the same values via the `--aspect-*` custom properties
+ * theme.ts's applyTheme sets, so there's only one place to change a colour.
  */
 import type { StatKey } from "../../engine/index.js";
+import { theme } from "../theme.js";
 
-export const ASPECT_FILL: Record<StatKey, string> = {
-  engines: "#c8483b", // red
-  cargo: "#3f9f63", // green (freight)
-  lasers: "#8a929b", // steel grey
-  shields: "#e9e9e9", // white
-  fuelTanks: "#3f74c9", // blue
-  booster: "#d9b53c", // yellow (cards)
-};
+const aspectKeys = Object.keys(theme.colors.aspect) as StatKey[];
+
+export const ASPECT_FILL: Record<StatKey, string> = Object.fromEntries(
+  aspectKeys.map((k) => [k, theme.colors.aspect[k].fill]),
+) as Record<StatKey, string>;
 
 /** readable text colour on top of a solid ASPECT_FILL swatch */
-export const ASPECT_INK: Record<StatKey, string> = {
-  engines: "#ffffff",
-  cargo: "#08130c",
-  lasers: "#0c1013",
-  shields: "#1a1a1a",
-  fuelTanks: "#ffffff",
-  booster: "#1a1400",
-};
+export const ASPECT_INK: Record<StatKey, string> = Object.fromEntries(
+  aspectKeys.map((k) => [k, theme.colors.aspect[k].ink]),
+) as Record<StatKey, string>;
 
 export const ASPECT_LABEL: Record<StatKey, string> = {
   engines: "engines",
@@ -33,14 +28,14 @@ export const ASPECT_LABEL: Record<StatKey, string> = {
   booster: "cards",
 };
 
-/** 3-letter tag printed on the board token */
+/** tag printed on the board token — full words, more readable than a 3-letter abbreviation */
 export const ASPECT_TAG: Record<StatKey, string> = {
-  engines: "ENG",
-  cargo: "FRT",
-  lasers: "LAS",
-  shields: "SHD",
-  fuelTanks: "FUE",
-  booster: "CRD",
+  engines: "ENGINE",
+  cargo: "CARGO",
+  lasers: "LASER",
+  shields: "SHIELD",
+  fuelTanks: "TANK",
+  booster: "HAND",
 };
 
 /** left-to-right order of the six stat cells around a base */
