@@ -226,8 +226,10 @@ export const randomBot: Bot = (state, rng) => {
 /**
  * A competent-but-simple heuristic: hunt the nearest resource, and once loaded (or low on
  * fuel) head home to deliver. Aims each burn to end adjacent to a resource (to load) or on
- * a base cell (to deliver + brake), while damping leftover velocity so it can stop. Never
- * starts combat.
+ * a base cell (to deliver + brake), while damping leftover velocity so it can stop.
+ * Household fuel proactively (refuel and turn for home before the tank is empty, not
+ * after), gives up a ship that genuinely can't make it home any more, and — mixed in with
+ * loading — occasionally raids an adjacent carrier for its cargo.
  */
 export const greedyBot: Bot = (state, rng) => {
   const acts = legalActions(state);
@@ -251,12 +253,22 @@ export const greedyBot: Bot = (state, rng) => {
   }
 
   const carrying = p.cargo.length > 0;
+  const baseCells = board.baseCells(p.homeBase);
+  const baseKeys = new Set(baseCells.map(hexKey));
+  const home = baseCells[0]!;
+  const homeDistFrom = (h: Hex) => Math.min(...baseCells.map((c) => distance(h, c)));
   const onOwnBase = board.baseOwnerAt(p.pose.current) === p.homeBase;
-  const stranded =
-    p.pose.atRest && p.fuel === 0 && !onOwnBase && !p.hand.some((c) => c.type === "reserveFuel");
+  const homeDist = homeDistFrom(p.pose.current);
+  const hasReserveCard = p.hand.some((c) => c.type === "reserveFuel");
+  // "stranded" used to mean only a literal empty tank — broadened to "the fuel in the tank
+  // can't cover the distance home even in a straight line", which is the actual question a
+  // player asks before deciding to keep pushing on. Carrying cargo no longer exempts a
+  // ship from this: a scrap re-rolls that cargo back into play (mode.shipLoss.rerollCargo)
+  // rather than losing it, which beats it sitting forever aboard a ship that can never
+  // reach home anyway.
+  const stranded = p.pose.atRest && !onOwnBase && !hasReserveCard && p.fuel < homeDist;
 
-  // give up a hopelessly stranded, empty ship — it refits at base
-  if (byType("scrapShip").length && !carrying && stranded) return { type: "scrapShip" };
+  if (byType("scrapShip").length && stranded) return { type: "scrapShip" };
   const draw = byType("drawBooster")[0];
   if (draw) return draw;
 
@@ -273,14 +285,14 @@ export const greedyBot: Bot = (state, rng) => {
   const drift = byType("drift")[0];
   if (drift) return drift;
 
-  // head home as soon as anything is aboard, or when fuel is getting low
-  const goHome = carrying || p.fuel <= 3;
-  const reserveFuelIds =
-    p.fuel <= 3 ? p.hand.filter((c) => c.type === "reserveFuel").map((c) => c.id) : [];
+  // head home once anything is aboard, or once the tank can no longer be trusted to cover
+  // the trip back from here — not a flat "<=3" any more, so a ship that strays far while
+  // hunting still turns for home in time instead of running the tank dry out in the field
+  const fuelMargin = 1; // a little slack so it doesn't shave things razor-thin
+  const fuelLow = p.fuel <= homeDist + fuelMargin;
+  const goHome = carrying || fuelLow;
+  const reserveFuelIds = fuelLow ? p.hand.filter((c) => c.type === "reserveFuel").map((c) => c.id) : [];
 
-  const baseCells = board.baseCells(p.homeBase);
-  const baseKeys = new Set(baseCells.map(hexKey));
-  const home = baseCells[0]!;
   const resourceCells = Object.keys(state.board.resources).map(parseHexKey);
   const targets = goHome ? baseCells : resourceCells;
   // when hunting, lock onto the resource nearest HOME (a fixed reference) so the target
@@ -308,7 +320,7 @@ export const greedyBot: Bot = (state, rng) => {
 
   if (burns.length || endMove) {
     const goal = nearest();
-    const scoreDest = (dest: Hex): number => {
+    const scoreDest = (dest: Hex, fuelSpent: number): number => {
       if (goHome && baseKeys.has(hexKey(dest))) return -1000; // land on base: deliver + brake
       if (!goHome && board.neighbours(dest).some((n) => state.board.resources[hexKey(n)])) {
         return -100; // end adjacent to a resource: can load this turn
@@ -316,13 +328,18 @@ export const greedyBot: Bot = (state, rng) => {
       const d = goal ? distance(dest, goal) : 0;
       const speed = distance(dest, p.pose.previous); // leftover velocity after this move
       const runaway = board.isOuter(dest) ? 40 : 0; // don't coast into the outer ring
+      // fuel household: while still hunting (not already heading home), a destination that
+      // would leave less fuel in the tank than the trip home from THERE costs is a real
+      // risk of getting stranded next turn — a soft penalty, not a hard ban, so it can
+      // still take that gamble when nothing safer is on offer
+      const overextends = !goHome && p.fuel - fuelSpent < homeDistFrom(dest) ? 50 : 0;
       // progress first, but always keep some brake pressure so it can actually stop —
       // then brake hard once we're basically there
-      return d * 6 + speed * 2 + (d <= 3 ? speed * 4 : 0) + runaway;
+      return d * 6 + speed * 2 + (d <= 3 ? speed * 4 : 0) + runaway + overextends;
     };
     type Opt = { action: Action; score: number };
-    const opts: Opt[] = burns.map((a) => ({ action: a, score: scoreDest(a.path[a.path.length - 1]!) }));
-    if (endMove) opts.push({ action: endMove, score: scoreDest(p.pose.current) });
+    const opts: Opt[] = burns.map((a) => ({ action: a, score: scoreDest(a.path[a.path.length - 1]!, a.path.length) }));
+    if (endMove) opts.push({ action: endMove, score: scoreDest(p.pose.current, 0) });
     if (opts.length) return withFuel(opts.reduce((b, o) => (o.score < b.score ? o : b)).action);
   }
 
@@ -338,7 +355,20 @@ export const greedyBot: Bot = (state, rng) => {
     if (best) return { type: "burn", path: [best], reserveFuelBoosters: reserveFuelIds };
   }
 
+  // post-move: load if there's ore in reach, or occasionally raid a neighbour's hold
+  // instead — a coin-flip against loading (when both are on offer) keeps this "sometimes",
+  // not a reflex; when only a target is available (nothing to load) it always takes the
+  // free shot. Plain attacks only (no laser-boost spend) — a simple bot risking its whole
+  // hand on a raid would be worse than just never attacking at all.
   const loads = byType("loadResource") as Extract<Action, { type: "loadResource" }>[];
+  const attacks = byType("attack") as Extract<Action, { type: "attack" }>[];
+  if (attacks.length) {
+    const values = state.config.modes.prospector.resources.values;
+    const richestSpoil = (targetId: number): number =>
+      state.players[targetId]!.cargo.reduce((m, c) => Math.max(m, values[c] ?? 0), 0);
+    const bestAttack = attacks.reduce((b, a) => (richestSpoil(a.targetPlayerId) > richestSpoil(b.targetPlayerId) ? a : b));
+    if (!loads.length || rng.next() < 0.4) return bestAttack;
+  }
   if (loads.length) {
     const values = state.config.modes.prospector.resources.values;
     return loads.reduce((b, a) =>
