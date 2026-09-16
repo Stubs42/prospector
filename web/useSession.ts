@@ -319,6 +319,19 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
         ),
       };
     }
+    if (qs.get("playedcard") === "1") {
+      // DEBUG ONLY — preview the open discard pile showing a real top card
+      const card = s.decks.booster.draw[0];
+      if (card) {
+        s = {
+          ...s,
+          decks: {
+            ...s.decks,
+            booster: { draw: s.decks.booster.draw.slice(1), discard: [...s.decks.booster.discard, card] },
+          },
+        };
+      }
+    }
     if (qs.get("gameover") === "1") {
       // DEBUG ONLY — preview the game-over ranking popup: a tied pair (identical score AND
       // identical per-colour counts, to check the "share the rank" path), a same-score

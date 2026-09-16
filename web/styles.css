@@ -86,7 +86,7 @@ body {
 /* collapsed: title/turn/toggle only, on one thin row — reclaims vertical space on a small
    phone screen. The spacer still pushes the toggle to the far right either way. */
 .topbar.collapsed { flex-wrap: nowrap; }
-.topbar-toggle { flex: 0 0 auto; line-height: 1; }
+.topbar-toggle { flex: 0 0 auto; line-height: 1; font-size: 1.7rem; padding: 0.1rem 0.7rem; }
 
 button {
   font: inherit;
@@ -146,10 +146,34 @@ button.danger { border-color: #6a3a2f; }
 /* the 4 shared deck piles — fixed screen overlays (see DeckPanels.tsx), same family as
    .status-panel: top-right mirrors its top-left identity panel (booster deck), lower-right
    sits clear of both .zoomctl and .handpanel (bottom-left). */
-.deck-panel, .supply-panel { position: absolute; z-index: 20; display: flex; gap: 8px; pointer-events: none; }
+.deck-panel, .supply-panel { position: absolute; z-index: 20; pointer-events: none; }
 .deck-panel { right: 12px; top: 12px; }
-.supply-panel { right: 12px; bottom: 14px; }
-.deckcard-orerow { display: flex; gap: 0.4em; font-weight: 800; }
+/* stacked, not side by side — ore above upgrades, both frames the same width (set inline
+   from theme.cards.boosterWidth in DeckPanels.tsx) so they line up as one column */
+.supply-panel { right: 12px; bottom: 14px; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+
+/* one common frame around a pair of card stacks (the booster draw + discard pair; each side
+   of the supply panel individually) — background/border live here, not on the card art
+   itself, so the draw-count caption can sit below the card but still visually "inside" it */
+.deck-panel, .supply-frame {
+  display: flex; gap: 10px; padding: 7px 9px;
+  background: rgba(10, 20, 15, 0.9); border: 1px solid var(--line); border-radius: 8px;
+}
+/* .supply-frame's width is set inline as a CONTENT width (to match a booster card exactly)
+   — box-sizing:border-box (the project-wide default) would instead shrink the content area
+   by the padding, undersizing it */
+.supply-frame { box-sizing: content-box; justify-content: center; }
+.deckstack { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.deckstack-caption { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
+.deckstack-label { font-size: 0.6rem; letter-spacing: 0.05em; color: var(--muted); text-transform: uppercase; }
+.deckstack-value { font-size: 0.82rem; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* the ore-not-yet-in-play readout: plain coloured dots, not a card — there's no "back" to a
+   pile of loose ore tokens, so a card-back frame never fit here the way it does the other 3 */
+.ore-dots { display: flex; gap: 10px; align-items: flex-end; }
+.ore-col { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.ore-dot { width: 15px; height: 15px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.25); }
+.ore-count { font-size: 0.82rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 
 .board-tip {
   position: absolute; z-index: 30; pointer-events: none;
@@ -209,6 +233,9 @@ button.danger { border-color: #6a3a2f; }
   .handpanel { height: auto; min-height: 166px; }
   .handpanel.open .handpanel-body { max-width: calc(100vw - 90px); }
   .handpanel-cards { zoom: 0.55; }
+  /* same treatment for the booster/upgrade deck stacks and the ore readout — half size so
+     they take up less of a small screen */
+  .deck-panel, .supply-frame { zoom: 0.6; }
 }
 /* explicit reset against the global `button` rule (styles.css ~L87) — that rule's own
    background/border would otherwise show through on this borderless, backgroundless toggle,
@@ -541,6 +568,9 @@ button.hexbutton {
   transition: transform 0.15s ease;
 }
 .card-art-wrap.picked { outline: 2px solid var(--gold); outline-offset: 1px; }
+/* the discard pile before anything's been played — same box as a real card, dashed instead
+   of a solid card-back so it reads as "nothing here yet" rather than an actual card */
+.card-art-wrap.empty-slot { border: 2px dashed var(--line); background: rgba(255, 255, 255, 0.02); }
 /* same "lift on hover" affordance as EquipmentPopup's .equip-card-wrap — playable cards
    only (a card you can't act on right now shouldn't invite a click) */
 .card-art-wrap.clickable:hover, .card.clickable:hover { transform: translateY(-3px); }
