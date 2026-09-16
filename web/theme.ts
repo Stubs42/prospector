@@ -269,10 +269,10 @@ export const theme: Theme = {
     aspect: {
       engines: { fill: "#c8483b", ink: "#ffffff" },
       cargo: { fill: "#3f9f63", ink: "#08130c" },
-      lasers: { fill: "#8a929b", ink: "#0c1013" },
+      lasers: { fill: "#d9b53c", ink: "#1a1400" },
       shields: { fill: "#e9e9e9", ink: "#1a1a1a" },
       fuelTanks: { fill: "#3f74c9", ink: "#ffffff" },
-      booster: { fill: "#d9b53c", ink: "#1a1400" },
+      booster: { fill: "#8a929b", ink: "#0c1013" },
     },
     ui: {
       panel: "#17251f",
@@ -379,7 +379,7 @@ export const theme: Theme = {
     animMs: 450,
   },
   actionBox: {
-    bgOpacity: 0.6,
+    bgOpacity: 0.5,
     borderStrokeWidth: 1,
     dropShadow: "0 10px 22px rgba(0, 0, 0, 0.55)",
     button: {
