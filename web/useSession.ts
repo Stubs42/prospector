@@ -23,6 +23,7 @@ import { legalActions } from "../engine/index.js";
 import { deriveMoveAnim, coastAnim, type MoveAnim } from "./anim.js";
 import { movePhaseMs, type Prefs } from "./prefs.js";
 import { randomBotName } from "./nameGen.js";
+import { logPose } from "./poseLog.js";
 
 // human seats are a live sentinel (null), resolved against prefs.playerName on every render
 // so changing "your name" in Settings takes effect immediately without touching bot names;
@@ -143,6 +144,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     const cur = stateRef.current;
     const r = applyAction(cur, a);
     if (r.ok) {
+      if (!cur.setup) logPose("dispatch", a.type, cur, r.state);
       let anim = deriveMoveAnim(cur, r.state, phaseMs, moveAnim);
       // coasting ends the move without a burn — slide the held drift to its target
       if (!anim && a.type === "endMove" && moveAnim?.kind === "drift" && moveAnim.playerId === cur.activePlayerIndex) {
@@ -240,6 +242,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     const id = setTimeout(() => {
       const cur = stateRef.current; // see stateRef's note above dispatch — same race guard
       const next = stepBot(cur, botRng.current);
+      logPose("bot", "bot", cur, next);
       let anim = deriveMoveAnim(cur, next, phaseMs, moveAnim);
       if (!anim && moveAnim?.kind === "drift") anim = coastAnim(moveAnim); // bot coasted out of the drift
       playAnim(anim);
