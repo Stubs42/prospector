@@ -207,12 +207,26 @@ export function UpgradeCardArt({ stat, amount }: UpgradeCardArtProps) {
 }
 
 /** a face-down card, real art — the deck-panel stacks (DeckPanels.tsx) use these instead of
-   a plain CSS placeholder */
+   a plain CSS placeholder. The booster back's star (.icon-card-fill) and the upgrade back's
+   cone (.icon-ship-neutral-fill) are themed to the "booster" aspect colour with a light-to-
+   dark sweep (see styles.css's ".card-art-back" rules) instead of their raw flat grey/gold —
+   the gradient stops are defined here (a fixed, shared id; harmless if this ever renders
+   twice at once — SVG tolerates a duplicate id, both resolve to the same colours anyway)
+   rather than in the CSS itself, since CSS can't reference a runtime theme colour inside an
+   SVG gradient stop the way it can a plain `fill`. */
 export function CardBackArt({ square }: { square?: boolean | undefined }) {
   const w = square ? theme.cards.upgradeSize : theme.cards.boosterWidth;
   const h = square ? w : w / PORTRAIT_ASPECT;
   return (
-    <div className="card-art" style={{ position: "relative", width: w, height: h }}>
+    <div className="card-art card-art-back" style={{ position: "relative", width: w, height: h }}>
+      <svg width={0} height={0} style={{ position: "absolute" }} aria-hidden="true">
+        <defs>
+          <linearGradient id="grad-aspect-booster" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" style={{ stopColor: "color-mix(in srgb, var(--aspect-booster) 65%, white)" }} />
+            <stop offset="100%" style={{ stopColor: "color-mix(in srgb, var(--aspect-booster) 65%, black)" }} />
+          </linearGradient>
+        </defs>
+      </svg>
       <Layer box={FULL} svg={square ? CARD_ART.upgradeBack : CARD_ART.boosterBack} />
     </div>
   );
