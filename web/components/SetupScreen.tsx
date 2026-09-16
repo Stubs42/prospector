@@ -16,8 +16,8 @@ import { hexKey } from "../../engine/hex.js";
 import type { Colour, Hex } from "../../engine/index.js";
 import { Board } from "./Board.js";
 import { HexPopup } from "./HexPopup.js";
-import { Settings } from "./Settings.js";
 import { ShipPickerPopup } from "./ShipPickerPopup.js";
+import { Topbar } from "./Topbar.js";
 import { StatusPanel } from "./StatusPanel.js";
 import type { Prefs } from "../prefs.js";
 import { SkipGate } from "../spin.js";
@@ -239,50 +239,7 @@ export function SetupScreen({
 
   return (
     <div className="app board-only">
-      <div className="topbar">
-        <h1>Prospector</h1>
-        <span className="turn">new game</span>
-        <span className="spacer" />
-        <label className="turn">
-          humans{" "}
-          <select
-            value={s.humans}
-            onChange={(e) => {
-              const h = Number(e.target.value);
-              s.openSetup(h, Math.min(s.bots, 6 - h));
-            }}
-          >
-            {[1, 2, 3, 4, 5, 6].map((n) => (
-              <option key={n} value={n} disabled={n + s.bots > 6 || n + s.bots < 2}>
-                {n}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="turn">
-          bots{" "}
-          <select value={s.bots} onChange={(e) => s.openSetup(s.humans, Number(e.target.value))}>
-            {[0, 1, 2, 3, 4, 5].map((n) => (
-              <option key={n} value={n} disabled={s.humans + n < 2 || s.humans + n > 6}>
-                {n}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="turn">
-          upgrade at start{" "}
-          <select
-            value={s.upgradeAtStart}
-            onChange={(e) => s.openSetup(s.humans, s.bots, e.target.value as "none" | "random" | "select")}
-          >
-            <option value="none">NONE</option>
-            <option value="random">RANDOM</option>
-            <option value="select">SELECT</option>
-          </select>
-        </label>
-        <Settings prefs={prefs} onChange={setPrefs} />
-        <button onClick={() => s.openSetup()}>New game</button>
-      </div>
+      <Topbar s={s} prefs={prefs} setPrefs={setPrefs} turnLabel="new game" />
 
       <div className="stage">
         <Board
