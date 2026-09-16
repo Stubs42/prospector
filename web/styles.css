@@ -230,12 +230,21 @@ button.danger { border-color: #6a3a2f; }
    below, unlike a paint-only transform:scale) so more fit per row, and the panel grows
    taller instead of clipping once cards wrap to a 2nd/3rd row */
 @media (max-width: 480px) {
-  .handpanel { height: auto; min-height: 166px; }
+  /* auto-height only while OPEN, not unconditionally — .handpanel-body's cards keep
+     flex-wrap even while collapsed (max-width:0), so at that near-zero width every card
+     wraps onto its own row; that inflated (but invisible, opacity:0) content height would
+     otherwise leak into .handpanel's own auto height and made the collapsed bar randomly
+     taller depending on hand size. Collapsed keeps the fixed 166px from the base rule above. */
+  .handpanel.open { height: auto; min-height: 166px; }
   .handpanel.open .handpanel-body { max-width: calc(100vw - 90px); }
   .handpanel-cards { zoom: 0.55; }
   /* same treatment for the booster/upgrade deck stacks and the ore readout — half size so
      they take up less of a small screen */
   .deck-panel, .supply-frame { zoom: 0.6; }
+  /* ship-picker (setup) and the equipment-choice popup — same shrink, so a card offered for
+     selection doesn't dwarf the rest of a small phone screen the way a full-size one would */
+  .shippicker-row .card-art { zoom: 0.6; }
+  .equip-choice { zoom: 0.6; }
 }
 /* explicit reset against the global `button` rule (styles.css ~L87) — that rule's own
    background/border would otherwise show through on this borderless, backgroundless toggle,
