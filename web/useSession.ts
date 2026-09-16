@@ -150,7 +150,22 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
       if (!anim && a.type === "endMove" && moveAnim?.kind === "drift" && moveAnim.playerId === cur.activePlayerIndex) {
         anim = coastAnim(moveAnim);
       }
-      playAnim(anim);
+      if (anim) {
+        playAnim(anim);
+      } else if (a.type === "scrapShip" || r.state.activePlayerIndex !== cur.activePlayerIndex) {
+        // the held drift (if any) no longer applies once the ship is scrapped, or the turn
+        // moves on to someone else, without ever resolving it into a slide
+        playAnim(null);
+      }
+      // otherwise: this dispatch never touched anyone's pose (drawBooster, discardBooster,
+      // useReserveFuel, attack, combat sub-decisions, chooseEquipment, ...) — leave whatever
+      // drift is currently held exactly as it is. Calling playAnim(null) here used to wipe
+      // the hold's own p0/c0 the instant e.g. a reserve-fuel card was played mid-drift, so
+      // the burn dispatched right after it derived its slide from scratch (the ship's plain
+      // current pose) instead of continuing the drift's already-shown path — a phantom extra
+      // "drift" animation, whose end then snapped to the real position: exactly the shape of
+      // the long-suspected "prev position reverts" bug, even though the underlying state was
+      // correct throughout (see poseLog's own findings — it never caught a real data break).
       stateRef.current = r.state; // commit before setState, so a same-tick dispatch sees it too
       setState(r.state);
       clearStaging();
