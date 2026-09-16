@@ -330,9 +330,13 @@ export const greedyBot: Bot = (state, rng) => {
       const runaway = board.isOuter(dest) ? 40 : 0; // don't coast into the outer ring
       // fuel household: while still hunting (not already heading home), a destination that
       // would leave less fuel in the tank than the trip home from THERE costs is a real
-      // risk of getting stranded next turn — a soft penalty, not a hard ban, so it can
-      // still take that gamble when nothing safer is on offer
-      const overextends = !goHome && p.fuel - fuelSpent < homeDistFrom(dest) ? 50 : 0;
+      // risk of getting stranded next turn — a soft penalty, scaled to how big the shortfall
+      // actually is (not a flat cliff), so a ship only marginally over the safe line still
+      // makes real progress instead of freezing in place; goHome is the hard safety net that
+      // actually turns it around once the margin gets genuinely bad, this just nudges it
+      // toward the safer of otherwise-similar options
+      const deficit = goHome ? 0 : Math.max(0, homeDistFrom(dest) - (p.fuel - fuelSpent));
+      const overextends = deficit * 8;
       // progress first, but always keep some brake pressure so it can actually stop —
       // then brake hard once we're basically there
       return d * 6 + speed * 2 + (d <= 3 ? speed * 4 : 0) + runaway + overextends;
