@@ -57,6 +57,12 @@ export interface Affordances {
      still avoid that by widening the affordable range. A GUI's auto-advance must never fire
      that endMove on its own here — the player needs a real chance to play the card first. */
   avoidableShipLoss: boolean;
+  /** true when the ship is out of fuel and about to drift for that reason (drift is legal,
+     the tank is empty) while a reserve-fuel card in hand could top it up first and open up
+     real burn targets instead. Same rule as avoidableShipLoss: a GUI's auto-advance must
+     never fire that drift on its own — the player needs a real chance to play the card and
+     see burn options widen before committing to just drifting. */
+  avoidableZeroFuelDrift: boolean;
 }
 
 export interface AffordanceOpts {
@@ -111,6 +117,10 @@ export function affordances(state: GameState, opts: AffordanceOpts = {}): Afford
     avoidableShipLoss:
       !!state.players[state.activePlayerIndex]?.turn.mustBurn &&
       legal.some((a) => a.type === "endMove") &&
+      legal.some((a) => a.type === "useReserveFuel"),
+    avoidableZeroFuelDrift:
+      state.players[state.activePlayerIndex]?.fuel === 0 &&
+      legal.some((a) => a.type === "drift") &&
       legal.some((a) => a.type === "useReserveFuel"),
   };
 }

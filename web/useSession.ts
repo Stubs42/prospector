@@ -243,6 +243,9 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     // never auto-fire the "ship is lost" endMove while a reserve-fuel card could still save
     // it — see Affordances.avoidableShipLoss
     !afford.avoidableShipLoss &&
+    // never auto-fire an empty-tank drift while a reserve-fuel card could top it up and
+    // open real burn targets first — see Affordances.avoidableZeroFuelDrift
+    !afford.avoidableZeroFuelDrift &&
     autoCandidates.length === 1
       ? autoCandidates[0]!
       : null;
