@@ -3,79 +3,83 @@
  * persistent, always-in-the-same-place readout, not board content, so panning/zooming/
  * rotating the board never touches them): the booster deck (draw + discard/played) top
  * right, mirroring StatusPanel's top-left identity panel; the equipment ("upgrade") draw
- * pile and the ore not yet in play lower right. Each stack is real card-back art
- * (CardBackArt, see CardArt.tsx) — the booster pair portrait, the upgrade/ore pair square —
- * with a label/value overlay at the same position a real card face uses. The back art's own
- * "screen" runs bigger than a face's, covering most of the card, so the overlay text is
- * light (not the dark ink a face uses on its lighter frame margin).
+ * pile and the ore not yet in play lower right.
+ *
+ * Each stack is real card-back art (CardBackArt, see CardArt.tsx) EXCEPT the "played" pile,
+ * which is an open discard — it shows the actual top (most recently discarded) card's real
+ * face, not a generic backside, since that's genuinely known information. The draw counts
+ * live as a caption below the art, inside a shared frame, rather than overlaid on the card
+ * itself (which read as if it were printed on the card). The ore-not-yet-in-play readout
+ * isn't a card at all any more — just three coloured dots (one per ore colour) with their
+ * counts below, in a plain frame instead of a square card-back.
  */
-import type { GameState, OreColour } from "../../engine/index.js";
-import { ORE_VAR } from "./kit.js";
-import { CardBackArt, CardText, BOOSTER_LABEL, BOOSTER_VALUE, UPGRADE_LABEL, UPGRADE_VALUE } from "./CardArt.js";
-import { PORTRAIT_ASPECT } from "../cardAssets.js";
+import type { GameState } from "../../engine/index.js";
+import { ORE_VAR, BoosterCardFace } from "./kit.js";
+import { CardBackArt } from "./CardArt.js";
 import { theme } from "../theme.js";
 
-const OVERLAY_INK = "#e8efe9";
+const ORE_ORDER = ["green", "yellow", "red"] as const;
 
-function DeckStack({ square, label, value }: { square?: boolean; label: string; value: React.ReactNode }) {
-  const labelPt = square ? UPGRADE_LABEL : BOOSTER_LABEL;
-  const valuePt = square ? UPGRADE_VALUE : BOOSTER_VALUE;
-  const t = square ? theme.cards.upgrade : theme.cards.booster;
-  const h = square ? theme.cards.upgradeSize : theme.cards.boosterWidth / PORTRAIT_ASPECT;
+function DeckStack({
+  children,
+  label,
+  value,
+}: {
+  children: React.ReactNode;
+  label: string;
+  value: React.ReactNode;
+}) {
   return (
-    <div style={{ position: "relative" }}>
-      <CardBackArt square={square} />
-      <CardText x={labelPt.x} y={labelPt.y + t.titleOffsetY} frac={t.titleFontSize} cardHeight={h} color={OVERLAY_INK}>
-        {label}
-      </CardText>
-      <CardText x={valuePt.x} y={valuePt.y + t.valueOffsetY} frac={t.valueFontSize} cardHeight={h} color={OVERLAY_INK}>
-        {value}
-      </CardText>
+    <div className="deckstack">
+      {children}
+      <div className="deckstack-caption">
+        <span className="deckstack-label">{label}</span>
+        <span className="deckstack-value">{value}</span>
+      </div>
     </div>
   );
 }
 
-const ORE_ORDER: OreColour[] = ["green", "yellow", "red"];
+// the upgrade deck's own art is square at theme.cards.upgradeSize, wider than a booster
+// card (theme.cards.boosterWidth) — zoom it down to match, and give both supply-panel
+// frames that same content width so the ore frame (which has no card of its own to size
+// off) lines up with it exactly rather than hugging its own, narrower dot row
+const UPGRADE_CARD_SCALE = theme.cards.boosterWidth / theme.cards.upgradeSize;
+const SUPPLY_FRAME_WIDTH = theme.cards.boosterWidth;
 
 export function DeckPanels({ state }: { state: GameState }) {
   const boosterTotal = state.decks.booster.draw.length + state.decks.booster.discard.length;
   const equipmentTotal = state.decks.equipment.draw.length + state.decks.equipment.discard.length;
-  const upgradeH = theme.cards.upgradeSize;
+  const topDiscard = state.decks.booster.discard[state.decks.booster.discard.length - 1] ?? null;
   return (
     <>
       <div className="deck-panel">
-        <DeckStack label="BOOSTERS" value={`${state.decks.booster.draw.length}/${boosterTotal}`} />
-        <DeckStack label="PLAYED" value={`${state.decks.booster.discard.length}/${boosterTotal}`} />
+        <DeckStack label="BOOSTERS" value={`${state.decks.booster.draw.length}/${boosterTotal}`}>
+          <CardBackArt />
+        </DeckStack>
+        <DeckStack label="PLAYED" value={`${state.decks.booster.discard.length}/${boosterTotal}`}>
+          {topDiscard ? <BoosterCardFace card={topDiscard} /> : <CardBackArt />}
+        </DeckStack>
       </div>
       <div className="supply-panel">
-        <DeckStack square label="UPGRADES" value={`${state.decks.equipment.draw.length}/${equipmentTotal}`} />
-        <div style={{ position: "relative" }}>
-          <CardBackArt square />
-          <CardText
-            x={UPGRADE_LABEL.x}
-            y={UPGRADE_LABEL.y + theme.cards.upgrade.titleOffsetY}
-            frac={theme.cards.upgrade.titleFontSize}
-            cardHeight={upgradeH}
-            color={OVERLAY_INK}
-          >
-            ORE
-          </CardText>
-          <div
-            className="deckcard-orerow"
-            style={{
-              position: "absolute",
-              left: `${(UPGRADE_VALUE.x + theme.cards.upgrade.valueOffsetX) * 100}%`,
-              top: `${(UPGRADE_VALUE.y + theme.cards.upgrade.valueOffsetY) * 100}%`,
-              transform: "translate(-50%, -50%)",
-              fontSize: theme.cards.upgrade.valueFontSize * upgradeH,
-            }}
-          >
+        <div className="supply-frame" style={{ width: SUPPLY_FRAME_WIDTH }}>
+          <div className="ore-dots">
             {ORE_ORDER.map((o) => (
-              <span key={o} style={{ color: ORE_VAR[o] }}>
-                {state.supply[o]}
-              </span>
+              <div key={o} className="ore-col">
+                <span className="ore-dot" style={{ background: ORE_VAR[o] }} />
+                <span className="ore-count" style={{ color: ORE_VAR[o] }}>
+                  {state.supply[o]}
+                </span>
+              </div>
             ))}
           </div>
+        </div>
+        <div className="supply-frame" style={{ width: SUPPLY_FRAME_WIDTH }}>
+          <DeckStack label="UPGRADES" value={`${state.decks.equipment.draw.length}/${equipmentTotal}`}>
+            <div style={{ zoom: UPGRADE_CARD_SCALE }}>
+              <CardBackArt square />
+            </div>
+          </DeckStack>
         </div>
       </div>
     </>
