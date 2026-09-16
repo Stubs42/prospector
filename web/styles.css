@@ -162,8 +162,6 @@ button.danger { border-color: #6a3a2f; }
   background: rgba(10, 20, 15, 0.9); border: 1px solid var(--line);
   padding: 0.4rem 0.9rem; border-radius: 999px; font-size: 0.82rem;
 }
-.board-toast.win { border-color: var(--gold); color: var(--gold); }
-
 /* the hand — docked beside .zoomctl (bottom-left), matching its stacked-button height
    (5 * 30px buttons + 4 * 4px gaps = 166px) so the two read as one control cluster. One
    frame throughout (background+border live on .handpanel itself, not the toggle) that

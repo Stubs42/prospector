@@ -22,6 +22,40 @@ import type { Prefs } from "../prefs.js";
 import { buildSpinSchedule, runSpinSchedule, SkipGate } from "../spin.js";
 import { theme } from "../theme.js";
 import type { Session } from "../useSession.js";
+import type { GameState } from "../../engine/types.js";
+
+// final ranking for the game-over popup: same total-value score the engine already uses to
+// pick winnerIds, but broken into a full ordering — ties broken by counting the most
+// valuable ore delivered first, then the next tier down, etc.; a tie that survives every
+// tier truly shares the rank, and the rank after a tie is skipped (1, 2, 2, 4 — standard
+// competition ranking), not squeezed down to 3.
+function rankPlayers(state: GameState, names: string[]) {
+  const { values, colours } = state.config.modes.prospector.resources;
+  const byValueDesc = [...colours].sort((a, b) => values[b]! - values[a]!);
+  const rows = state.players.map((p) => ({
+    id: p.id,
+    colour: p.colour,
+    name: names[p.id] ?? p.colour,
+    score: p.delivered.reduce((a, c) => a + values[c]!, 0),
+    counts: byValueDesc.map((c) => p.delivered.filter((d) => d === c).length),
+  }));
+  rows.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    for (let i = 0; i < a.counts.length; i++) {
+      if (b.counts[i] !== a.counts[i]) return b.counts[i]! - a.counts[i]!;
+    }
+    return 0;
+  });
+  let rank = 1;
+  return rows.map((row, i) => {
+    if (i > 0) {
+      const prev = rows[i - 1]!;
+      const tied = prev.score === row.score && prev.counts.every((v, j) => v === row.counts[j]);
+      if (!tied) rank = i + 1;
+    }
+    return { ...row, rank };
+  });
+}
 
 /** how many lines of "what happened this move" the status panel keeps before trimming */
 const MOVE_LOG_CAP = 10;
@@ -812,8 +846,16 @@ export function GameScreen({
         <DeckPanels state={state} />
         {isWaitingOnBot && !activeIsBot && <div className="board-toast">🤖 waiting on the bot…</div>}
         {state.gameOver && (
-          <div className="board-toast win">
-            Game over — winner: <b>{sc.winnerIds.map((i) => state.players[i]!.colour).join(", ")}</b>
+          <div className="board-scrim">
+            <HexPopup
+              lines={[
+                "Game Over!",
+                ...rankPlayers(state, s.names).map(
+                  (row) => `${row.rank}. ${row.name} (${row.colour}) — ${row.score} pt${row.score === 1 ? "" : "s"}`,
+                ),
+                "Ready Your next Game",
+              ]}
+            />
           </div>
         )}
 
