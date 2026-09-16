@@ -7,6 +7,7 @@
  * panning could carry it out of view entirely. Living outside that transform, like the
  * zoom controls or the status panel, is what actually fixes it.
  */
+import type { ReactNode } from "react";
 import { ActionBox, HexButton } from "./ActionBox.js";
 
 export interface HexPopupAction {
@@ -15,7 +16,7 @@ export interface HexPopupAction {
   onClick: () => void;
 }
 
-export function HexPopup({ lines, actions }: { lines: string[]; actions?: HexPopupAction[] | undefined }) {
+export function HexPopup({ lines, actions }: { lines: ReactNode[]; actions?: HexPopupAction[] | undefined }) {
   return (
     <ActionBox>
       {lines.map((ln, i) => (
