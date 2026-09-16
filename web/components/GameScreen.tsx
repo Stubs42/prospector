@@ -864,9 +864,15 @@ export function GameScreen({
                       <th></th>
                       <th>Player</th>
                       <th>Ship</th>
-                      <th className="num">red</th>
-                      <th className="num">yellow</th>
-                      <th className="num">green</th>
+                      <th className="num">
+                        <i className="swatch ore" style={{ background: "var(--ore-red)" }} />
+                      </th>
+                      <th className="num">
+                        <i className="swatch ore" style={{ background: "var(--ore-yellow)" }} />
+                      </th>
+                      <th className="num">
+                        <i className="swatch ore" style={{ background: "var(--ore-green)" }} />
+                      </th>
                       <th className="num">pts</th>
                     </tr>
                   </thead>
@@ -875,7 +881,7 @@ export function GameScreen({
                       <tr key={row.id}>
                         <td className="num">{row.rank}.</td>
                         <td>
-                          <i className="swatch" style={{ background: `var(--ship-${row.colour})`, display: "inline-block" }} />
+                          <i className="swatch" style={{ background: `var(--ship-${row.colour})` }} />
                         </td>
                         <td>{row.name}</td>
                         <td>{row.shipName}</td>
