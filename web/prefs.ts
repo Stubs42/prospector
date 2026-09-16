@@ -11,6 +11,9 @@ export interface Prefs {
   animations: "on" | "off" | "auto";
   /** how long a move-animation phase takes */
   moveSpeed: "slow" | "normal" | "fast";
+  /** hide everything in the topbar except the title/turn/toggle itself — reclaims vertical
+     space on a small phone screen; persisted so it doesn't need re-toggling every reload */
+  topbarCollapsed: boolean;
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -19,6 +22,7 @@ export const DEFAULT_PREFS: Prefs = {
   autoEndTurn: false,
   animations: "auto",
   moveSpeed: "normal",
+  topbarCollapsed: false,
 };
 
 const MOVE_PHASE_MS: Record<Prefs["moveSpeed"], number> = { slow: 780, normal: 440, fast: 220 };

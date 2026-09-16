@@ -71,7 +71,7 @@ body {
 .app { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
 
 .topbar {
-  display: flex; align-items: center; gap: 1rem;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 1rem;
   padding: 0.6rem 1rem;
   border-bottom: 1px solid var(--line);
   background: #0c1a15;
@@ -83,6 +83,10 @@ body {
 }
 .topbar .turn { color: var(--muted); font-variant-numeric: tabular-nums; }
 .topbar .spacer { flex: 1; }
+/* collapsed: title/turn/toggle only, on one thin row — reclaims vertical space on a small
+   phone screen. The spacer still pushes the toggle to the far right either way. */
+.topbar.collapsed { flex-wrap: nowrap; }
+.topbar-toggle { flex: 0 0 auto; line-height: 1; }
 
 button {
   font: inherit;
@@ -172,6 +176,10 @@ button.danger { border-color: #6a3a2f; }
 .handpanel {
   position: absolute; left: 42px; bottom: 4px; z-index: 20;
   display: flex; align-items: stretch; height: 166px;
+  /* never let the hand grow wider than the viewport itself, on any screen — paired with
+     .handpanel-cards' own flex-wrap below so cards that don't fit one row wrap to another
+     instead of being clipped by this panel's own overflow:hidden */
+  max-width: calc(100vw - 50px);
   background: rgba(14, 24, 19, 0.9); border: 1px solid var(--line); border-radius: 7px;
   overflow: hidden; transition: border-color 0.15s ease;
 }
@@ -192,7 +200,16 @@ button.danger { border-color: #6a3a2f; }
   display: flex; flex-direction: column; justify-content: center; gap: 0.3rem;
 }
 .handpanel.open .handpanel-body { max-width: 900px; opacity: 1; padding: 0 0.5rem; }
-.handpanel-cards { display: flex; gap: 6px; flex-wrap: nowrap; align-items: center; }
+.handpanel-cards { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+
+/* small phone screen: half-size cards (zoom, not transform — it actually reflows the wrap
+   below, unlike a paint-only transform:scale) so more fit per row, and the panel grows
+   taller instead of clipping once cards wrap to a 2nd/3rd row */
+@media (max-width: 480px) {
+  .handpanel { height: auto; min-height: 166px; }
+  .handpanel.open .handpanel-body { max-width: calc(100vw - 90px); }
+  .handpanel-cards { zoom: 0.55; }
+}
 /* explicit reset against the global `button` rule (styles.css ~L87) — that rule's own
    background/border would otherwise show through on this borderless, backgroundless toggle,
    and its `button:hover:not(:disabled) { border-color: var(--gold) }` (specificity 0,2,1) was
