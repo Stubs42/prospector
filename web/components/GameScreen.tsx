@@ -403,11 +403,17 @@ export function GameScreen({
   }, [state.turnNumber, state.activePlayerIndex, actionLabel]);
 
   const canRefuel = (id: string) => afford.legal.some((a) => a.type === "useReserveFuel" && a.cardId === id);
+  // `overLimit` (afford.overLimit) is only ever meaningful for state.activePlayerIndex — a
+  // bot's own over-limit moment (before its auto-discard resolves) must never make the
+  // solo human's OWN cards look discardable/urgent/dimmed, which the raw overLimit flag
+  // used to do throughout this hand-state logic (it doesn't know whose hand it's about).
+  // Hoisted above clickableAction/cardState so every check below uses the scoped version.
+  const handOwnerOverLimit = overLimit && handOwner.id === state.activePlayerIndex;
   // the click handler a card WOULD get right now, if any — factored out of cardState so
   // "is anything in this hand playable at all" (handHasPlayableCard below) can ask the same
   // question without duplicating the rules
   const clickableAction = (c: BoosterCard): (() => void) | undefined => {
-    if (overLimit) return () => dispatch({ type: "discardBooster", cardId: c.id });
+    if (handOwnerOverLimit) return () => dispatch({ type: "discardBooster", cardId: c.id });
     // reserve fuel isn't armed for a later burn — it's used up the instant it's clicked
     if (inBurnPhase && c.type === "reserveFuel" && canRefuel(c.id)) return () => dispatch({ type: "useReserveFuel", cardId: c.id });
     if (inBurnPhase && c.type === "engine") return () => s.toggleArmed(c.id);
@@ -422,7 +428,7 @@ export function GameScreen({
     const c = handOwner.hand.find((x) => x.id === id)!;
     const onClick = clickableAction(c);
     const clickable = !!onClick;
-    const pulse: "urgent" | "new" | null = overLimit ? "urgent" : s.newCardIds.has(id) ? "new" : null;
+    const pulse: "urgent" | "new" | null = handOwnerOverLimit ? "urgent" : s.newCardIds.has(id) ? "new" : null;
     // a card that can't be played dims itself ONLY once something else in the hand can —
     // no point graying out the whole hand when nothing is actionable at all (see
     // handHasPlayableCard below); replaces the old "ready" pulse on the playable card(s)
@@ -475,17 +481,13 @@ export function GameScreen({
   // itself (same reasoning as inBurnPhase's own pendingEquipment check above).
   const startUpgradeImminent = !!handOwner.startEquipment || !!state.pendingEquipment;
   const handHasNewCard = !startUpgradeImminent && handOwner.hand.some((c) => s.newCardIds.has(c.id));
-  // `overLimit` (afford.overLimit) is only ever meaningful for state.activePlayerIndex — a
-  // bot's own over-limit moment (before its auto-discard resolves) must never force the
-  // solo human's collapsed hand open, same reasoning as handHasNewCard above
-  const handOwnerOverLimit = overLimit && handOwner.id === state.activePlayerIndex;
   const showCards =
     !handHidden &&
     handOwner.hand.length > 0 &&
     (handOwnerOverLimit ||
       ((inBurnPhase || combatCardType !== null) && handHasPlayableCard) ||
       handHasNewCard);
-  const cardHint = overLimit
+  const cardHint = handOwnerOverLimit
     ? null // the centred hex popup carries this message instead
     : inBurnPhase && p.hand.some((c) => c.type === "engine" || c.type === "reserveFuel" || c.type === "hyperspace")
       ? "Tap an engine card to arm it for this burn, a reserve-fuel card to refuel now, or a hyperspace card to jump instead."
