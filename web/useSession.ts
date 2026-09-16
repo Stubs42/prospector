@@ -23,7 +23,7 @@ import { legalActions } from "../engine/index.js";
 import { deriveMoveAnim, coastAnim, type MoveAnim } from "./anim.js";
 import { movePhaseMs, type Prefs } from "./prefs.js";
 import { randomBotName } from "./nameGen.js";
-import { logPose } from "./poseLog.js";
+import { logPose, resetPoseLog } from "./poseLog.js";
 
 // human seats are a live sentinel (null), resolved against prefs.playerName on every render
 // so changing "your name" in Settings takes effect immediately without touching bot names;
@@ -203,6 +203,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     setSeats(seatArr);
     setRawNames(rawNamesFor(seatArr));
     const g = createGame({ seats: seatArr, seed: (Math.random() * 1e9) | 0, upgradeAtStart: upgrade });
+    resetPoseLog(); // a brand new game — the old one's last pose is not this one's baseline
     stateRef.current = g;
     setState(g);
     setShownPlayer(g.activePlayerIndex);
@@ -294,6 +295,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     if (qs.get("skipsetup") === "1" && !n) {
       let s = state;
       while (s.setup) s = stepBot(s, rng); // randomly resolve pickBase/pickShip for every seat
+      resetPoseLog();
       stateRef.current = s;
       setState(s);
       setSeats(Array<Seat>(s.players.length).fill("human"));
@@ -379,6 +381,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
         players: s.players.map((pl, i) => ({ ...pl, delivered: cases[i % cases.length]! })),
       };
     }
+    resetPoseLog(); // this whole block only ever runs once, on a debug/demo fast-forward
     stateRef.current = s;
     setState(s);
     setShownPlayer(s.activePlayerIndex);
