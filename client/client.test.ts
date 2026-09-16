@@ -99,6 +99,27 @@ describe("affordances", () => {
     expect(a.burnTargets.length).toBeGreaterThan(0); // refuelling opened up real burn targets
     expect(a.avoidableShipLoss).toBe(false); // resolved — safe to auto-advance again if forced
   });
+
+  it("flags avoidableZeroFuelDrift when the tank is empty and a reserve-fuel card could still open up burn targets", () => {
+    let g = createGame({ seed: 7, colours: ["red", "black"], startPlayer: 0, upgradeAtStart: "none" });
+    g.players[0]!.placed = true;
+    g.players[0]!.fuel = 0;
+    const card = { id: "test-fuel", deck: "booster" as const, type: "reserveFuel" as const, value: 3, effect: "" };
+    g = run(g, { type: "drawBooster" });
+    g.players[0]!.hand = [...g.players[0]!.hand, card];
+    while (g.players[0]!.hand.length > 4) g = run(g, { type: "discardBooster", cardId: g.players[0]!.hand[0]!.id });
+
+    let a = affordances(g);
+    expect(g.players[0]!.turn.driftDone).toBe(false);
+    expect(a.legal.some((x) => x.type === "drift")).toBe(true);
+    expect(a.legal.some((x) => x.type === "useReserveFuel")).toBe(true);
+    expect(a.avoidableZeroFuelDrift).toBe(true); // a GUI's auto-advance must not fire drift here
+
+    g = run(g, { type: "useReserveFuel", cardId: card.id });
+    a = affordances(g);
+    expect(g.players[0]!.fuel).toBeGreaterThan(0);
+    expect(a.avoidableZeroFuelDrift).toBe(false); // resolved — safe to auto-advance again if forced
+  });
 });
 
 describe("driftPreview", () => {
