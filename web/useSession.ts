@@ -169,7 +169,27 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     // banked) the instant they're clicked, via useReserveFuel — only engine cards arm.
     const cur = stateRef.current;
     const active = cur.players[cur.activePlayerIndex]!;
-    const engineBoosters = active.hand.filter((c) => c.type === "engine" && armed.has(c.id)).map((c) => c.id);
+    // arming an engine card widens the burn-target PREVIEW (see armedEngine/afford above),
+    // but that doesn't mean every armed card is actually needed for whichever target the
+    // player ends up clicking — a nearby burn that was already reachable unboosted must not
+    // silently spend a card that was only armed to reach a farther one. Try the burn with
+    // progressively more of the armed cards attached (smallest first, so a small card covers
+    // a small shortfall before a big one gets touched), stopping at the first count that's
+    // actually legal — applyAction clones state internally, so a losing trial here is free.
+    const armedEngineCards = active.hand
+      .filter((c) => c.type === "engine" && armed.has(c.id))
+      .sort((a, b) => (a.value ?? 0) - (b.value ?? 0));
+    for (let n = 0; n <= armedEngineCards.length; n++) {
+      const engineBoosters = armedEngineCards.slice(0, n).map((c) => c.id);
+      const attempt = engineBoosters.length ? { ...burn, engineBoosters } : burn;
+      if (applyAction(cur, attempt).ok) {
+        dispatch(attempt);
+        return;
+      }
+    }
+    // every prefix failed (shouldn't happen for a target the UI actually offered) — fall
+    // back to spending everything armed, so a genuinely-needed burn is never just dropped
+    const engineBoosters = armedEngineCards.map((c) => c.id);
     dispatch(engineBoosters.length ? { ...burn, engineBoosters } : burn);
   }
   /** (re)start setup fresh — a new interactive game, base/ship all unpicked */
