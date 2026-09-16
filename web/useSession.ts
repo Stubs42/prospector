@@ -269,16 +269,26 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   }, [state, isWaitingOnBot, reducedMotion, phaseMs, moveAnim]);
 
   // a deliberate-choice action (attack, useReserveFuel, scrapShip, ...) is hidden from
-  // auto-fire so it never fires ON ITS OWN — but that must never make endTurn look like
-  // "the only thing left" either: if attack is legal but hidden, ending the turn without it
-  // ever being offered silently throws the choice away just as much as auto-firing it would.
-  // So endTurn only auto-fires when it's truly the SOLE legal action overall (checked
-  // against the full, unfiltered list), never merely the sole one left after hiding others.
+  // auto-fire so it never fires ON ITS OWN — but that must never make a "close out this
+  // phase" action (endMove as much as endTurn) look like "the only thing left" either: e.g.
+  // out of fuel with nothing else to do but a reserve-fuel card in hand — endMove was the
+  // only thing surviving the AUTO_HIDE filter, so it auto-fired and finalized the move
+  // before the player ever got to play the card, leaving scrapping the ship as the only way
+  // out. Both endMove and endTurn now only auto-fire when they're truly the SOLE legal
+  // action overall (checked against the full, unfiltered list), never merely the sole one
+  // left after hiding others.
+  const CLOSING_ACTIONS = new Set<Action["type"]>(["endMove", "endTurn"]);
   const autoCandidates = afford.legal.filter((a) => !AUTO_HIDE.has(a.type));
   const soleAutoCandidate =
-    autoCandidates.length === 1 && autoCandidates[0]!.type !== "endTurn" ? autoCandidates[0]! : null;
-  const soleEndTurn =
-    prefs.autoEndTurn && afford.legal.length === 1 && afford.legal[0]!.type === "endTurn" ? afford.legal[0]! : null;
+    autoCandidates.length === 1 && !CLOSING_ACTIONS.has(autoCandidates[0]!.type) ? autoCandidates[0]! : null;
+  const soleClosingAction =
+    afford.legal.length === 1 && CLOSING_ACTIONS.has(afford.legal[0]!.type)
+      ? afford.legal[0]!.type === "endTurn"
+        ? prefs.autoEndTurn
+          ? afford.legal[0]!
+          : null
+        : afford.legal[0]!
+      : null;
   const autoAction =
     prefs.autoSingle &&
     !state.setup &&
@@ -293,7 +303,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     // never auto-fire an empty-tank drift while a reserve-fuel card could top it up and
     // open real burn targets first — see Affordances.avoidableZeroFuelDrift
     !afford.avoidableZeroFuelDrift
-      ? (soleAutoCandidate ?? soleEndTurn)
+      ? (soleAutoCandidate ?? soleClosingAction)
       : null;
   useEffect(() => {
     if (!autoAction) return;
