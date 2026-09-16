@@ -269,6 +269,14 @@ button.danger { border-color: #6a3a2f; }
 .actionbox-outcome { font-weight: 700; margin-top: 0.15rem; }
 .actionbox-buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center; margin-top: 0.3rem; }
 
+/* game-over ranking table, inside a HexPopup */
+.gameover-table { border-collapse: collapse; font-size: 0.82rem; }
+.gameover-table th, .gameover-table td { padding: 0.15rem 0.5rem; font-weight: 400; text-align: left; }
+.gameover-table th { color: var(--muted); font-weight: 400; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.gameover-table td.num, .gameover-table th.num { text-align: right; }
+.gameover-table .swatch { width: 0.7rem; height: 0.7rem; }
+.gameover-table tbody tr:not(:last-child) td { border-bottom: 1px solid rgba(255,255,255,0.08); }
+
 /* every button inside an action box shares the box's own hex silhouette (see
    ActionBox.tsx's HexButton) instead of the app's plain rounded-rect buttons.
    `button.hexbutton`, not `.hexbutton` — a "primary"/"danger" HexButton carries BOTH

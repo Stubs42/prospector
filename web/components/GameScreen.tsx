@@ -31,14 +31,21 @@ import type { GameState } from "../../engine/types.js";
 // competition ranking), not squeezed down to 3.
 function rankPlayers(state: GameState, names: string[]) {
   const { values, colours } = state.config.modes.prospector.resources;
-  const byValueDesc = [...colours].sort((a, b) => values[b]! - values[a]!);
-  const rows = state.players.map((p) => ({
-    id: p.id,
-    colour: p.colour,
-    name: names[p.id] ?? p.colour,
-    score: p.delivered.reduce((a, c) => a + values[c]!, 0),
-    counts: byValueDesc.map((c) => p.delivered.filter((d) => d === c).length),
-  }));
+  const byValueDesc = [...colours].sort((a, b) => values[b]! - values[a]!); // red, yellow, green
+  const rows = state.players.map((p) => {
+    const countOf = (c: (typeof colours)[number]) => p.delivered.filter((d) => d === c).length;
+    return {
+      id: p.id,
+      colour: p.colour,
+      name: names[p.id] ?? p.colour,
+      shipName: state.config.modes.prospector.ships[p.colour].name,
+      score: p.delivered.reduce((a, c) => a + values[c]!, 0),
+      counts: byValueDesc.map(countOf), // used for the tiebreak, in the same red/yellow/green order
+      red: countOf("red"),
+      yellow: countOf("yellow"),
+      green: countOf("green"),
+    };
+  });
   rows.sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
     for (let i = 0; i < a.counts.length; i++) {
@@ -850,10 +857,37 @@ export function GameScreen({
             <HexPopup
               lines={[
                 "Game Over!",
-                ...rankPlayers(state, s.names).map(
-                  (row) => `${row.rank}. ${row.name} (${row.colour}) — ${row.score} pt${row.score === 1 ? "" : "s"}`,
-                ),
-                "Ready Your next Game",
+                <table className="gameover-table" key="ranking">
+                  <thead>
+                    <tr>
+                      <th></th>
+                      <th></th>
+                      <th>Player</th>
+                      <th>Ship</th>
+                      <th className="num">red</th>
+                      <th className="num">yellow</th>
+                      <th className="num">green</th>
+                      <th className="num">pts</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rankPlayers(state, s.names).map((row) => (
+                      <tr key={row.id}>
+                        <td className="num">{row.rank}.</td>
+                        <td>
+                          <i className="swatch" style={{ background: `var(--ship-${row.colour})`, display: "inline-block" }} />
+                        </td>
+                        <td>{row.name}</td>
+                        <td>{row.shipName}</td>
+                        <td className="num">{row.red}</td>
+                        <td className="num">{row.yellow}</td>
+                        <td className="num">{row.green}</td>
+                        <td className="num">{row.score}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>,
+                "Ready for a New Game",
               ]}
             />
           </div>
