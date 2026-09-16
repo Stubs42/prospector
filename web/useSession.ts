@@ -249,9 +249,17 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     return () => clearTimeout(id);
   }, [state, isWaitingOnBot, reducedMotion, phaseMs, moveAnim]);
 
-  const autoCandidates = afford.legal.filter(
-    (a) => !AUTO_HIDE.has(a.type) && (a.type !== "endTurn" || prefs.autoEndTurn),
-  );
+  // a deliberate-choice action (attack, useReserveFuel, scrapShip, ...) is hidden from
+  // auto-fire so it never fires ON ITS OWN — but that must never make endTurn look like
+  // "the only thing left" either: if attack is legal but hidden, ending the turn without it
+  // ever being offered silently throws the choice away just as much as auto-firing it would.
+  // So endTurn only auto-fires when it's truly the SOLE legal action overall (checked
+  // against the full, unfiltered list), never merely the sole one left after hiding others.
+  const autoCandidates = afford.legal.filter((a) => !AUTO_HIDE.has(a.type));
+  const soleAutoCandidate =
+    autoCandidates.length === 1 && autoCandidates[0]!.type !== "endTurn" ? autoCandidates[0]! : null;
+  const soleEndTurn =
+    prefs.autoEndTurn && afford.legal.length === 1 && afford.legal[0]!.type === "endTurn" ? afford.legal[0]! : null;
   const autoAction =
     prefs.autoSingle &&
     !state.setup &&
@@ -265,9 +273,8 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     !afford.avoidableShipLoss &&
     // never auto-fire an empty-tank drift while a reserve-fuel card could top it up and
     // open real burn targets first — see Affordances.avoidableZeroFuelDrift
-    !afford.avoidableZeroFuelDrift &&
-    autoCandidates.length === 1
-      ? autoCandidates[0]!
+    !afford.avoidableZeroFuelDrift
+      ? (soleAutoCandidate ?? soleEndTurn)
       : null;
   useEffect(() => {
     if (!autoAction) return;
