@@ -353,12 +353,12 @@ export const theme: Theme = {
       nameFontSize: 0.08,
       nameOffsetY: 0.035,
       iconScale: {
-        shields: 1,
-        lasers: 1,
-        cargo: 1,
-        engines: 1,
-        booster: 1,
-        fuelTanks: 1,
+        shields: 1.5,
+        lasers: 1.5,
+        cargo: 1.5,
+        engines: 1.5,
+        booster: 1.5,
+        fuelTanks: 1.5,
       },
       fuelIconOffsetX: 0,
       fuelFontSize: 0.05,
@@ -379,7 +379,7 @@ export const theme: Theme = {
     animMs: 450,
   },
   actionBox: {
-    bgOpacity: 0.5,
+    bgOpacity: 0.7,
     borderStrokeWidth: 1,
     dropShadow: "0 10px 22px rgba(0, 0, 0, 0.55)",
     button: {
