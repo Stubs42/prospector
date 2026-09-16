@@ -154,6 +154,11 @@ export function Board({
   const vb = { x: v.cx - w / v.z / 2, y: v.cy - h / v.z / 2, w: w / v.z, h: h / v.z };
   const dragRef = useRef<{ x: number; y: number; cx: number; cy: number; moved: boolean } | null>(null);
   const pannedRef = useRef(false);
+  // touch: one finger reuses dragRef's own tap-vs-drag logic below (just a second pointer
+  // source); two fingers hand off to pinchRef instead — tracked by id since either finger
+  // may lift first, and a third finger (e.g. a resting palm) is simply ignored
+  const touchPointsRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchRef = useRef<{ dist: number; mx: number; my: number } | null>(null);
 
   const toBoard = useCallback((clientX: number, clientY: number) => {
     const el = svgRef.current;
@@ -194,12 +199,54 @@ export function Board({
   }, [zoomBy]);
 
   const onPointerDown = (e: RPointerEvent<SVGSVGElement>) => {
+    if (e.pointerType === "touch") {
+      e.preventDefault();
+      touchPointsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (touchPointsRef.current.size === 2) {
+        dragRef.current = null; // a second finger landed mid-drag: hand off to pinch instead
+        const [a, b] = [...touchPointsRef.current.values()] as [{ x: number; y: number }, { x: number; y: number }];
+        pinchRef.current = { dist: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+        return;
+      }
+      if (touchPointsRef.current.size > 2) return; // a third finger (e.g. a resting palm): ignore
+      pannedRef.current = false;
+      dragRef.current = { x: e.clientX, y: e.clientY, cx: v.cx, cy: v.cy, moved: false };
+      return;
+    }
     if (e.button !== 1) return; // middle-drag pans; left stays free for board clicks
     e.preventDefault();
     pannedRef.current = false;
     dragRef.current = { x: e.clientX, y: e.clientY, cx: v.cx, cy: v.cy, moved: false };
   };
   const onPointerMove = (e: RPointerEvent<SVGSVGElement>) => {
+    if (e.pointerType === "touch" && touchPointsRef.current.has(e.pointerId)) {
+      touchPointsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
+    if (touchPointsRef.current.size >= 2) {
+      const [a, b] = [...touchPointsRef.current.values()] as [{ x: number; y: number }, { x: number; y: number }];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      const mx = (a.x + b.x) / 2;
+      const my = (a.y + b.y) / 2;
+      const prev = pinchRef.current;
+      const el = svgRef.current;
+      if (prev && el && prev.dist > 0 && dist > 0) {
+        pannedRef.current = true;
+        el.setPointerCapture(e.pointerId);
+        const z = Math.min(MAX_Z, Math.max(MIN_Z, v.z * (dist / prev.dist)));
+        // anchor the zoom on the board point that was under the fingers' previous midpoint,
+        // then also carry the midpoint's own on-screen movement (two fingers panning
+        // together while pinching) — same "keep this board point under the cursor" math
+        // zoomBy uses, plus a translation term zoomBy doesn't need
+        const { bx, by } = toBoard(prev.mx, prev.my);
+        const r = el.getBoundingClientRect();
+        const s = Math.min(r.width / vb.w, r.height / vb.h);
+        const cx = bx - (bx - v.cx) * (v.z / z) - (mx - prev.mx) / s;
+        const cy = by - (by - v.cy) * (v.z / z) - (my - prev.my) / s;
+        setView({ cx, cy, z });
+      }
+      pinchRef.current = { dist, mx, my };
+      return;
+    }
     const d = dragRef.current;
     if (!d) return;
     const el = svgRef.current;
@@ -215,8 +262,23 @@ export function Board({
     setView({ cx: d.cx - dx, cy: d.cy - dy, z: v.z });
   };
   const endPan = (e: RPointerEvent<SVGSVGElement>) => {
-    dragRef.current = null;
-    pannedRef.current = false;
+    if (e.pointerType === "touch") {
+      touchPointsRef.current.delete(e.pointerId);
+      if (touchPointsRef.current.size < 2) pinchRef.current = null;
+      if (touchPointsRef.current.size === 1) {
+        // one finger lifted out of a pinch, one still down: resume as a plain single-finger
+        // pan from here rather than treating the remaining finger as a fresh tap
+        const [remaining] = [...touchPointsRef.current.values()] as [{ x: number; y: number }];
+        dragRef.current = { x: remaining.x, y: remaining.y, cx: v.cx, cy: v.cy, moved: true };
+      } else if (touchPointsRef.current.size === 0) {
+        dragRef.current = null;
+      }
+    } else {
+      dragRef.current = null;
+    }
+    // NOT reset here: a real drag/pinch leaves pannedRef true so the synthetic "click" a
+    // touch release fires right after is still suppressed by onClickCapture below; the next
+    // gesture's onPointerDown clears it before anything new starts
     if (svgRef.current?.hasPointerCapture(e.pointerId)) svgRef.current.releasePointerCapture(e.pointerId);
   };
 
