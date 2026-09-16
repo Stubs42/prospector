@@ -30,7 +30,9 @@ import { randomBotName } from "./nameGen.js";
 const rawNamesFor = (seatArr: Seat[]): (string | null)[] =>
   seatArr.map((k) => (k === "bot" ? randomBotName() : null));
 
-const AUTO_HIDE = new Set<Action["type"]>([
+// exported only so a plain unit test can assert membership without rendering the hook (no
+// jsdom/RTL in this project — see web/dispatchRace.test.ts for the established pattern)
+export const AUTO_HIDE = new Set<Action["type"]>([
   "declineCounter",
   "discardBooster",
   "combatDefend",
@@ -40,6 +42,10 @@ const AUTO_HIDE = new Set<Action["type"]>([
   "scrapShip",
   // playing a reserve-fuel card is always the player's voluntary choice — never auto-fire it
   "useReserveFuel",
+  // starting combat is always the player's voluntary choice, staged through the attack-target
+  // click + CombatBox (laser-booster picker) — auto-firing the raw action here skipped that
+  // whole flow and attacked with no confirmation and no chance to spend boosters
+  "attack",
 ]);
 
 /** how long a freshly-drawn card keeps its "new" pulse */
