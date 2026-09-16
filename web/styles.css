@@ -589,7 +589,14 @@ button.hexbutton {
    themed icon (e.g. an aspect-coloured icon's own centre dot) is never touched. */
 /* the class sometimes sits on the leaf path/rect itself, sometimes only on a wrapping <g> —
    ", .icon-X path/rect" covers both without guessing which a given icon uses */
-.card-art .icon-shield-stroke, .card-art .icon-shield-stroke path { stroke: var(--aspect-shields) !important; }
+/* tier 2/3 wrap their multiple rings in a <g class="icon-shield-stroke">, and the icon's
+   grey ship-body circle (icon-ship-neutral-fill, its own stroke:none) happens to sit nested
+   inside that SAME group as a sibling of the rings — so the plain descendant selector below
+   used to also match it, and !important then beat its inline stroke:none. Tier 1 (the class
+   sits directly on its one ring path, no wrapping group) never had this — hence "shield 1
+   looks right, 2/3 don't". :not() keeps this rule to the rings only, whichever tier. */
+.card-art .icon-shield-stroke:not(.icon-ship-neutral-fill),
+.card-art .icon-shield-stroke path:not(.icon-ship-neutral-fill) { stroke: var(--aspect-shields) !important; }
 .card-art .icon-laser-stroke, .card-art .icon-laser-stroke path { fill: var(--aspect-lasers) !important; stroke: var(--aspect-lasers) !important; }
 .card-art .icon-engine-fill, .card-art .icon-engine-fill path { fill: var(--aspect-engines) !important; }
 .card-art .icon-cargo-stroke, .card-art .icon-cargo-stroke path { stroke: var(--aspect-cargo) !important; }
