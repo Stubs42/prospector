@@ -568,6 +568,9 @@ button.hexbutton {
   transition: transform 0.15s ease;
 }
 .card-art-wrap.picked { outline: 2px solid var(--gold); outline-offset: 1px; }
+/* the discard pile before anything's been played — same box as a real card, dashed instead
+   of a solid card-back so it reads as "nothing here yet" rather than an actual card */
+.card-art-wrap.empty-slot { border: 2px dashed var(--line); background: rgba(255, 255, 255, 0.02); }
 /* same "lift on hover" affordance as EquipmentPopup's .equip-card-wrap — playable cards
    only (a card you can't act on right now shouldn't invite a click) */
 .card-art-wrap.clickable:hover, .card.clickable:hover { transform: translateY(-3px); }

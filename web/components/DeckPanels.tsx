@@ -16,9 +16,19 @@
 import type { GameState } from "../../engine/index.js";
 import { ORE_VAR, BoosterCardFace } from "./kit.js";
 import { CardBackArt } from "./CardArt.js";
+import { PORTRAIT_ASPECT } from "../cardAssets.js";
 import { theme } from "../theme.js";
 
 const ORE_ORDER = ["green", "yellow", "red"] as const;
+
+/** the discard pile before anything's been played — an empty slot, not a card-back (there's
+   no "card" there yet to show the back of); same box as a real card so nothing shifts once
+   one appears */
+function EmptyCardSlot() {
+  const w = theme.cards.boosterWidth;
+  const h = w / PORTRAIT_ASPECT;
+  return <div className="card-art-wrap empty-slot" style={{ width: w, height: h }} />;
+}
 
 function DeckStack({
   children,
@@ -55,10 +65,12 @@ export function DeckPanels({ state }: { state: GameState }) {
     <>
       <div className="deck-panel">
         <DeckStack label="BOOSTERS" value={`${state.decks.booster.draw.length}/${boosterTotal}`}>
-          <CardBackArt />
+          <div className="card-art-wrap">
+            <CardBackArt />
+          </div>
         </DeckStack>
         <DeckStack label="PLAYED" value={`${state.decks.booster.discard.length}/${boosterTotal}`}>
-          {topDiscard ? <BoosterCardFace card={topDiscard} /> : <CardBackArt />}
+          {topDiscard ? <BoosterCardFace card={topDiscard} /> : <EmptyCardSlot />}
         </DeckStack>
       </div>
       <div className="supply-panel">
@@ -76,7 +88,7 @@ export function DeckPanels({ state }: { state: GameState }) {
         </div>
         <div className="supply-frame" style={{ width: SUPPLY_FRAME_WIDTH }}>
           <DeckStack label="UPGRADES" value={`${state.decks.equipment.draw.length}/${equipmentTotal}`}>
-            <div style={{ zoom: UPGRADE_CARD_SCALE }}>
+            <div className="card-art-wrap" style={{ zoom: UPGRADE_CARD_SCALE }}>
               <CardBackArt square />
             </div>
           </DeckStack>
