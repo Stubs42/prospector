@@ -89,7 +89,7 @@
         },
         "equipment": {
           "perType": 6,
-          "types": { "shields": 1, "lasers": 1, "fuelTanks": 3, "cargo": 1, "engines": 1, "booster": 1 },
+          "types": { "shields": 1, "lasers": 1, "fuelTanks": 3, "cargo": 1, "engines": 1, "booster": 2 },
           "fuelEquip": { "tankIncrease": 3, "grantFuel": 3 }
         },
         "fuel": { "denominations": { "1": 24, "3": 19 }, "sharedFieldCards": 6, "sharedFieldValue": 3 }
