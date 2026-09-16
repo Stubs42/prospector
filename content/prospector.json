@@ -636,43 +636,43 @@
      "id": "equip-booster-01",
      "deck": "equipment",
      "stat": "booster",
-     "amount": 1,
-     "effect": "permanent booster +1"
+     "amount": 2,
+     "effect": "permanent booster +2"
     },
     {
      "id": "equip-booster-02",
      "deck": "equipment",
      "stat": "booster",
-     "amount": 1,
-     "effect": "permanent booster +1"
+     "amount": 2,
+     "effect": "permanent booster +2"
     },
     {
      "id": "equip-booster-03",
      "deck": "equipment",
      "stat": "booster",
-     "amount": 1,
-     "effect": "permanent booster +1"
+     "amount": 2,
+     "effect": "permanent booster +2"
     },
     {
      "id": "equip-booster-04",
      "deck": "equipment",
      "stat": "booster",
-     "amount": 1,
-     "effect": "permanent booster +1"
+     "amount": 2,
+     "effect": "permanent booster +2"
     },
     {
      "id": "equip-booster-05",
      "deck": "equipment",
      "stat": "booster",
-     "amount": 1,
-     "effect": "permanent booster +1"
+     "amount": 2,
+     "effect": "permanent booster +2"
     },
     {
      "id": "equip-booster-06",
      "deck": "equipment",
      "stat": "booster",
-     "amount": 1,
-     "effect": "permanent booster +1"
+     "amount": 2,
+     "effect": "permanent booster +2"
     }
    ]
   },
