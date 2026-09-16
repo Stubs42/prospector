@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { applyAction, boardFor, createGame } from "../engine/index.js";
 import { makeRng, type Rng } from "../engine/rng.js";
 import { hexKey } from "../engine/hex.js";
-import type { Action, Colour, GameState, Hex } from "../engine/index.js";
+import type { Action, Colour, GameState, Hex, OreColour } from "../engine/index.js";
 import {
   affordances,
   driftPreview,
@@ -308,6 +308,23 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
         players: s.players.map((pl, i) =>
           i === s.activePlayerIndex ? { ...pl, hand: [...pl.hand, ...s.decks.booster.draw.slice(0, 3)] } : pl,
         ),
+      };
+    }
+    if (qs.get("gameover") === "1") {
+      // DEBUG ONLY — preview the game-over ranking popup: a tied pair (identical score AND
+      // identical per-colour counts, to check the "share the rank" path), a same-score
+      // player that loses the tiebreak on red count (checks the skip-to-3 path), and a
+      // clear last place.
+      const cases = [
+        ["red", "red", "yellow"],
+        ["yellow", "yellow", "yellow", "yellow"],
+        ["red", "red", "yellow"],
+        ["green"],
+      ] as OreColour[][];
+      s = {
+        ...s,
+        gameOver: true,
+        players: s.players.map((pl, i) => ({ ...pl, delivered: cases[i % cases.length]! })),
       };
     }
     stateRef.current = s;
