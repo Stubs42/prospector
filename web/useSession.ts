@@ -275,19 +275,26 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   // only thing surviving the AUTO_HIDE filter, so it auto-fired and finalized the move
   // before the player ever got to play the card, leaving scrapping the ship as the only way
   // out. Both endMove and endTurn now only auto-fire when they're truly the SOLE legal
-  // action overall (checked against the full, unfiltered list), never merely the sole one
-  // left after hiding others.
+  // action worth pausing for — checked against the full list minus scrapShip specifically,
+  // not the raw unfiltered list: scrapShip is a PERMANENT fallback (legal any time the ship
+  // is placed, config.core.turn.allowScrapBeforeDraw), not a situational opportunity like
+  // attack/useReserveFuel that only appears when actually relevant — counting it here would
+  // make endMove/endTurn nearly never auto-fire in perfectly ordinary play (it's always
+  // sitting there in the background), which is exactly what happened the first time this
+  // was tightened: normal end-of-move/turn advance started requiring a manual click even
+  // with nothing real to decide.
   const CLOSING_ACTIONS = new Set<Action["type"]>(["endMove", "endTurn"]);
   const autoCandidates = afford.legal.filter((a) => !AUTO_HIDE.has(a.type));
   const soleAutoCandidate =
     autoCandidates.length === 1 && !CLOSING_ACTIONS.has(autoCandidates[0]!.type) ? autoCandidates[0]! : null;
+  const legalMinusScrap = afford.legal.filter((a) => a.type !== "scrapShip");
   const soleClosingAction =
-    afford.legal.length === 1 && CLOSING_ACTIONS.has(afford.legal[0]!.type)
-      ? afford.legal[0]!.type === "endTurn"
+    legalMinusScrap.length === 1 && CLOSING_ACTIONS.has(legalMinusScrap[0]!.type)
+      ? legalMinusScrap[0]!.type === "endTurn"
         ? prefs.autoEndTurn
-          ? afford.legal[0]!
+          ? legalMinusScrap[0]!
           : null
-        : afford.legal[0]!
+        : legalMinusScrap[0]!
       : null;
   const autoAction =
     prefs.autoSingle &&
