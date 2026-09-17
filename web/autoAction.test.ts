@@ -41,13 +41,18 @@ const CLOSING_ACTIONS = new Set<Action["type"]>(["endMove", "endTurn"]);
 function autoActionFor(legal: Action[], autoEndTurn: boolean): Action | null {
   const nonHidden = legal.filter((a) => !AUTO_HIDE.has(a.type));
   const soleAutoCandidate = nonHidden.length === 1 && !CLOSING_ACTIONS.has(nonHidden[0]!.type) ? nonHidden[0]! : null;
+  // scrapShip is a PERMANENT fallback (legal any time the ship is placed), not a situational
+  // opportunity like attack/useReserveFuel — it must not count as "something else is still
+  // pending" here, or endMove/endTurn would almost never auto-fire in ordinary play (it's
+  // always sitting there in the background)
+  const legalMinusScrap = legal.filter((a) => a.type !== "scrapShip");
   const soleClosingAction =
-    legal.length === 1 && CLOSING_ACTIONS.has(legal[0]!.type)
-      ? legal[0]!.type === "endTurn"
+    legalMinusScrap.length === 1 && CLOSING_ACTIONS.has(legalMinusScrap[0]!.type)
+      ? legalMinusScrap[0]!.type === "endTurn"
         ? autoEndTurn
-          ? legal[0]!
+          ? legalMinusScrap[0]!
           : null
-        : legal[0]!
+        : legalMinusScrap[0]!
       : null;
   return soleAutoCandidate ?? soleClosingAction;
 }
@@ -110,5 +115,27 @@ describe("auto-advance never ends the move while a stranded player could still p
     // (and soon the turn) before the player ever got to play the card, leaving scrapping the
     // ship as the only way out
     expect(autoActionFor(legal, true)).toBeNull();
+  });
+});
+
+describe("auto-advance still ends an ordinary move on its own (scrapShip is always technically legal too)", () => {
+  it("after a normal burn with fuel to spare: endMove auto-fires despite scrapShip also being legal", () => {
+    let s = createGame({ seed: 11, colours: ["black", "red"], startPlayer: 0, upgradeAtStart: "none" });
+    s.players[0]!.placed = true;
+    s = run(s, { type: "drawBooster" });
+    while (s.players[0]!.hand.length > s.config.modes.prospector.ships.black.booster) {
+      s = run(s, { type: "discardBooster", cardId: s.players[0]!.hand[0]!.id });
+    }
+    s = run(s, { type: "drift" });
+    const burns = legalActions(s).filter((a) => a.type === "burn") as Extract<Action, { type: "burn" }>[];
+    s = run(s, burns[0]!); // a plain, ordinary burn — nothing left to decide afterward
+    const legal = legalActions(s);
+    expect(legal.some((a) => a.type === "scrapShip")).toBe(true); // always legal once placed
+    expect(legal.some((a) => a.type === "endMove")).toBe(true);
+    expect(legal.some((a) => a.type === "useReserveFuel")).toBe(false); // nothing situational pending
+    // the regression this guards against: treating scrapShip as "something else is still on
+    // offer" made endMove stop auto-firing in completely ordinary play, requiring an extra
+    // manual click after every single burn
+    expect(autoActionFor(legal, true)).toEqual(legal.find((a) => a.type === "endMove"));
   });
 });
