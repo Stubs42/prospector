@@ -28,8 +28,11 @@ sudo chown prospector:prospector /opt/prospector
 sudo -u prospector git clone <repo-url> /opt/prospector
 cd /opt/prospector
 sudo -u prospector npm ci
-sudo -u prospector npm run build:web
+sudo -u prospector npm run build:web:selfhost
 ```
+Use `build:web:selfhost`, not the plain `build:web` — that one bakes in the `/prospector/`
+sub-path GitHub Pages needs, which breaks asset loading when this server serves the build from
+its own root instead.
 
 ## 4. Configure
 
@@ -67,7 +70,7 @@ this same port, no application changes needed).
 cd /opt/prospector
 sudo -u prospector git pull
 sudo -u prospector npm ci
-sudo -u prospector npm run build:web
+sudo -u prospector npm run build:web:selfhost
 sudo systemctl restart prospector
 ```
 Games in progress survive the restart — state is persisted to Postgres on every move, and

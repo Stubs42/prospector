@@ -84,48 +84,56 @@ async function main(): Promise<void> {
         } catch {
           return;
         }
-        switch (msg.type) {
-          case "createRoom": {
-            const room = await createRoom(pool, ws, msg);
-            attachedRoomCode = room.roomCode;
-            attachedPlayerIndex = 0;
-            break;
-          }
-          case "joinRoom": {
-            if (msg.reconnectToken) {
-              const lookup = await findByReconnectToken(pool, msg.reconnectToken);
-              const room = lookup && getRoom(lookup.roomCode);
-              if (lookup && room) {
-                reconnect(ws, room, lookup.playerIndex);
-                attachedRoomCode = room.roomCode;
-                attachedPlayerIndex = lookup.playerIndex;
-                break;
-              }
-              // fall through to a fresh join if the token didn't resolve to a live room
-            }
-            const joined = await joinRoom(pool, ws, msg);
-            if (joined) {
-              attachedRoomCode = joined.roomCode;
-              attachedPlayerIndex = joined.playerIndex;
-            }
-            break;
-          }
-          case "action": {
-            const room = attachedRoomCode ? getRoom(attachedRoomCode) : undefined;
-            if (!room || attachedPlayerIndex === null) {
-              ws.send(JSON.stringify({ type: "error", message: "not in a room" }));
+        try {
+          switch (msg.type) {
+            case "createRoom": {
+              const room = await createRoom(pool, ws, msg);
+              attachedRoomCode = room.roomCode;
+              attachedPlayerIndex = 0;
               break;
             }
-            await handleAction(pool, room, attachedPlayerIndex, ws, msg.action);
-            break;
+            case "joinRoom": {
+              if (msg.reconnectToken) {
+                const lookup = await findByReconnectToken(pool, msg.reconnectToken);
+                const room = lookup && getRoom(lookup.roomCode);
+                if (lookup && room) {
+                  reconnect(ws, room, lookup.playerIndex);
+                  attachedRoomCode = room.roomCode;
+                  attachedPlayerIndex = lookup.playerIndex;
+                  break;
+                }
+                // fall through to a fresh join if the token didn't resolve to a live room
+              }
+              const joined = await joinRoom(pool, ws, msg);
+              if (joined) {
+                attachedRoomCode = joined.roomCode;
+                attachedPlayerIndex = joined.playerIndex;
+              }
+              break;
+            }
+            case "action": {
+              const room = attachedRoomCode ? getRoom(attachedRoomCode) : undefined;
+              if (!room || attachedPlayerIndex === null) {
+                ws.send(JSON.stringify({ type: "error", message: "not in a room" }));
+                break;
+              }
+              await handleAction(pool, room, attachedPlayerIndex, ws, msg.action);
+              break;
+            }
+            case "leaveRoom": {
+              const room = attachedRoomCode ? getRoom(attachedRoomCode) : undefined;
+              if (room && attachedPlayerIndex !== null) handleDisconnect(room, attachedPlayerIndex);
+              attachedRoomCode = null;
+              attachedPlayerIndex = null;
+              break;
+            }
           }
-          case "leaveRoom": {
-            const room = attachedRoomCode ? getRoom(attachedRoomCode) : undefined;
-            if (room && attachedPlayerIndex !== null) handleDisconnect(room, attachedPlayerIndex);
-            attachedRoomCode = null;
-            attachedPlayerIndex = null;
-            break;
-          }
+        } catch (err) {
+          // never let a bad/malicious message (e.g. createGame's own range checks throwing on
+          // an out-of-bounds player count) crash the whole process for every other room —
+          // this socket just gets told, everyone else keeps playing
+          console.error("message handler error:", err);
+          ws.send(JSON.stringify({ type: "error", message: err instanceof Error ? err.message : "internal error" }));
         }
       })();
     });

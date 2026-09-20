@@ -40,9 +40,11 @@ export interface PoseLogEntry {
   seq: number;
   ts: number;
   source: "dispatch" | "bot";
-  /** the dispatched action's type, or just "bot" for the bot-turn timer (stepBot doesn't
-     expose which action it actually picked, only the resulting state) */
-  actionType: Action["type"] | "bot";
+  /** the dispatched action's type; "bot" for the local bot-turn timer (stepBot doesn't
+     expose which action it actually picked, only the resulting state), "network" for a
+     server-pushed state this client didn't itself just dispatch (another player's move, a
+     server-driven bot turn, or a race against this client's own pending action) */
+  actionType: Action["type"] | "bot" | "network";
   playerId: number;
   before: PoseSnapshot;
   after: PoseSnapshot;
@@ -57,7 +59,7 @@ export interface PoseAnomaly {
   /** the action that was dispatched when the break was noticed (its OWN before/after was
      internally fine — the break is that its `before` didn't match the end of the PREVIOUS
      dispatch) */
-  actionType: Action["type"] | "bot";
+  actionType: Action["type"] | "bot" | "network";
   expected: PoseSnapshot;
   actual: PoseSnapshot;
 }
@@ -92,7 +94,7 @@ function persist(key: string, value: unknown): void {
 /** Call once per real dispatch (human or bot), with the SAME before/after states that
    dispatch actually reduced. Runs the continuity assertion against whatever the PREVIOUS
    call's `after` was, then records this dispatch's own before/after for context. */
-export function logPose(source: "dispatch" | "bot", actionType: Action["type"] | "bot", before: GameState, after: GameState): void {
+export function logPose(source: "dispatch" | "bot", actionType: Action["type"] | "bot" | "network", before: GameState, after: GameState): void {
   if (lastAfter) {
     for (const p of lastAfter.players) {
       const expected = snap(p.pose);
