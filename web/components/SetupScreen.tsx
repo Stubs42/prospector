@@ -257,7 +257,6 @@ export function SetupScreen({
           loadCells={[]}
           burnTargets={[]}
           driftGhost={null}
-          burnPreview={null}
           onCoast={null}
           scrapCells={[]}
           attackTargets={[]}
@@ -269,7 +268,6 @@ export function SetupScreen({
           moveAnim={null}
           onMoveAnimEnd={() => {}}
           onCell={onCell}
-          onCellHover={() => {}}
           onSkipAnimation={spinning || shipSpinning || rollOffActive ? onSkipAnimation : null}
         />
 

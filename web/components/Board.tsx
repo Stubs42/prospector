@@ -61,7 +61,6 @@ export interface BoardProps {
   loadCells: readonly Hex[];
   burnTargets: { cell: Hex; cost: number }[];
   driftGhost: { at: Hex; from: Hex } | null;
-  burnPreview: { path: Hex[]; cost: number } | null;
   onCoast: (() => void) | null;
   /** the active player's own base cells — clicking one (off a burn target) asks to scrap */
   scrapCells: readonly Hex[];
@@ -78,7 +77,6 @@ export interface BoardProps {
   moveAnim: MoveAnim | null;
   onMoveAnimEnd: () => void;
   onCell: (h: Hex) => void;
-  onCellHover: (h: Hex | null) => void;
   /** non-null while a "purely cosmetic, already-decided" animation is playing (a spin, a
      dice reveal) — a click anywhere on the board fast-forwards it to the result instead of
      hitting whatever's normally under the cursor */
@@ -99,7 +97,6 @@ export function Board({
   loadCells,
   burnTargets,
   driftGhost,
-  burnPreview,
   onCoast,
   scrapCells,
   attackTargets,
@@ -111,7 +108,6 @@ export function Board({
   moveAnim,
   onMoveAnimEnd,
   onCell,
-  onCellHover,
   onSkipAnimation = null,
 }: BoardProps) {
   const board = boardFor(state);
@@ -419,11 +415,8 @@ export function Board({
           pointerEvents={clickable ? "all" : undefined}
           className={clickable ? (isBaseCell ? "cell-hit-quiet" : "cell-hit") : undefined}
           onClick={clickable ? clicked(() => onCell({ q: c.q, r: c.r })) : undefined}
-          onMouseEnter={clickable && !isBaseCell ? () => onCellHover({ q: c.q, r: c.r }) : undefined}
           onMouseMove={isBaseCell ? (e) => onTip("Select this base", e) : undefined}
-          onMouseLeave={
-            isBaseCell ? (e) => onTip(null, e) : clickable ? () => onCellHover(null) : undefined
-          }
+          onMouseLeave={isBaseCell ? (e) => onTip(null, e) : undefined}
         />
       ))}
 
@@ -593,35 +586,6 @@ export function Board({
         );
       })}
 
-      {/* burn hover: the path and its fuel cost */}
-      {burnPreview && burnPreview.path.length > 0 && (
-        <g pointerEvents="none">
-          <polyline
-            points={[state.players[state.activePlayerIndex]!.pose.current, ...burnPreview.path]
-              .map((hx) => {
-                const p = px(hx);
-                return `${p.x},${p.y}`;
-              })
-              .join(" ")}
-            fill="none"
-            stroke="var(--gold)"
-            strokeWidth={2.5}
-            strokeLinejoin="round"
-          />
-          {(() => {
-            const end = px(burnPreview.path[burnPreview.path.length - 1]!);
-            return (
-              <g transform={`translate(${end.x} ${end.y - S * 0.9})`}>
-                <rect x={-16} y={-11} width={32} height={20} rx={4} fill="#111" stroke="var(--gold)" />
-                <text x={0} y={4} textAnchor="middle" fontSize={11} fill="var(--gold)" fontWeight={700}>
-                  ⛽{burnPreview.cost}
-                </text>
-              </g>
-            );
-          })()}
-        </g>
-      )}
-
       {/* ships — abstract marker: ring at current, dot at previous, line while in flight.
          attackable enemies and (post-move) your own ship pulse and are click targets. */}
       {world && state.players
@@ -671,9 +635,7 @@ export function Board({
         const col = BURN_COST_COLOUR[Math.min(cost, 3)]!;
         return (
           <g key={`burn-${hexKey(cell)}`} className="cell-hit burn-target"
-             onClick={() => onCell(cell)}
-             onMouseEnter={() => onCellHover(cell)}
-             onMouseLeave={() => onCellHover(null)}>
+             onClick={() => onCell(cell)}>
             <circle cx={x} cy={y} r={S * 0.6} fill={col} fillOpacity={0.14} stroke={col} strokeWidth={2.6} />
             <text x={x} y={y + 4} textAnchor="middle" fontSize={11} fontWeight={700} fill={col}>
               {cost === 0 ? "◇" : cost}
