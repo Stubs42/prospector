@@ -282,6 +282,16 @@ export function GameScreen({
     prevPendingCombatRef.current = state.pendingCombat;
     if (prev && !state.pendingCombat && prev.awaiting === "counter" && prev.lastAttackFailed) {
       setAttackFailedSummary(prev.attackerId);
+      // the attacker's own combatReveal ("Defence Successful" + Confirm) is local state that
+      // only clears when THIS browser clicks its own Confirm — but decline happened on the
+      // DEFENDER's browser, so if the attacker hasn't confirmed yet, their stale reveal box
+      // would otherwise keep rendering right on top of the new Attack Failed box (found live:
+      // "the window showing the dice is displayed above it and I cannot end my turn") — and
+      // holdAdvance would stay stuck true forever, since nothing else was ever going to flip
+      // it back. The fight has unambiguously ended by now regardless of whether this browser
+      // ever acknowledged its own reveal, so both get force-cleared here.
+      setCombatReveal(null);
+      s.setHoldAdvance(false);
     }
   }, [state.pendingCombat]);
   const combatLogLen = useRef(state.log.length);
@@ -896,7 +906,10 @@ export function GameScreen({
            panel — outside the board's own pan/zoom transform, so they never collide with it */}
         {!suppress && attackFailedBox && <HexPopup lines={attackFailedBox.lines} actions={attackFailedBox.actions} />}
         {!suppress && !attackFailedBox && popup && <HexPopup lines={popup.lines} />}
-        {!suppress && combatBox && <CombatBox {...combatBox} />}
+        {/* attackFailedBox wins if both are somehow still true at once — it's the fight's
+           final word, and a stale combatReveal box (something else's decline having already
+           force-cleared it above) must never sit on top of it, same principle as `popup` */}
+        {!suppress && !attackFailedBox && combatBox && <CombatBox {...combatBox} />}
         {!suppress && !combatBox && equipBox && <EquipmentPopup {...equipBox} />}
         {scrapConfirm && (
           <div className="board-scrim" onClick={scrapConfirm.onCancel}>
