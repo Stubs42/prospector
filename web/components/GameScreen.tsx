@@ -81,7 +81,6 @@ export function GameScreen({
   setPrefs: (p: Prefs) => void;
   reducedMotion: boolean;
 }) {
-  const [hoverCell, setHoverCell] = useState<Hex | null>(null);
   const [logOpen, setLogOpen] = useState(false);
   const [scrapConfirmOpen, setScrapConfirmOpen] = useState(
     () => typeof location !== "undefined" && new URLSearchParams(location.search).get("scrap") === "1",
@@ -816,7 +815,6 @@ export function GameScreen({
     return () => window.removeEventListener("keydown", onKey);
   }, [scrapConfirm]);
 
-  const burnPreview = s.burnPreviewFor(hoverCell);
   function onCell(h: Hex) {
     const k = hexKey(h);
     if (afford.placeCells.some((c) => hexKey(c) === k)) return dispatch({ type: "placeShip", cell: h });
@@ -841,7 +839,6 @@ export function GameScreen({
           loadCells={loadCellsForBoard}
           burnTargets={interactive && !suppress ? afford.burnTargets : []}
           driftGhost={interactive && !suppress ? driftGhost : null}
-          burnPreview={interactive && !suppress ? burnPreview : null}
           onCoast={suppress ? null : onCoast}
           scrapCells={anim ? [] : scrapCells}
           attackTargets={attackTargets}
@@ -853,7 +850,6 @@ export function GameScreen({
           moveAnim={s.moveAnim}
           onMoveAnimEnd={s.endMoveAnim}
           onCell={onCell}
-          onCellHover={setHoverCell}
           onSkipAnimation={placing || (combatReveal && !combatReveal.showOutcome) || equipSpinId ? onSkipAnimation : null}
         />
 

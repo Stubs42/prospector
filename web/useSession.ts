@@ -246,11 +246,6 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
 
   // --- previews --------------------------------------------------------
   const driftGhost = afford.legal.some((a) => a.type === "drift") ? driftPreview(state) : null;
-  const burnPreviewFor = (h: Hex | null): { path: Hex[]; cost: number } | null => {
-    if (!h) return null;
-    const t = afford.burnTargets.find((b) => hexKey(b.cell) === hexKey(h));
-    return t ? { path: t.path, cost: t.cost } : null;
-  };
 
   // --- timers ---------------------------------------------------------
   useEffect(() => {
@@ -498,7 +493,6 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     isWaitingOnBot,
     needPassGate,
     driftGhost,
-    burnPreviewFor,
     moveAnim,
     animLive,
     newCardIds,
