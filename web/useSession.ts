@@ -124,6 +124,16 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   // deterministic engine bug — those repro 100% off the same action sequence).
   const stateRef = useRef(state);
   stateRef.current = state;
+  // same reasoning as stateRef, for the same reason: commitState's incoming-"state"-message
+  // path is invoked from ws.onmessage, a closure assigned ONCE per socket connection (inside
+  // openSocket, itself only called when hosting/joining/reconnecting) — not re-created every
+  // render. A plain `moveAnim` read inside that closure would forever see whatever it was at
+  // connect time (typically null), never the real held-drift animation a later burn needs to
+  // continue smoothly from — exactly the shape of a reported bug: a burn's slide visually
+  // started from the raw (already-drift-advanced) state position instead of the true held
+  // ring/dot, jumping through the drift target before snapping to the real one.
+  const moveAnimRef = useRef(moveAnim);
+  moveAnimRef.current = moveAnim;
 
   // --- online (networked) mode -------------------------------------------
   // offline (the default) behaves exactly as this file always has: dispatch applies locally.
@@ -152,13 +162,16 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   const isMe = (playerIndex: number): boolean => online.status === "offline" || online.playerIndex === playerIndex;
 
   function playAnim(a: MoveAnim | null) {
+    moveAnimRef.current = a; // synchronous, like stateRef — see its declaration above
     setMoveAnim(a);
     // a "drift" doesn't animate — it just holds the ship in place while burn targets
     // show — so it never blocks the timers; only a running slide does.
     setAnimLive(a != null && a.kind !== "drift");
   }
   function endAnim() {
-    setMoveAnim((a) => (a && a.kind === "drift" ? a : null));
+    const next = moveAnimRef.current && moveAnimRef.current.kind === "drift" ? moveAnimRef.current : null;
+    moveAnimRef.current = next;
+    setMoveAnim(next);
     setAnimLive(false);
   }
 
@@ -218,10 +231,14 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   // dispatch()/online-mode callers for how each supplies it.
   function commitState(cur: GameState, next: GameState, actionType: Action["type"] | null) {
     if (!cur.setup) logPose("dispatch", actionType ?? "network", cur, next);
-    let anim = deriveMoveAnim(cur, next, phaseMs, moveAnim);
+    // read the ref, not the closed-over `moveAnim` — see moveAnimRef's declaration: this
+    // function is called from a stale ws.onmessage closure once online, which would otherwise
+    // never see anything past whatever moveAnim was at connect time
+    const heldAnim = moveAnimRef.current;
+    let anim = deriveMoveAnim(cur, next, phaseMs, heldAnim);
     // coasting ends the move without a burn — slide the held drift to its target
-    if (!anim && actionType === "endMove" && moveAnim?.kind === "drift" && moveAnim.playerId === cur.activePlayerIndex) {
-      anim = coastAnim(moveAnim);
+    if (!anim && actionType === "endMove" && heldAnim?.kind === "drift" && heldAnim.playerId === cur.activePlayerIndex) {
+      anim = coastAnim(heldAnim);
     }
     if (anim) {
       playAnim(anim);
