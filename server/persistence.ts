@@ -17,13 +17,14 @@ export interface StoredGame {
   id: string;
   roomCode: string;
   state: GameState;
+  seats: Seat[];
   players: StoredPlayer[];
 }
 
-export async function createGameRecord(pool: pg.Pool, roomCode: string, state: GameState): Promise<string> {
+export async function createGameRecord(pool: pg.Pool, roomCode: string, state: GameState, seats: Seat[]): Promise<string> {
   const res = await pool.query<{ id: string }>(
-    "INSERT INTO games (room_code, state) VALUES ($1, $2) RETURNING id",
-    [roomCode, state],
+    "INSERT INTO games (room_code, state, seats) VALUES ($1, $2, $3) RETURNING id",
+    [roomCode, state, JSON.stringify(seats)],
   );
   return res.rows[0]!.id;
 }
@@ -41,8 +42,8 @@ export async function addPlayer(pool: pg.Pool, gameId: string, player: StoredPla
 
 /** Every persisted game, for repopulating the in-memory room registry on server boot. */
 export async function loadAllGames(pool: pg.Pool): Promise<StoredGame[]> {
-  const games = await pool.query<{ id: string; room_code: string; state: GameState }>(
-    "SELECT id, room_code, state FROM games",
+  const games = await pool.query<{ id: string; room_code: string; state: GameState; seats: Seat[] }>(
+    "SELECT id, room_code, state, seats FROM games",
   );
   const players = await pool.query<{
     game_id: string;
@@ -66,6 +67,7 @@ export async function loadAllGames(pool: pg.Pool): Promise<StoredGame[]> {
     id: g.id,
     roomCode: g.room_code,
     state: g.state,
+    seats: g.seats,
     players: (byGame.get(g.id) ?? []).sort((a, b) => a.playerIndex - b.playerIndex),
   }));
 }

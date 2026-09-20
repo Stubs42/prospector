@@ -3,8 +3,8 @@ import type { WebSocket } from "ws";
 import { legalActions } from "../engine/index.js";
 import { fakePool, FakePool } from "./testFakePool.js";
 import { getRoom, removeRoom } from "./rooms.js";
-import { createRoom, joinRoom, handleAction, handleDisconnect, reconnect } from "./game-server.js";
-import { findByReconnectToken } from "./persistence.js";
+import { createRoom, joinRoom, handleAction, handleDisconnect, reconnect, restoreRoom } from "./game-server.js";
+import { findByReconnectToken, loadAllGames } from "./persistence.js";
 
 function fakeSocket(): WebSocket & { sent: unknown[] } {
   const sent: unknown[] = [];
@@ -158,6 +158,29 @@ describe("game-server", () => {
       const stateBeforeBotTurn = room.state;
       await vi.advanceTimersByTimeAsync(2000);
       expect(room.state).not.toBe(stateBeforeBotTurn);
+    } finally {
+      removeRoom(room.roomCode);
+    }
+  });
+
+  it("restoreRoom keeps bot seats after a reload, even while still in interactive setup", async () => {
+    // regression test: state.players is empty during setup, so deriving seat kinds from its
+    // length (instead of the persisted `seats` column) silently dropped every bot seat — only
+    // ever caught by restarting a real server against real Postgres mid-setup
+    const hostWs = fakeSocket();
+    const room = await createRoom(pool, hostWs, {
+      type: "createRoom",
+      displayName: "Alice",
+      humans: 1,
+      bots: 2,
+      upgradeAtStart: "none",
+      variant: "standard",
+    });
+    try {
+      expect(room.state.setup).not.toBeNull();
+      const [stored] = await loadAllGames(pool);
+      const restored = restoreRoom(stored!);
+      expect(restored.seats).toEqual(["human", "bot", "bot"]);
     } finally {
       removeRoom(room.roomCode);
     }

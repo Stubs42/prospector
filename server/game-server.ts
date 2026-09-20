@@ -24,20 +24,16 @@ function broadcastState(room: Room): void {
 }
 
 /** Restore a room (state + seats + player metadata) from a persisted record, e.g. on boot —
-   no sockets are attached yet; those arrive as clients reconnect via their token. */
+   no sockets are attached yet; those arrive as clients reconnect via their token. `seats` is
+   read back verbatim from its own persisted column rather than re-derived from `state.players`
+   — during interactive setup that array is still empty, so deriving seat kinds from its length
+   silently dropped bot seats (only ever caught by testing against a real, restarted server). */
 export function restoreRoom(stored: StoredGame): Room {
-  const seats = stored.players
-    .slice()
-    .sort((a, b) => a.playerIndex - b.playerIndex)
-    .map((p) => p.seatKind)
-    // player records only cover human seats (bots are never persisted as players) — pad the
-    // rest of the seat array out from the stored state's own player count
-    .concat(Array(Math.max(0, stored.state.players.length - stored.players.length)).fill("bot"));
   return {
     id: stored.id,
     roomCode: stored.roomCode,
     state: stored.state,
-    seats,
+    seats: stored.seats,
     players: stored.players.map((p) => ({ playerIndex: p.playerIndex, displayName: p.displayName, seatKind: p.seatKind, reconnectToken: p.reconnectToken })),
     sockets: new Map(),
     rng: makeRng(stored.state.rngState),
@@ -54,7 +50,7 @@ export async function createRoom(
   const seed = (Math.random() * 1e9) | 0;
   const state = createGame({ seats, seed, upgradeAtStart: msg.upgradeAtStart, variant: msg.variant });
   const roomCode = generateRoomCode();
-  const gameId = await createGameRecord(pool, roomCode, state);
+  const gameId = await createGameRecord(pool, roomCode, state, seats);
   const reconnectToken = randomUUID();
   const hostPlayer: RoomPlayer = { playerIndex: 0, displayName: msg.displayName, seatKind: "human", reconnectToken };
   await addPlayer(pool, gameId, hostPlayer);
