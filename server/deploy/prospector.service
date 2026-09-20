@@ -1,0 +1,16 @@
+[Unit]
+Description=Prospector multiplayer server
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=prospector
+Group=prospector
+WorkingDirectory=/opt/prospector
+EnvironmentFile=/opt/prospector/.env
+ExecStart=/opt/prospector/node_modules/.bin/tsx server/main.ts
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
