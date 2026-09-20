@@ -732,6 +732,18 @@ circle.cell-hit { pointer-events: all; }
   border: 1px solid var(--line); border-radius: 5px; padding: 0.25rem 0.4rem; font: inherit;
 }
 
+/* online lobby (host/join a networked room) — shares .settings-panel/.settings-row's look */
+.online-lobby { position: relative; display: flex; align-items: center; gap: 0.4rem; }
+.online-lobby-panel { width: 220px; }
+.online-lobby-tabs { display: flex; gap: 0.3rem; }
+.online-lobby-tabs button {
+  flex: 1; padding: 0.3rem 0; font-size: 0.78rem;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px; color: var(--muted);
+}
+.online-lobby-tabs button.active { color: var(--ink); border-color: var(--line-strong, var(--line)); }
+.online-room-code { font-size: 0.82rem; color: var(--muted); letter-spacing: 0.04em; }
+.online-lobby-error { font-size: 0.76rem; color: #e08a3d; }
+
 @media (prefers-reduced-motion: reduce) {
   .ore-chip, .pulse-avail, .ship-blink, .region-blink { animation: none; }
   .pulse-avail { opacity: 1; }

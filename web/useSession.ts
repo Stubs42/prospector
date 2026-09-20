@@ -24,6 +24,37 @@ import { deriveMoveAnim, coastAnim, type MoveAnim } from "./anim.js";
 import { movePhaseMs, type Prefs } from "./prefs.js";
 import { randomBotName } from "./nameGen.js";
 import { logPose, resetPoseLog } from "./poseLog.js";
+import type { ClientMessage, ServerMessage } from "../client/index.js";
+
+const RECONNECT_KEY = "prospector.online.session";
+interface SavedOnlineSession {
+  roomCode: string;
+  token: string;
+}
+function loadSavedOnlineSession(): SavedOnlineSession | null {
+  try {
+    const raw = localStorage.getItem(RECONNECT_KEY);
+    return raw ? (JSON.parse(raw) as SavedOnlineSession) : null;
+  } catch {
+    return null;
+  }
+}
+function saveOnlineSession(s: SavedOnlineSession | null): void {
+  try {
+    if (s) localStorage.setItem(RECONNECT_KEY, JSON.stringify(s));
+    else localStorage.removeItem(RECONNECT_KEY);
+  } catch {
+    // localStorage can throw (private mode, quota) — reconnect-on-refresh just won't work
+  }
+}
+
+export interface OnlineState {
+  status: "offline" | "connecting" | "online";
+  roomCode: string | null;
+  playerIndex: number | null;
+  seats: Seat[];
+  error: string | null;
+}
 
 // human seats are a live sentinel (null), resolved against prefs.playerName on every render
 // so changing "your name" in Settings takes effect immediately without touching bot names;
@@ -94,6 +125,25 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   const stateRef = useRef(state);
   stateRef.current = state;
 
+  // --- online (networked) mode -------------------------------------------
+  // offline (the default) behaves exactly as this file always has: dispatch applies locally.
+  // Once online, dispatch instead sends the action to the server and waits for its broadcast
+  // "state" message to arrive — see dispatch() and the socket message handler below.
+  const wsRef = useRef<WebSocket | null>(null);
+  const [online, setOnlineState] = useState<OnlineState>({
+    status: "offline",
+    roomCode: null,
+    playerIndex: null,
+    seats: [],
+    error: null,
+  });
+  // set by dispatch() right before sending an action over the wire, so the socket handler can
+  // attribute the next incoming state to it (for the anim-deriving special cases below that
+  // need to know the action type, not just the before/after pose) — cleared once consumed.
+  // Best-effort: if another player's/bot's broadcast races in first, this occasionally
+  // mis-attributes a cosmetic animation choice, never the underlying game state.
+  const pendingActionTypeRef = useRef<Action["type"] | null>(null);
+
   function playAnim(a: MoveAnim | null) {
     setMoveAnim(a);
     // a "drift" doesn't animate — it just holds the ship in place while burn targets
@@ -118,18 +168,32 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   const activeIsBot = activeIsBotOf(state, seats);
 
   // state.activePlayerIndex tracks whoever is up next throughout setup too (see stepSetup),
-  // so this pass-gate and the bot-turn check below both already work during pickBase/pickShip
+  // so this pass-gate and the bot-turn check below both already work during pickBase/pickShip.
+  // "pass the device" only makes sense in local hot-seat play — online, every seat has its own
+  // device/browser, so there's nothing to pass.
   const needPassGate =
-    humansCount >= 2 && !state.gameOver && !activeIsBot && shownPlayer !== state.activePlayerIndex;
+    online.status === "offline" &&
+    humansCount >= 2 &&
+    !state.gameOver &&
+    !activeIsBot &&
+    shownPlayer !== state.activePlayerIndex;
   // held while GameScreen is playing the initial-resource-placement reveal — the real game
   // state already has every resource placed (see populateGame), so without this the bot
   // timer / auto-draw could silently advance the game while that animation is still playing
   const [holdAdvance, setHoldAdvance] = useState(false);
   // during setup, SetupScreen resolves bot turns itself (the same lucky-wheel spin a human's
   // "Random" button runs, just auto-triggered) so the pick is actually watchable — this timer
-  // stays out of it entirely and only drives bot turns in a real, started game
+  // stays out of it entirely and only drives bot turns in a real, started game. Online, the
+  // server drives every bot turn centrally (server/game-server.ts) — this client must never
+  // also step a bot locally, or two independent RNGs would race to advance the same game.
   const isWaitingOnBot =
-    !state.setup && !holdAdvance && !animLive && !state.gameOver && !needPassGate && seats[waitingOn(state)] === "bot";
+    online.status === "offline" &&
+    !state.setup &&
+    !holdAdvance &&
+    !animLive &&
+    !state.gameOver &&
+    !needPassGate &&
+    seats[waitingOn(state)] === "bot";
 
   // --- state transitions -------------------------------------------------
   const clearStaging = () => {
@@ -137,49 +201,68 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     setCombatSel(new Set());
     setAttackTarget(null);
   };
+  // Applies a (cur -> next) transition to all the client-local bookkeeping that isn't part of
+  // GameState itself: pose log, move animation, staging, the "just drew this" pulse, and the
+  // setup-just-finished pass-gate reset. Transport-agnostic on purpose — `next` may have come
+  // from a local applyAction call (hot-seat) or a server broadcast (online); either way this
+  // is the one place that turns "here's a new GameState" into the right UI reaction.
+  // `actionType` drives two animation special-cases that a plain pose diff can't tell apart on
+  // its own (coasting a held drift with no burn, and clearing a hold on scrapShip) — see the
+  // dispatch()/online-mode callers for how each supplies it.
+  function commitState(cur: GameState, next: GameState, actionType: Action["type"] | null) {
+    if (!cur.setup) logPose("dispatch", actionType ?? "network", cur, next);
+    let anim = deriveMoveAnim(cur, next, phaseMs, moveAnim);
+    // coasting ends the move without a burn — slide the held drift to its target
+    if (!anim && actionType === "endMove" && moveAnim?.kind === "drift" && moveAnim.playerId === cur.activePlayerIndex) {
+      anim = coastAnim(moveAnim);
+    }
+    if (anim) {
+      playAnim(anim);
+    } else if (actionType === "scrapShip" || next.activePlayerIndex !== cur.activePlayerIndex) {
+      // the held drift (if any) no longer applies once the ship is scrapped, or the turn
+      // moves on to someone else, without ever resolving it into a slide
+      playAnim(null);
+    }
+    // otherwise: this transition never touched anyone's pose (drawBooster, discardBooster,
+    // useReserveFuel, attack, combat sub-decisions, chooseEquipment, ...) — leave whatever
+    // drift is currently held exactly as it is. Calling playAnim(null) here used to wipe
+    // the hold's own p0/c0 the instant e.g. a reserve-fuel card was played mid-drift, so
+    // the burn dispatched right after it derived its slide from scratch (the ship's plain
+    // current pose) instead of continuing the drift's already-shown path — a phantom extra
+    // "drift" animation, whose end then snapped to the real position: exactly the shape of
+    // the long-suspected "prev position reverts" bug, even though the underlying state was
+    // correct throughout (see poseLog's own findings — it never caught a real data break).
+    stateRef.current = next; // commit before setState, so a same-tick dispatch sees it too
+    setState(next);
+    clearStaging();
+    if (actionType === "drawBooster") {
+      const before = new Set(cur.players[cur.activePlayerIndex]?.hand.map((c) => c.id));
+      const after = next.players[cur.activePlayerIndex]?.hand ?? [];
+      setNewCardIds(new Set(after.filter((c) => !before.has(c.id)).map((c) => c.id)));
+    } else {
+      setNewCardIds(new Set());
+    }
+    // setup just finished (the last pickShip finalized into a real game) — start fresh
+    // on the pass-gate so the very first real turn doesn't immediately ask to "pass"
+    if (cur.setup && !next.setup) setShownPlayer(next.activePlayerIndex);
+  }
   function dispatch(a: Action) {
     // always reduce against the latest known state (see stateRef above), never the `state`
     // this render closed over — a same-tick second dispatch must build on the first one's
     // result, not silently discard it
     const cur = stateRef.current;
+    if (online.status !== "offline") {
+      // the server is the sole authority once online — send the action and wait for its
+      // broadcast "state" message (handled below) to actually commit anything; a locally-run
+      // applyAction here would just be discarded speculation, so don't even attempt one
+      pendingActionTypeRef.current = a.type;
+      const msg: ClientMessage = { type: "action", action: a };
+      wsRef.current?.send(JSON.stringify(msg));
+      return;
+    }
     const r = applyAction(cur, a);
-    if (r.ok) {
-      if (!cur.setup) logPose("dispatch", a.type, cur, r.state);
-      let anim = deriveMoveAnim(cur, r.state, phaseMs, moveAnim);
-      // coasting ends the move without a burn — slide the held drift to its target
-      if (!anim && a.type === "endMove" && moveAnim?.kind === "drift" && moveAnim.playerId === cur.activePlayerIndex) {
-        anim = coastAnim(moveAnim);
-      }
-      if (anim) {
-        playAnim(anim);
-      } else if (a.type === "scrapShip" || r.state.activePlayerIndex !== cur.activePlayerIndex) {
-        // the held drift (if any) no longer applies once the ship is scrapped, or the turn
-        // moves on to someone else, without ever resolving it into a slide
-        playAnim(null);
-      }
-      // otherwise: this dispatch never touched anyone's pose (drawBooster, discardBooster,
-      // useReserveFuel, attack, combat sub-decisions, chooseEquipment, ...) — leave whatever
-      // drift is currently held exactly as it is. Calling playAnim(null) here used to wipe
-      // the hold's own p0/c0 the instant e.g. a reserve-fuel card was played mid-drift, so
-      // the burn dispatched right after it derived its slide from scratch (the ship's plain
-      // current pose) instead of continuing the drift's already-shown path — a phantom extra
-      // "drift" animation, whose end then snapped to the real position: exactly the shape of
-      // the long-suspected "prev position reverts" bug, even though the underlying state was
-      // correct throughout (see poseLog's own findings — it never caught a real data break).
-      stateRef.current = r.state; // commit before setState, so a same-tick dispatch sees it too
-      setState(r.state);
-      clearStaging();
-      if (a.type === "drawBooster") {
-        const before = new Set(cur.players[cur.activePlayerIndex]?.hand.map((c) => c.id));
-        const after = r.state.players[cur.activePlayerIndex]!.hand;
-        setNewCardIds(new Set(after.filter((c) => !before.has(c.id)).map((c) => c.id)));
-      } else {
-        setNewCardIds(new Set());
-      }
-      // setup just finished (the last pickShip finalized into a real game) — start fresh
-      // on the pass-gate so the very first real turn doesn't immediately ask to "pass"
-      if (cur.setup && !r.state.setup) setShownPlayer(r.state.activePlayerIndex);
-    } else console.warn("rejected", a, r.error);
+    if (r.ok) commitState(cur, r.state, a.type);
+    else console.warn("rejected", a, r.error);
   }
   function dispatchBurn(burn: Extract<Action, { type: "burn" }>) {
     // reserve-fuel cards are no longer staged here — they're played (and their fuel
@@ -226,6 +309,86 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     clearStaging();
     playAnim(null);
   }
+
+  // --- online (networked) mode: connection management --------------------
+  function wsUrl(): string {
+    const scheme = location.protocol === "https:" ? "wss:" : "ws:";
+    return `${scheme}//${location.host}/ws`;
+  }
+  function openSocket(onOpen: (ws: WebSocket) => void): void {
+    wsRef.current?.close();
+    setOnlineState((o) => ({ ...o, status: "connecting", error: null }));
+    const ws = new WebSocket(wsUrl());
+    wsRef.current = ws;
+    ws.onopen = () => onOpen(ws);
+    ws.onerror = () => setOnlineState((o) => ({ ...o, status: "offline", error: "Could not reach the server" }));
+    ws.onclose = () => setOnlineState((o) => (o.status === "offline" ? o : { ...o, status: "offline" }));
+    ws.onmessage = (ev) => {
+      const msg: ServerMessage = JSON.parse(ev.data as string);
+      switch (msg.type) {
+        case "roomJoined":
+          saveOnlineSession({ roomCode: msg.roomCode, token: msg.reconnectToken });
+          setOnlineState({
+            status: "online",
+            roomCode: msg.roomCode,
+            playerIndex: msg.playerIndex,
+            seats: msg.seats,
+            error: null,
+          });
+          setSeats(msg.seats);
+          break;
+        case "state": {
+          const actionType = pendingActionTypeRef.current;
+          pendingActionTypeRef.current = null;
+          commitState(stateRef.current, msg.state, actionType);
+          break;
+        }
+        case "error":
+          setOnlineState((o) => ({ ...o, error: msg.message }));
+          break;
+        case "roomClosed":
+          saveOnlineSession(null);
+          setOnlineState({ status: "offline", roomCode: null, playerIndex: null, seats: [], error: "Room closed" });
+          break;
+      }
+    };
+  }
+  function hostOnline(
+    displayName: string,
+    h: number,
+    b: number,
+    upgrade: "none" | "random" | "select",
+    variant: "standard" | "short" | "long",
+  ): void {
+    openSocket((ws) => {
+      const msg: ClientMessage = { type: "createRoom", displayName, humans: h, bots: b, upgradeAtStart: upgrade, variant };
+      ws.send(JSON.stringify(msg));
+    });
+  }
+  function joinOnline(displayName: string, roomCode: string): void {
+    openSocket((ws) => {
+      const msg: ClientMessage = { type: "joinRoom", roomCode, displayName };
+      ws.send(JSON.stringify(msg));
+    });
+  }
+  function leaveOnline(): void {
+    saveOnlineSession(null);
+    wsRef.current?.close();
+    wsRef.current = null;
+    setOnlineState({ status: "offline", roomCode: null, playerIndex: null, seats: [], error: null });
+    openSetup(); // fall back to a fresh local hot-seat game rather than a dead screen
+  }
+  // auto-reconnect once, on first mount, if a browser refresh left a room behind
+  useEffect(() => {
+    const saved = loadSavedOnlineSession();
+    if (!saved) return;
+    openSocket((ws) => {
+      const msg: ClientMessage = { type: "joinRoom", roomCode: saved.roomCode, displayName: "", reconnectToken: saved.token };
+      ws.send(JSON.stringify(msg));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const pickBase = (base: Colour) => dispatch({ type: "pickBase", base });
   const pickShip = (colour: Colour) => dispatch({ type: "pickShip", colour });
   const finishSetup = () => dispatch({ type: "finishSetup" });
@@ -511,6 +674,10 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     toggleArmed: toggle(setArmed),
     toggleCombatSel: toggle(setCombatSel),
     setAttackTarget,
+    online,
+    hostOnline,
+    joinOnline,
+    leaveOnline,
   };
 }
 
