@@ -281,19 +281,27 @@ export function SetupScreen({
           <HexPopup lines={lines} actions={[{ label: "🎲 Random", kind: "primary", onClick: spinRandomBase }]} />
         )}
         {rollOffActive && <HexPopup lines={lines} />}
-        {!s.needPassGate && setup.stage === "pickShip" && shownShip && (
+        {!s.needPassGate &&
+          setup.stage === "pickShip" &&
+          shownShip &&
+          // offline (hot-seat), everyone shares one screen, so a bot's spin stays watchable
+          // as before; online, another seat's pick — human or bot — is nobody else's to
+          // follow, only its result (the coloured base) is: see the plan doc "Gate
+          // interactive UI to the deciding player online"
+          (s.online.status === "offline" || s.isMe(current)) && (
           <ShipPickerPopup
-            // this box (unlike the base-pick one) still shows during a bot's own turn —
-            // watchable, but not addressed to "you", since it isn't your decision to make
+            // this box (unlike the base-pick one) still shows during a bot's own turn in
+            // hot-seat — watchable, but not addressed to "you", since it isn't your decision
             title={currentIsBot ? "Selecting Ship" : "Select Your Ship"}
             colour={shownShip}
             name={mode.ships[shownShip].name}
             stats={mode.ships[shownShip]}
             canBrowse={freeShips.length > 1}
             spinning={shipSpinning}
-            // a bot's own turn is watch-only — the card still spins, but there's
-            // nothing for the human to click on the bot's behalf
-            interactive={!currentIsBot && s.isMe(current)}
+            // a bot's own turn is watch-only (hot-seat only — online, a bot's turn never
+            // satisfies the render condition above at all) — the card still spins, but
+            // there's nothing for the human to click on the bot's behalf
+            interactive={!currentIsBot}
             onPrev={() => browseShip(-1)}
             onNext={() => browseShip(1)}
             onSelect={selectShip}
