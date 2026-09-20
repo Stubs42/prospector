@@ -12,6 +12,7 @@
     "test:watch": "vitest",
     "dev": "vite",
     "build:web": "vite build",
+    "build:web:selfhost": "VITE_BASE_PATH=/ vite build",
     "preview": "vite preview",
     "dev:server": "tsx watch server/main.ts",
     "start:server": "tsx server/main.ts"
