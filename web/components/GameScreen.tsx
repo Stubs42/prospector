@@ -378,8 +378,12 @@ export function GameScreen({
   // hot-seat behavior is unchanged.
   const interactive = !activeIsBot && !needPassGate && s.isMe(state.activePlayerIndex);
   const overLimit = afford.overLimit;
-  // turn 1: the ship must be placed on a base cell before anything else
-  const launchPhase = interactive && !pc && afford.placeCells.length > 0;
+  // turn 1: the ship must be placed on a base cell before anything else. `needsLaunch` is the
+  // plain, ungated fact (used below for the passive status label, which must read the same for
+  // every viewer); `launchPhase` additionally requires `interactive` since IT drives the actual
+  // clickable popup/highlight, which only the deciding seat should ever see.
+  const needsLaunch = !pc && afford.placeCells.length > 0;
+  const launchPhase = interactive && needsLaunch;
 
   // --- start-of-game "random" upgrade: auto-spin, then dispatch chooseEquipment ---------
   // Same "already decided, just cosmetic suspense" lucky-wheel as SetupScreen's own "Random"
@@ -461,7 +465,7 @@ export function GameScreen({
     : attackTarget !== null ? "Attacking"
     : afford.equipmentChoice ? "Choosing an upgrade"
     : overLimit ? "Discarding a card"
-    : launchPhase ? "Picking a launch cell"
+    : needsLaunch ? "Picking a launch cell"
     : !p.turn.boosterDrawn ? "Drawing a card"
     : !p.turn.driftDone ? "Drifting"
     : !p.turn.moved ? "Deciding a burn"
