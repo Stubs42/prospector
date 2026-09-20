@@ -4,3 +4,4 @@ board/board.png
 board/board.svg
 *.log
 scratch/
+.env

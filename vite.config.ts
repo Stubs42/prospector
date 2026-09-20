@@ -11,7 +11,7 @@ export default defineConfig(({ command }) => ({
   build: { outDir: "../dist-web", emptyOutDir: true },
   test: {
     root: ".",
-    include: ["engine/**/*.test.ts", "client/**/*.test.ts", "web/**/*.test.ts"],
+    include: ["engine/**/*.test.ts", "client/**/*.test.ts", "web/**/*.test.ts", "server/**/*.test.ts"],
     setupFiles: ["engine/test-provide.ts"],
   },
 }));
