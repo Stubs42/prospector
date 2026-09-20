@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { WebSocket } from "ws";
 import { legalActions } from "../engine/index.js";
+import { stepBot } from "../client/index.js";
 import { fakePool, FakePool } from "./testFakePool.js";
 import { getRoom, removeRoom } from "./rooms.js";
 import { createRoom, joinRoom, handleAction, handleDisconnect, reconnect, restoreRoom } from "./game-server.js";
@@ -211,6 +212,47 @@ describe("game-server", () => {
       const [stored] = await loadAllGames(pool);
       const restored = restoreRoom(stored!);
       expect(restored.seats).toEqual(["human", "bot", "bot"]);
+    } finally {
+      removeRoom(room.roomCode);
+    }
+  });
+
+  it("lets any connected seat finish setup, even when the bot who picked last would otherwise own the turn", async () => {
+    // regression test: state.activePlayerIndex during the "rollOff" stage is still whoever
+    // picked LAST (finishSetup itself is what finally sets it to the real winner) — gating
+    // finishSetup the same way as every other action meant only that exact last-picker's own
+    // browser could ever complete setup. With seats [human, bot] the bot always picks last, so
+    // no connected human could ever finish setup — a permanent stall, found live.
+    const hostWs = fakeSocket();
+    const room = await createRoom(pool, hostWs, {
+      type: "createRoom",
+      displayName: "Alice",
+      humans: 1,
+      bots: 1,
+      upgradeAtStart: "none",
+      variant: "standard",
+    });
+    try {
+      // drive the human seat's own picks directly; step the bot's picks with stepBot the same
+      // way scheduleBotCheck would, but stop the INSTANT rollOff is reached — letting the real
+      // bot-timer run past that point would call stepBot again, which (since finishSetup is
+      // the sole legal action during rollOff, for anyone) would resolve it itself and mask
+      // exactly the gap this test exists to catch
+      let guard = 0;
+      while (room.state.setup && room.state.setup.stage !== "rollOff" && guard++ < 20) {
+        if (room.seats[room.state.activePlayerIndex] === "human") {
+          const legal = legalActions(room.state)[0]!;
+          await handleAction(pool, room, 0, hostWs, legal);
+        } else {
+          room.state = stepBot(room.state, room.rng);
+        }
+      }
+      expect(room.state.setup?.stage).toBe("rollOff");
+      expect(room.state.activePlayerIndex).toBe(1); // the bot, who picked last — not the host
+
+      await handleAction(pool, room, 0, hostWs, { type: "finishSetup" });
+      expect(room.state.setup).toBeNull(); // the only human seat completed it despite the mismatch
+      expect(hostWs.sent.some((m: any) => m.type === "error")).toBe(false);
     } finally {
       removeRoom(room.roomCode);
     }
