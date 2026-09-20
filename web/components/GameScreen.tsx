@@ -6,6 +6,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { score, statsOf } from "../../engine/index.js";
+import { waitingOn } from "../../client/index.js";
 import { boardFor } from "../../engine/game.js";
 import { add, hexKey, scale } from "../../engine/hex.js";
 import type { BoosterCard, Colour, Hex } from "../../engine/index.js";
@@ -265,8 +266,24 @@ export function GameScreen({
   const [combatReveal, setCombatReveal] = useState<CombatReveal | null>(null);
   // set once the loser of a fight declines to (or can't) counter-attack — the fight is over,
   // but the attacker (always still the one on turn) gets one explicit "Attack Failed" / "End
-  // Turn" beat rather than just silently falling back to the ambient "click your ship" cue
-  const [attackFailedSummary, setAttackFailedSummary] = useState(false);
+  // Turn" beat rather than just silently falling back to the ambient "click your ship" cue.
+  // Holds the attacker's own playerId (not just a boolean) so this can be shown ONLY on that
+  // attacker's own browser online — derived below from the pendingCombat transition itself,
+  // not from whichever browser happened to click decline (that used to be the same browser in
+  // hot-seat by construction, but online the decliner is a different seat/device entirely).
+  const [attackFailedSummary, setAttackFailedSummary] = useState<number | null>(null);
+  // watches pendingCombat go from "awaiting a declined/failed counter" to null — every
+  // browser (attacker's, decliner's, any spectator's) evaluates this identically off shared
+  // state, so the resulting summary always attributes to the real attacker regardless of who
+  // dispatched declineCounter.
+  const prevPendingCombatRef = useRef(state.pendingCombat);
+  useEffect(() => {
+    const prev = prevPendingCombatRef.current;
+    prevPendingCombatRef.current = state.pendingCombat;
+    if (prev && !state.pendingCombat && prev.awaiting === "counter" && prev.lastAttackFailed) {
+      setAttackFailedSummary(prev.attackerId);
+    }
+  }, [state.pendingCombat]);
   const combatLogLen = useRef(state.log.length);
   useEffect(() => {
     if (state.log.length <= combatLogLen.current) {
@@ -355,7 +372,11 @@ export function GameScreen({
 
   const anim = s.animLive; // a move is actively playing — hold back prompts/targets
   const suppress = anim || scrapConfirmOpen || placing; // also true while placing / the scrap dialog is up
-  const interactive = !activeIsBot && !needPassGate;
+  // online, only the browser whose own seat is actually active gets an interactive board/
+  // popup — everyone else just watches state changes and animations play out (see plan doc:
+  // "Gate interactive UI to the deciding player online"). s.isMe is always true offline, so
+  // hot-seat behavior is unchanged.
+  const interactive = !activeIsBot && !needPassGate && s.isMe(state.activePlayerIndex);
   const overLimit = afford.overLimit;
   // turn 1: the ship must be placed on a base cell before anything else
   const launchPhase = interactive && !pc && afford.placeCells.length > 0;
@@ -425,7 +446,10 @@ export function GameScreen({
   // exactly like before.
   const soloHumanId = s.humans === 1 ? seats.indexOf("human") : -1;
   const handOwner = seats[activeMover.id] === "bot" && soloHumanId >= 0 ? state.players[soloHumanId]! : activeMover;
-  const handHidden = seats[handOwner.id] === "bot";
+  // online, another human's hand is exactly as private as a bot's "hand" always was here —
+  // extends the existing hiding rule instead of adding a parallel one, closing both the
+  // information leak (seeing someone else's exact cards) and the clickability gap in one line
+  const handHidden = seats[handOwner.id] === "bot" || (s.online.status !== "offline" && !s.isMe(handOwner.id));
 
   // --- status panel: who's doing what, and a running log of their move ---------------
   const actionLabel: string =
@@ -569,19 +593,25 @@ export function GameScreen({
       ? "Pick laser boosters, then declare."
       : null;
 
-  // declining a counter-attack is really two different real moves depending on WHO declines:
+  // declining a counter-attack reads as two different real moves depending on WHO declines:
   // the on-turn player (the original attacker, having just defended a counter) is genuinely
   // ending their own turn; the off-turn player (the original defender, done retaliating) is
-  // just stepping back from the fight and handing control back — the attacker still needs
-  // their own explicit "Attack Failed" / "End Turn" beat once that happens (attackFailedSummary).
+  // just stepping back from the fight and handing control back — the attacker still gets
+  // their own explicit "Attack Failed" / "End Turn" beat once that happens, derived from the
+  // pendingCombat transition above (attackFailedSummary), not set here directly — the browser
+  // that clicks decline is the DEFENDER's, not necessarily the attacker's who needs to see it.
   const declineIsOnTurn = pc ? pc.defenderId === state.activePlayerIndex : false;
-  const onDeclineCounter = () => {
-    if (!declineIsOnTurn) setAttackFailedSummary(true);
-    dispatch({ type: "declineCounter" });
-  };
+  const onDeclineCounter = () => dispatch({ type: "declineCounter" });
 
+  // combat's real decider is whichever seat pendingCombat.awaiting is actually asking —
+  // attacker while resolving/rolling, defender otherwise — not always state.activePlayerIndex
+  // (a counter-attack round swaps the roles). Online, only that seat's own browser gets real
+  // buttons; everyone else sees the box (title, dice, outcome) with nothing to click.
+  const myDecision = s.isMe(waitingOn(state));
   const buttons: PanelButton[] = [];
-  if (pc && pc.awaiting === "defend" && seats[pc.defenderId] === "human") {
+  if (!myDecision) {
+    // spectating this decision — leave buttons empty, just watch
+  } else if (pc && pc.awaiting === "defend" && seats[pc.defenderId] === "human") {
     buttons.push({
       label: `Stand${pickedIds("shield").length ? ` (+${selSum("shield")})` : ""}`,
       kind: "primary",
@@ -630,11 +660,13 @@ export function GameScreen({
         // vanishing on its own after a fixed pause. A loss goes straight to the REAL
         // counter-attack/end-fight choice (reusing `buttons`, computed above from the very
         // same pendingCombat.awaiting==="counter" this reveal is for) instead of a separate
-        // generic "Confirm" first — but only when there's an actual human decision to make;
-        // if whoever decides next is a bot, there's nothing to choose here, just a plain
-        // acknowledgment while the bot timer picks it up once this closes.
+        // generic "Confirm" first — but only when there's an actual human decision to make
+        // AND this is that human's own browser; a bot's turn next, or a spectator watching
+        // someone else's decision, both just get a plain acknowledgment that dismisses their
+        // own local reveal overlay (setCombatReveal/setHoldAdvance are local-only — never a
+        // dispatch) while the real decider (or the bot timer) picks it up once this closes.
         buttons: combatReveal.showOutcome
-          ? combatReveal.attackerWins || seats[combatReveal.defenderId] !== "human"
+          ? combatReveal.attackerWins || seats[combatReveal.defenderId] !== "human" || !myDecision
             ? [
                 {
                   label: "Confirm",
@@ -696,9 +728,12 @@ export function GameScreen({
   // the fight is fully over and it was the OFF-turn player who called it off (End Fight) —
   // the on-turn attacker gets one explicit "Attack Failed" / "End Turn" beat instead of just
   // silently falling back to the ambient "click your ship" cue. Takes priority over the plain
-  // guidance popup, same family as combatBox/equipBox below.
+  // guidance popup, same family as combatBox/equipBox below. Gated to the real attacker's own
+  // browser (attackFailedSummary holds THEIR playerId, not a plain boolean — see its
+  // declaration — since online the browser that clicked decline is a different seat entirely).
+  // attackerId can legitimately be 0, so this checks `!== null`, never plain truthiness.
   const attackFailedBox =
-    attackFailedSummary && !pc
+    attackFailedSummary !== null && !pc && s.isMe(attackFailedSummary)
       ? {
           lines: ["Attack Failed"],
           actions: [
@@ -706,7 +741,7 @@ export function GameScreen({
               label: "End Turn",
               kind: "primary" as const,
               onClick: () => {
-                setAttackFailedSummary(false);
+                setAttackFailedSummary(null);
                 dispatch({ type: "endTurn" });
               },
             },
