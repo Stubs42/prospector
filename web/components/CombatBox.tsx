@@ -23,18 +23,24 @@ export interface CombatCardChip {
 }
 
 /** one die's reveal: cycles through `value` (a fresh face each animation tick) until
-   `settled`, at which point `value` is the real roll and `total` prints alongside it */
+   `settled`, at which point `value` is the real roll and `base`/`total` print alongside it
+   as "base+die=total" (lasers+roll=attack total, shields+roll=defence total) */
 export interface CombatDieView {
   value: number;
   settled: boolean;
+  base: number;
   total: number;
 }
 
 export interface CombatRollView {
   attack: CombatDieView | null;
   defence: CombatDieView | null;
-  /** shown once both dice are settled — the win/loss line (and any spoil taken) */
-  outcome?: string | null;
+  /** true when the defender auto-repelled (shield +99 or hyperspace) — the totals are still
+     real, but the win was never actually in question */
+  autoRepel?: boolean;
+  /** shown once both dice are settled — one or more lines (a title line plus detail, e.g.
+     "Attack Succeeded" / "Loot green Orb [2/3]") */
+  outcome?: string[] | null;
 }
 
 export interface CombatBoxProps {
@@ -69,21 +75,27 @@ export function CombatBox({ title, sub, cards, buttons, roll = null }: CombatBox
 
       {roll && (roll.attack || roll.defence) && (
         <div className="combat-roll">
-          {roll.attack && (
-            <div className="combat-die">
-              <Die value={roll.attack.value} tone="attack" />
-              <span>{roll.attack.settled ? `= ${roll.attack.total}` : "attack"}</span>
-            </div>
-          )}
-          {roll.defence && (
-            <div className="combat-die">
-              <Die value={roll.defence.value} tone="defence" />
-              <span>{roll.defence.settled ? `= ${roll.defence.total}` : "defence"}</span>
-            </div>
-          )}
+          <div className="combat-calc attack">
+            {roll.attack?.settled ? `${roll.attack.base}+${roll.attack.value}=${roll.attack.total}` : "attack"}
+          </div>
+          <div className="combat-dice">
+            {roll.attack && <Die value={roll.attack.value} tone="attack" />}
+            {roll.defence && <Die value={roll.defence.value} tone="defence" />}
+          </div>
+          <div className="combat-calc defence">
+            {roll.defence?.settled
+              ? `${roll.defence.base}+${roll.defence.value}=${roll.defence.total}${roll.autoRepel ? " (auto-repel)" : ""}`
+              : "defence"}
+          </div>
         </div>
       )}
-      {roll?.outcome && <div className="actionbox-outcome">{roll.outcome}</div>}
+      {roll?.outcome && (
+        <div className="actionbox-outcome">
+          {roll.outcome.map((line, i) => (
+            <div key={i}>{line}</div>
+          ))}
+        </div>
+      )}
 
       {buttons.length > 0 && (
         <div className="actionbox-buttons">

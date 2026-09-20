@@ -4,9 +4,9 @@
  * this file; `client/` and `engine/` are untouched.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { applyAction, boardFor, createGame } from "../engine/index.js";
+import { applyAction, boardFor, createGame, statsOf } from "../engine/index.js";
 import { makeRng, type Rng } from "../engine/rng.js";
-import { hexKey } from "../engine/hex.js";
+import { add, hexKey } from "../engine/hex.js";
 import type { Action, Colour, GameState, Hex, OreColour } from "../engine/index.js";
 import {
   affordances,
@@ -342,6 +342,67 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
       if (legalActions(s).some((a) => a.type === step.type)) {
         const r = applyAction(s, step);
         if (r.ok) s = r.state;
+      }
+    }
+    if (
+      qs.get("combattest") === "onturn" ||
+      qs.get("combattest") === "offturn" ||
+      qs.get("combattest") === "resolve"
+    ) {
+      // DEBUG ONLY — preview the counter-attack decision box directly (skips the whole
+      // declare/defend/resolve dance): "offturn" is the original defender being asked to
+      // counter or step back after successfully defending round 1 (attacker still on turn);
+      // "onturn" is the original attacker being asked the same after successfully defending
+      // a round-2 counter (so THEY'D end their own turn by declining, not just the fight);
+      // "resolve" lands one step earlier still — right at "Roll the dice" — so the reveal
+      // animation and win/loss outcome message can be checked without fighting through the
+      // declare/stand click-through
+      // the N stepBot calls above may not have caught up with every seat's start-of-game
+      // upgrade pick yet (each call is one action, not a full turn) — every other action,
+      // including our own forced pendingCombat below, is globally gated behind resolving it
+      while (s.pendingEquipment) {
+        const card = s.pendingEquipment.cards[0];
+        if (!card) break;
+        const r = applyAction(s, { type: "chooseEquipment", cardId: card.id });
+        if (!r.ok) break;
+        s = r.state;
+      }
+      const active = s.players[s.activePlayerIndex]!;
+      const enemy = s.players.find((pl) => pl.id !== active.id && !pl.eliminated);
+      if (enemy) {
+        // a fixed direction, not board.neighbours(...).filter(...) — this only needs real
+        // adjacency for areNeighbours' sake, not a legal/free cell, so it can't land on an
+        // empty filtered list depending on where this seed happened to start the ship
+        const spot = add(active.pose.current, { q: 1, r: 0 });
+        const onTurn = qs.get("combattest") === "onturn";
+        const resolving = qs.get("combattest") === "resolve";
+        s = {
+          ...s,
+          phase: "moved",
+          players: s.players.map((pl) =>
+            pl.id === enemy.id ? { ...pl, pose: { current: spot, previous: spot, atRest: true } } : pl,
+          ),
+          pendingCombat: resolving
+            ? {
+                attackerId: active.id,
+                defenderId: enemy.id,
+                round: 1,
+                // wildly lopsided on purpose: guarantees a win regardless of dice roll, so
+                // this debug path can preview the "Attack Succeeded"/loot outcome message
+                attackerLaserBoost: qs.get("forcewin") === "1" ? 99 : 0,
+                awaiting: "resolve",
+                lastAttackFailed: false,
+                defShields: statsOf(s, enemy).shields,
+              }
+            : {
+                attackerId: onTurn ? enemy.id : active.id,
+                defenderId: onTurn ? active.id : enemy.id,
+                round: onTurn ? 2 : 1,
+                attackerLaserBoost: 0,
+                awaiting: "counter",
+                lastAttackFailed: true,
+              },
+        };
       }
     }
     if (qs.get("equip") === "1" && s.decks.equipment.draw.length >= 3) {
