@@ -8,3 +8,4 @@ export * from "./preview.js";
 export * from "./bot.js";
 export { formatLogEntry } from "./log-format.js";
 export type { ClientMessage, ServerMessage } from "./protocol.js";
+export { randomBotName } from "./nameGen.js";

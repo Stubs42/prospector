@@ -19,6 +19,8 @@ export interface Room {
   roomCode: string;
   state: GameState;
   seats: Seat[];
+  /** display name per seat, index = playerIndex — see persistence.ts's `names` column */
+  names: string[];
   players: RoomPlayer[];
   /** human seats only — a bot seat never has a socket */
   sockets: Map<number, WebSocket>;

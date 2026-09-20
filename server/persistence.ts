@@ -18,19 +18,32 @@ export interface StoredGame {
   roomCode: string;
   state: GameState;
   seats: Seat[];
+  names: string[];
   players: StoredPlayer[];
 }
 
-export async function createGameRecord(pool: pg.Pool, roomCode: string, state: GameState, seats: Seat[]): Promise<string> {
+export async function createGameRecord(
+  pool: pg.Pool,
+  roomCode: string,
+  state: GameState,
+  seats: Seat[],
+  names: string[],
+): Promise<string> {
   const res = await pool.query<{ id: string }>(
-    "INSERT INTO games (room_code, state, seats) VALUES ($1, $2, $3) RETURNING id",
-    [roomCode, state, JSON.stringify(seats)],
+    "INSERT INTO games (room_code, state, seats, names) VALUES ($1, $2, $3, $4) RETURNING id",
+    [roomCode, state, JSON.stringify(seats), JSON.stringify(names)],
   );
   return res.rows[0]!.id;
 }
 
 export async function updateGameState(pool: pg.Pool, gameId: string, state: GameState): Promise<void> {
   await pool.query("UPDATE games SET state = $2, updated_at = now() WHERE id = $1", [gameId, state]);
+}
+
+/** Names change only on a join (or at creation), unlike state — a separate write keeps that
+   independent of the far more frequent per-action state updates. */
+export async function updateRoomNames(pool: pg.Pool, gameId: string, names: string[]): Promise<void> {
+  await pool.query("UPDATE games SET names = $2, updated_at = now() WHERE id = $1", [gameId, JSON.stringify(names)]);
 }
 
 export async function addPlayer(pool: pg.Pool, gameId: string, player: StoredPlayer): Promise<void> {
@@ -42,8 +55,8 @@ export async function addPlayer(pool: pg.Pool, gameId: string, player: StoredPla
 
 /** Every persisted game, for repopulating the in-memory room registry on server boot. */
 export async function loadAllGames(pool: pg.Pool): Promise<StoredGame[]> {
-  const games = await pool.query<{ id: string; room_code: string; state: GameState; seats: Seat[] }>(
-    "SELECT id, room_code, state, seats FROM games",
+  const games = await pool.query<{ id: string; room_code: string; state: GameState; seats: Seat[]; names: string[] }>(
+    "SELECT id, room_code, state, seats, names FROM games",
   );
   const players = await pool.query<{
     game_id: string;
@@ -68,6 +81,7 @@ export async function loadAllGames(pool: pg.Pool): Promise<StoredGame[]> {
     roomCode: g.room_code,
     state: g.state,
     seats: g.seats,
+    names: g.names,
     players: (byGame.get(g.id) ?? []).sort((a, b) => a.playerIndex - b.playerIndex),
   }));
 }

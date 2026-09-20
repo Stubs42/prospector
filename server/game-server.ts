@@ -6,10 +6,10 @@ import type { WebSocket } from "ws";
 import type pg from "pg";
 import { applyAction, createGame } from "../engine/index.js";
 import { makeRng } from "../engine/rng.js";
-import { mkSeats, stepBot, waitingOn, waitingOnBot } from "../client/index.js";
+import { mkSeats, randomBotName, stepBot, waitingOn, waitingOnBot } from "../client/index.js";
 import type { ClientMessage, ServerMessage } from "../client/index.js";
 import { addRoom, generateRoomCode, getRoom, type Room, type RoomPlayer } from "./rooms.js";
-import { addPlayer, createGameRecord, updateGameState, type StoredGame } from "./persistence.js";
+import { addPlayer, createGameRecord, updateGameState, updateRoomNames, type StoredGame } from "./persistence.js";
 
 const BOT_TURN_MS = 400;
 
@@ -18,7 +18,7 @@ function send(ws: WebSocket, msg: ServerMessage): void {
 }
 
 function broadcastState(room: Room): void {
-  const msg: ServerMessage = { type: "state", state: room.state };
+  const msg: ServerMessage = { type: "state", state: room.state, names: room.names };
   const payload = JSON.stringify(msg);
   for (const ws of room.sockets.values()) if (ws.readyState === ws.OPEN) ws.send(payload);
 }
@@ -34,6 +34,7 @@ export function restoreRoom(stored: StoredGame): Room {
     roomCode: stored.roomCode,
     state: stored.state,
     seats: stored.seats,
+    names: stored.names,
     players: stored.players.map((p) => ({ playerIndex: p.playerIndex, displayName: p.displayName, seatKind: p.seatKind, reconnectToken: p.reconnectToken })),
     sockets: new Map(),
     rng: makeRng(stored.state.rngState),
@@ -50,7 +51,11 @@ export async function createRoom(
   const seed = (Math.random() * 1e9) | 0;
   const state = createGame({ seats, seed, upgradeAtStart: msg.upgradeAtStart, variant: msg.variant });
   const roomCode = generateRoomCode();
-  const gameId = await createGameRecord(pool, roomCode, state, seats);
+  // a bot's name is picked once, here, so every viewer sees the same one — never invented
+  // locally per-browser (that was the whole bug this exists to fix); an as-yet-unfilled human
+  // seat gets a plain placeholder until someone actually joins it
+  const names = seats.map((kind, i) => (i === 0 ? msg.displayName : kind === "bot" ? randomBotName() : `Player ${i + 1}`));
+  const gameId = await createGameRecord(pool, roomCode, state, seats, names);
   const reconnectToken = randomUUID();
   const hostPlayer: RoomPlayer = { playerIndex: 0, displayName: msg.displayName, seatKind: "human", reconnectToken };
   await addPlayer(pool, gameId, hostPlayer);
@@ -59,14 +64,15 @@ export async function createRoom(
     roomCode,
     state,
     seats,
+    names,
     players: [hostPlayer],
     sockets: new Map([[0, ws]]),
     rng: makeRng((Math.random() * 1e9) | 0),
     botTimer: null,
   };
   addRoom(room);
-  send(ws, { type: "roomJoined", roomCode, playerIndex: 0, reconnectToken, seats: room.seats });
-  send(ws, { type: "state", state: room.state });
+  send(ws, { type: "roomJoined", roomCode, playerIndex: 0, reconnectToken, seats: room.seats, names: room.names });
+  send(ws, { type: "state", state: room.state, names: room.names });
   scheduleBotCheck(pool, room);
   return room;
 }
@@ -104,9 +110,14 @@ export async function joinRoom(
   const player: RoomPlayer = { playerIndex: seatIndex, displayName: msg.displayName, seatKind: "human", reconnectToken };
   await addPlayer(pool, room.id, player);
   room.players.push(player);
+  room.names[seatIndex] = msg.displayName;
+  await updateRoomNames(pool, room.id, room.names);
   room.sockets.set(seatIndex, ws);
-  send(ws, { type: "roomJoined", roomCode: room.roomCode, playerIndex: seatIndex, reconnectToken, seats: room.seats });
-  send(ws, { type: "state", state: room.state });
+  send(ws, { type: "roomJoined", roomCode: room.roomCode, playerIndex: seatIndex, reconnectToken, seats: room.seats, names: room.names });
+  // the joiner already has the fresh names in that roomJoined message above — broadcast to
+  // everyone ELSE already in the room too, so an already-connected player learns the new
+  // real name immediately instead of waiting for the next unrelated action's own broadcast
+  broadcastState(room);
   return { roomCode: room.roomCode, playerIndex: seatIndex };
 }
 
@@ -120,8 +131,9 @@ export function reconnect(ws: WebSocket, room: Room, playerIndex: number): void 
     playerIndex,
     reconnectToken: player?.reconnectToken ?? "",
     seats: room.seats,
+    names: room.names,
   });
-  send(ws, { type: "state", state: room.state });
+  send(ws, { type: "state", state: room.state, names: room.names });
 }
 
 export function handleDisconnect(room: Room, playerIndex: number): void {

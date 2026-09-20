@@ -10,6 +10,7 @@ interface GameRow {
   room_code: string;
   state: unknown;
   seats: unknown;
+  names: unknown;
 }
 interface PlayerRow {
   game_id: string;
@@ -27,12 +28,23 @@ export class FakePool {
   async query(sql: string, params: any[] = []): Promise<{ rows: any[] }> {
     if (sql.includes("INSERT INTO games")) {
       const id = randomUUID();
-      this.games.push({ id, room_code: params[0], state: params[1], seats: JSON.parse(params[2]) });
+      this.games.push({
+        id,
+        room_code: params[0],
+        state: params[1],
+        seats: JSON.parse(params[2]),
+        names: JSON.parse(params[3]),
+      });
       return { rows: [{ id }] };
     }
-    if (sql.includes("UPDATE games")) {
+    if (sql.includes("UPDATE games SET state")) {
       const row = this.games.find((g) => g.id === params[0]);
       if (row) row.state = params[1];
+      return { rows: [] };
+    }
+    if (sql.includes("UPDATE games SET names")) {
+      const row = this.games.find((g) => g.id === params[0]);
+      if (row) row.names = JSON.parse(params[1]);
       return { rows: [] };
     }
     if (sql.includes("INSERT INTO game_players")) {
@@ -45,8 +57,10 @@ export class FakePool {
       });
       return { rows: [] };
     }
-    if (sql.includes("SELECT id, room_code, state, seats FROM games")) {
-      return { rows: this.games.map((g) => ({ id: g.id, room_code: g.room_code, state: g.state, seats: g.seats })) };
+    if (sql.includes("SELECT id, room_code, state, seats, names FROM games")) {
+      return {
+        rows: this.games.map((g) => ({ id: g.id, room_code: g.room_code, state: g.state, seats: g.seats, names: g.names })),
+      };
     }
     if (sql.includes("SELECT game_id, player_index")) {
       return { rows: this.players.slice() };

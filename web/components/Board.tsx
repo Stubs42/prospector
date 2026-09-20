@@ -46,6 +46,8 @@ function hexPoints(cx: number, cy: number, size: number): string {
 export interface BoardProps {
   state: GameState;
   seats: readonly Seat[];
+  /** display name per seat, index = playerId — see useSession.ts's `names` */
+  names: readonly string[];
   scores: readonly number[];
   highlight: { cells: Hex[]; kind: "place" | "base" | null };
   /** during a "pick a random base" spin: the one base region to trace solid (not pulsing) */
@@ -89,6 +91,7 @@ const BURN_COST_COLOUR = ["var(--ok)", "#d7b13d", "#e08a3d", "#c1573c"];
 export function Board({
   state,
   seats,
+  names,
   scores,
   highlight,
   spinHighlight = null,
@@ -663,7 +666,7 @@ export function Board({
       })}
 
       {/* table furniture (ship panels) — drawn on top so text stays legible */}
-      {world && <BaseInfo board={board} state={state} seats={seats} scores={scores} onTip={onTip} rotation={rotation} />}
+      {world && <BaseInfo board={board} state={state} seats={seats} names={names} scores={scores} onTip={onTip} rotation={rotation} />}
 
     </svg>
       {tip && (
