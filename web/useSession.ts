@@ -143,6 +143,13 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   // Best-effort: if another player's/bot's broadcast races in first, this occasionally
   // mis-attributes a cosmetic animation choice, never the underlying game state.
   const pendingActionTypeRef = useRef<Action["type"] | null>(null);
+  // "is this browser's own seat the one a given decision belongs to" — offline (hot-seat) this
+  // is always true (one shared browser IS whoever's deciding); online it's the difference
+  // between an interactive prompt and a passive one. GameScreen/SetupScreen use this to gate
+  // every "what do you want to do" surface (pickers, burn targets, combat buttons, hand cards)
+  // so only the deciding seat's own browser ever renders them as clickable — every other
+  // connected browser just watches the result.
+  const isMe = (playerIndex: number): boolean => online.status === "offline" || online.playerIndex === playerIndex;
 
   function playAnim(a: MoveAnim | null) {
     setMoveAnim(a);
@@ -680,6 +687,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     toggleCombatSel: toggle(setCombatSel),
     setAttackTarget,
     online,
+    isMe,
     hostOnline,
     joinOnline,
     leaveOnline,

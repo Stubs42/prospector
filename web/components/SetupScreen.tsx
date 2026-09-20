@@ -47,8 +47,8 @@ export function SetupScreen({
   // turnIndex for both stages; during the roll-off reveal there's no "turn", only a winner
   const current = setup.stage === "rollOff" ? (setup.startSeat ?? 0) : setup.turnIndex;
   const currentIsBot = seats[current] === "bot";
-  const canPickNow = setup.stage === "pickBase" && !currentIsBot && !s.needPassGate;
-  const canPickShipNow = setup.stage === "pickShip" && !currentIsBot && !s.needPassGate;
+  const canPickNow = setup.stage === "pickBase" && !currentIsBot && !s.needPassGate && s.isMe(current);
+  const canPickShipNow = setup.stage === "pickShip" && !currentIsBot && !s.needPassGate && s.isMe(current);
 
   // whichever "already decided" spin is currently running (base pick, ship pick, the
   // roll-off) — a click anywhere on the board fast-forwards it to its result, since none
@@ -113,13 +113,16 @@ export function SetupScreen({
   }
 
   // a bot's own pickBase turn spins the same wheel, automatically, after a short pause —
-  // every pick reads the same regardless of who made it, and nothing just instantly appears
+  // every pick reads the same regardless of who made it, and nothing just instantly appears.
+  // Online, the server is the sole authority for bot picks (server/game-server.ts's
+  // scheduleBotCheck already drives stepBot through setup) — without the offline guard, every
+  // connected browser would independently race to resolve the same bot turn.
   useEffect(() => {
-    if (setup.stage !== "pickBase" || !currentIsBot || s.needPassGate || spinning) return;
+    if (s.online.status !== "offline" || setup.stage !== "pickBase" || !currentIsBot || s.needPassGate || spinning) return;
     const id = window.setTimeout(runBaseSpin, 400);
     return () => window.clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setup.stage, current, currentIsBot, s.needPassGate]);
+  }, [setup.stage, current, currentIsBot, s.needPassGate, s.online.status]);
 
   function onCell(h: Hex) {
     if (!canPickNow || spinning) return;
@@ -172,14 +175,15 @@ export function SetupScreen({
     runShipSpin();
   }
 
-  // a bot's own pickShip turn spins the same wheel, automatically — see the pickBase effect.
+  // a bot's own pickShip turn spins the same wheel, automatically — see the pickBase effect
+  // above (same online-authority reasoning: the server resolves bot picks, not this client).
   // rollOff can never overlap a pickShip turn now (it only starts once every seat has both).
   useEffect(() => {
-    if (setup.stage !== "pickShip" || !currentIsBot || s.needPassGate || shipSpinning) return;
+    if (s.online.status !== "offline" || setup.stage !== "pickShip" || !currentIsBot || s.needPassGate || shipSpinning) return;
     const id = window.setTimeout(runShipSpin, 400);
     return () => window.clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setup.stage, current, currentIsBot, s.needPassGate]);
+  }, [setup.stage, current, currentIsBot, s.needPassGate, s.online.status]);
 
   function selectShip() {
     if (!canPickShipNow || shipSpinning || !shownShip) return;
@@ -289,7 +293,7 @@ export function SetupScreen({
             spinning={shipSpinning}
             // a bot's own turn is watch-only — the card still spins, but there's
             // nothing for the human to click on the bot's behalf
-            interactive={!currentIsBot}
+            interactive={!currentIsBot && s.isMe(current)}
             onPrev={() => browseShip(-1)}
             onNext={() => browseShip(1)}
             onSelect={selectShip}
