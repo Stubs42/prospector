@@ -9,6 +9,7 @@ interface GameRow {
   id: string;
   room_code: string;
   state: unknown;
+  seats: unknown;
 }
 interface PlayerRow {
   game_id: string;
@@ -26,7 +27,7 @@ export class FakePool {
   async query(sql: string, params: any[] = []): Promise<{ rows: any[] }> {
     if (sql.includes("INSERT INTO games")) {
       const id = randomUUID();
-      this.games.push({ id, room_code: params[0], state: params[1] });
+      this.games.push({ id, room_code: params[0], state: params[1], seats: JSON.parse(params[2]) });
       return { rows: [{ id }] };
     }
     if (sql.includes("UPDATE games")) {
@@ -44,8 +45,8 @@ export class FakePool {
       });
       return { rows: [] };
     }
-    if (sql.includes("SELECT id, room_code, state FROM games")) {
-      return { rows: this.games.map((g) => ({ id: g.id, room_code: g.room_code, state: g.state })) };
+    if (sql.includes("SELECT id, room_code, state, seats FROM games")) {
+      return { rows: this.games.map((g) => ({ id: g.id, room_code: g.room_code, state: g.state, seats: g.seats })) };
     }
     if (sql.includes("SELECT game_id, player_index")) {
       return { rows: this.players.slice() };

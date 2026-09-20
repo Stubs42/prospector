@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS games (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   room_code text UNIQUE NOT NULL,
   state jsonb NOT NULL,
+  -- seat kinds ("human"/"bot" per index) can't always be derived from state alone — during
+  -- interactive setup, GameState.players is still empty, so this is stored independently
+  seats jsonb NOT NULL DEFAULT '[]',
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
