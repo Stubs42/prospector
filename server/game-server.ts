@@ -6,7 +6,7 @@ import type { WebSocket } from "ws";
 import type pg from "pg";
 import { applyAction, createGame } from "../engine/index.js";
 import { makeRng } from "../engine/rng.js";
-import { mkSeats, stepBot, waitingOnBot } from "../client/index.js";
+import { mkSeats, stepBot, waitingOn, waitingOnBot } from "../client/index.js";
 import type { ClientMessage, ServerMessage } from "../client/index.js";
 import { addRoom, generateRoomCode, getRoom, type Room, type RoomPlayer } from "./rooms.js";
 import { addPlayer, createGameRecord, updateGameState, type StoredGame } from "./persistence.js";
@@ -139,6 +139,15 @@ export async function handleAction(
   ws: WebSocket,
   action: Extract<ClientMessage, { type: "action" }>["action"],
 ): Promise<void> {
+  // the engine itself has no notion of "who is submitting this" — applyAction just checks
+  // whether the action is legal for whoever it internally considers active right now, which
+  // is exactly right for a single trusted local caller (hot-seat) but means nothing stops one
+  // networked player's socket from acting for another seat entirely unless this is checked
+  // here. waitingOn covers setup (pickBase/pickShip), plain turns, AND mid-combat (whichever
+  // side — attacker or defender — the pendingCombat.awaiting step is actually asking).
+  if (playerIndex !== waitingOn(room.state)) {
+    return send(ws, { type: "error", message: "not your turn" });
+  }
   const result = applyAction(room.state, action);
   if (!result.ok) return send(ws, { type: "error", message: result.error ?? "illegal action" });
   room.state = result.state;

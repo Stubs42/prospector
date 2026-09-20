@@ -109,6 +109,36 @@ describe("game-server", () => {
     }
   });
 
+  it("rejects an action from a seat whose turn it isn't, even if the action would otherwise be legal", async () => {
+    // regression test: applyAction only checks whether an action is legal for whoever the
+    // engine considers active — it has no idea which socket sent it, so without this guard
+    // one player's connection could submit actions for another seat's turn (found live,
+    // clicking the "current step" panel from the wrong browser during a real 2-player test)
+    const hostWs = fakeSocket();
+    const room = await createRoom(pool, hostWs, {
+      type: "createRoom",
+      displayName: "Alice",
+      humans: 2,
+      bots: 0,
+      upgradeAtStart: "none",
+      variant: "standard",
+    });
+    try {
+      const guestWs = fakeSocket();
+      await joinRoom(pool, guestWs, { type: "joinRoom", roomCode: room.roomCode, displayName: "Bob" });
+
+      expect(room.state.activePlayerIndex).toBe(0); // it's the host's (seat 0) turn
+      const legal = legalActions(room.state)[0]!;
+      const before = room.state;
+      await handleAction(pool, room, 1, guestWs, legal); // guest (seat 1) tries to act anyway
+
+      expect(room.state).toBe(before); // untouched
+      expect(guestWs.sent.at(-1)).toMatchObject({ type: "error", message: "not your turn" });
+    } finally {
+      removeRoom(room.roomCode);
+    }
+  });
+
   it("reconnect re-attaches a socket to its seat using its stored token", async () => {
     const hostWs = fakeSocket();
     const room = await createRoom(pool, hostWs, {
