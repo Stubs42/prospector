@@ -145,7 +145,16 @@ export async function handleAction(
   // networked player's socket from acting for another seat entirely unless this is checked
   // here. waitingOn covers setup (pickBase/pickShip), plain turns, AND mid-combat (whichever
   // side — attacker or defender — the pendingCombat.awaiting step is actually asking).
-  if (playerIndex !== waitingOn(room.state)) {
+  //
+  // finishSetup is the one deliberate exception: it fires once, after every seat has already
+  // picked base+ship, to reveal an already-decided roll-off winner — state.activePlayerIndex
+  // at that point is still whichever seat picked LAST (finishSetup itself is what finally sets
+  // it to the real winner), not a seat with any decision left to make. Gating it the same way
+  // as everything else meant only that exact last-picker's own browser could ever complete
+  // setup — a permanent stall whenever that seat happened to be a bot (no browser to submit
+  // it at all). See engine/game.ts's stepSetup: any seat submitting finishSetup during
+  // "rollOff" produces the identical, already-determined result — never a partisan decision.
+  if (action.type !== "finishSetup" && playerIndex !== waitingOn(room.state)) {
     return send(ws, { type: "error", message: "not your turn" });
   }
   const result = applyAction(room.state, action);

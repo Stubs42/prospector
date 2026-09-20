@@ -474,6 +474,13 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     !state.gameOver &&
     !needPassGate &&
     !activeIsBot &&
+    // online, every connected browser computes this identically (it's derived purely from
+    // shared state) — without this check, every spectator's browser would ALSO fire its own
+    // dispatch attempt on the same timer, get rejected by the server's turn-ownership check,
+    // but still stamp its own pendingActionTypeRef with a guess that the next (unrelated) real
+    // broadcast would then be wrongly attributed to — exactly the shape of a reported "move
+    // animation glitches" bug, since the anim-deriving special cases key off actionType.
+    isMe(state.activePlayerIndex) &&
     // never auto-fire the "ship is lost" endMove while a reserve-fuel card could still save
     // it — see Affordances.avoidableShipLoss
     !afford.avoidableShipLoss &&
