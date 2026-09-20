@@ -1018,7 +1018,10 @@ export function applyAction(prev: GameState, action: Action): StepResult {
         defenceDie: roll.defence,
         attackTotal: outcome.attackTotal,
         defenceTotal: outcome.defenceTotal,
+        attackerLasers,
+        defenderShields: pc.defShields ?? 0,
         autoRepel: pc.autoRepel ?? false,
+        round: pc.round,
       };
 
       if (outcome.attackerWins) {

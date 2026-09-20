@@ -5,7 +5,7 @@
  * there's no nullable-`p` juggling to do here at all.
  */
 import { useEffect, useRef, useState } from "react";
-import { score } from "../../engine/index.js";
+import { score, statsOf } from "../../engine/index.js";
 import { boardFor } from "../../engine/game.js";
 import { add, hexKey, scale } from "../../engine/hex.js";
 import type { BoosterCard, Colour, Hex } from "../../engine/index.js";
@@ -249,6 +249,12 @@ export function GameScreen({
     defenceDie: number;
     attackTotal: number;
     defenceTotal: number;
+    attackerLasers: number;
+    defenderShields: number;
+    autoRepel: boolean;
+    /** the fight round this reveal is for (1 = the original attack, 2+ = a counter-attack) —
+       drives the "attacks" vs "counter attacks" wording in the title */
+    round: number;
     attackerWins: boolean;
     spoil: string | null;
     attackFace: number;
@@ -258,6 +264,10 @@ export function GameScreen({
     showOutcome: boolean;
   }
   const [combatReveal, setCombatReveal] = useState<CombatReveal | null>(null);
+  // set once the loser of a fight declines to (or can't) counter-attack — the fight is over,
+  // but the attacker (always still the one on turn) gets one explicit "Attack Failed" / "End
+  // Turn" beat rather than just silently falling back to the ambient "click your ship" cue
+  const [attackFailedSummary, setAttackFailedSummary] = useState(false);
   const combatLogLen = useRef(state.log.length);
   useEffect(() => {
     if (state.log.length <= combatLogLen.current) {
@@ -274,6 +284,10 @@ export function GameScreen({
       defenceDie: number;
       attackTotal: number;
       defenceTotal: number;
+      attackerLasers: number;
+      defenderShields: number;
+      autoRepel: boolean;
+      round: number;
       spoil?: string | null;
     };
     s.setHoldAdvance(true);
@@ -287,6 +301,10 @@ export function GameScreen({
       defenceDie: d.defenceDie,
       attackTotal: d.attackTotal,
       defenceTotal: d.defenceTotal,
+      attackerLasers: d.attackerLasers,
+      defenderShields: d.defenderShields,
+      autoRepel: d.autoRepel,
+      round: d.round,
       attackerWins: entry.event === "attackSucceeded",
       spoil: d.spoil ?? null,
       attackFace: 1,
@@ -540,7 +558,7 @@ export function GameScreen({
 
   // --- combat / bottom-panel buttons -------------------------------
   const combatTitle = pc
-    ? `${pc.round > 1 ? "Counter-attack — " : ""}${mode.ships[state.players[pc.attackerId]!.colour].name} attacks ${
+    ? `${mode.ships[state.players[pc.attackerId]!.colour].name} ${pc.round > 1 ? "counter attacks" : "attacks"} ${
         mode.ships[state.players[pc.defenderId]!.colour].name
       }`
     : attackTarget !== null
@@ -551,6 +569,17 @@ export function GameScreen({
     : attackTarget !== null
       ? "Pick laser boosters, then declare."
       : null;
+
+  // declining a counter-attack is really two different real moves depending on WHO declines:
+  // the on-turn player (the original attacker, having just defended a counter) is genuinely
+  // ending their own turn; the off-turn player (the original defender, done retaliating) is
+  // just stepping back from the fight and handing control back — the attacker still needs
+  // their own explicit "Attack Failed" / "End Turn" beat once that happens (attackFailedSummary).
+  const declineIsOnTurn = pc ? pc.defenderId === state.activePlayerIndex : false;
+  const onDeclineCounter = () => {
+    if (!declineIsOnTurn) setAttackFailedSummary(true);
+    dispatch({ type: "declineCounter" });
+  };
 
   const buttons: PanelButton[] = [];
   if (pc && pc.awaiting === "defend" && seats[pc.defenderId] === "human") {
@@ -570,7 +599,7 @@ export function GameScreen({
         kind: "danger",
         onClick: () => dispatch({ ...afford.counterAttack!, laserBoosters: pickedIds("laser") }),
       });
-    buttons.push({ label: "Decline", onClick: () => dispatch({ type: "declineCounter" }) });
+    buttons.push({ label: declineIsOnTurn ? "End Turn" : "End Fight", onClick: onDeclineCounter });
   } else if (!pc && attackTarget !== null) {
     buttons.push({
       label: `Declare attack${pickedIds("laser").length ? ` (+${selSum("laser")})` : ""}`,
@@ -593,34 +622,66 @@ export function GameScreen({
   // or being revealed — a fixed overlay (see HexPopup's note), not anchored to any ship
   const combatBox: CombatBoxProps | null = combatReveal
     ? {
-        title: `${mode.ships[state.players[combatReveal.attackerId]!.colour].name} attacks ${
-          mode.ships[state.players[combatReveal.defenderId]!.colour].name
-        }`,
+        title: `${mode.ships[state.players[combatReveal.attackerId]!.colour].name} ${
+          combatReveal.round > 1 ? "counter attacks" : "attacks"
+        } ${mode.ships[state.players[combatReveal.defenderId]!.colour].name}`,
         cards: [],
         // the outcome sits on screen until explicitly acknowledged — a milestone-ish
         // result (won a resource, or didn't) deserves a real "ok, got it" rather than
-        // vanishing on its own after a fixed pause
+        // vanishing on its own after a fixed pause. A loss goes straight to the REAL
+        // counter-attack/end-fight choice (reusing `buttons`, computed above from the very
+        // same pendingCombat.awaiting==="counter" this reveal is for) instead of a separate
+        // generic "Confirm" first — but only when there's an actual human decision to make;
+        // if whoever decides next is a bot, there's nothing to choose here, just a plain
+        // acknowledgment while the bot timer picks it up once this closes.
         buttons: combatReveal.showOutcome
-          ? [
-              {
-                label: "Confirm",
-                kind: "primary",
+          ? combatReveal.attackerWins || seats[combatReveal.defenderId] !== "human"
+            ? [
+                {
+                  label: "Confirm",
+                  kind: "primary" as const,
+                  onClick: () => {
+                    setCombatReveal(null);
+                    s.setHoldAdvance(false);
+                  },
+                },
+              ]
+            : buttons.map((b) => ({
+                ...b,
                 onClick: () => {
                   setCombatReveal(null);
                   s.setHoldAdvance(false);
+                  b.onClick();
                 },
-              },
-            ]
+              }))
           : [],
         roll: {
-          attack: { value: combatReveal.attackFace, settled: combatReveal.attackSettled, total: combatReveal.attackTotal },
+          attack: {
+            value: combatReveal.attackFace,
+            settled: combatReveal.attackSettled,
+            base: combatReveal.attackerLasers,
+            total: combatReveal.attackTotal,
+          },
           defence: combatReveal.attackSettled
-            ? { value: combatReveal.defenceFace, settled: combatReveal.defenceSettled, total: combatReveal.defenceTotal }
+            ? {
+                value: combatReveal.defenceFace,
+                settled: combatReveal.defenceSettled,
+                base: combatReveal.defenderShields,
+                total: combatReveal.defenceTotal,
+              }
             : null,
+          autoRepel: combatReveal.autoRepel,
           outcome: combatReveal.showOutcome
             ? combatReveal.attackerWins
-              ? `Hit! Takes${combatReveal.spoil ? ` a ${combatReveal.spoil} resource` : " nothing (empty hold)"}`
-              : "Missed!"
+              ? [
+                  "Attack Succeeded",
+                  combatReveal.spoil
+                    ? `Loot ${combatReveal.spoil} Orb [${state.players[combatReveal.attackerId]!.cargo.length}/${
+                        statsOf(state, state.players[combatReveal.attackerId]!).cargo
+                      }]`
+                    : "Nothing to Loot (empty hold)",
+                ]
+              : ["Defence Successful"]
             : null,
         },
       }
@@ -630,6 +691,27 @@ export function GameScreen({
           sub: combatSub,
           cards: combatCards,
           buttons,
+        }
+      : null;
+
+  // the fight is fully over and it was the OFF-turn player who called it off (End Fight) —
+  // the on-turn attacker gets one explicit "Attack Failed" / "End Turn" beat instead of just
+  // silently falling back to the ambient "click your ship" cue. Takes priority over the plain
+  // guidance popup, same family as combatBox/equipBox below.
+  const attackFailedBox =
+    attackFailedSummary && !pc
+      ? {
+          lines: ["Attack Failed"],
+          actions: [
+            {
+              label: "End Turn",
+              kind: "primary" as const,
+              onClick: () => {
+                setAttackFailedSummary(false);
+                dispatch({ type: "endTurn" });
+              },
+            },
+          ],
         }
       : null;
 
@@ -777,7 +859,8 @@ export function GameScreen({
 
         {/* guidance popup / combat box: fixed overlays, like the zoom controls or the status
            panel — outside the board's own pan/zoom transform, so they never collide with it */}
-        {!suppress && popup && <HexPopup lines={popup.lines} />}
+        {!suppress && attackFailedBox && <HexPopup lines={attackFailedBox.lines} actions={attackFailedBox.actions} />}
+        {!suppress && !attackFailedBox && popup && <HexPopup lines={popup.lines} />}
         {!suppress && combatBox && <CombatBox {...combatBox} />}
         {!suppress && !combatBox && equipBox && <EquipmentPopup {...equipBox} />}
         {scrapConfirm && (

@@ -20,13 +20,13 @@ export function resolveCombat(
   roll: { attack: number; defence: number },
   winTest: ProspectorConfig["combat"]["winTest"],
 ): CombatOutcome {
-  if (inp.autoRepel) {
-    return { attackerWins: false, attackTotal: 0, defenceTotal: 0 };
-  }
+  // always compute the real totals, even under autoRepel — a GUI showing "0+0=0" for what
+  // was actually e.g. "2 lasers + roll 4 = 6" vs "99 shield + roll 1 = 100" is just wrong,
+  // not simplified; autoRepel only needs to override the WIN check, not the numbers
   const attackTotal = inp.attackerLasers + roll.attack;
   const defenceTotal = inp.defenderShields + roll.defence;
   const attackerWins =
-    winTest === "strict-greater" ? attackTotal > defenceTotal : attackTotal >= defenceTotal;
+    !inp.autoRepel && (winTest === "strict-greater" ? attackTotal > defenceTotal : attackTotal >= defenceTotal);
   return { attackerWins, attackTotal, defenceTotal };
 }
 

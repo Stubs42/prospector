@@ -24,13 +24,15 @@ describe("resolveCombat", () => {
     expect(o.attackerWins).toBe(false);
   });
 
-  it("autoRepel always fails the attack", () => {
+  it("autoRepel always fails the attack, but still reports the real totals (not 0/0)", () => {
     const o = resolveCombat(
       { attackerLasers: 99, defenderShields: 0, autoRepel: true },
       { attack: 6, defence: 1 },
       "strict-greater",
     );
     expect(o.attackerWins).toBe(false);
+    expect(o.attackTotal).toBe(105); // 99 + 6 — genuinely would have won on the numbers alone
+    expect(o.defenceTotal).toBe(1); // 0 + 1 — autoRepel wins anyway, regardless of this total
   });
 });
 
