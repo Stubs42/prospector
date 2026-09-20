@@ -97,12 +97,7 @@ export function OnlineLobby({ s }: { s: Session }) {
                   <option value="select">SELECT</option>
                 </select>
               </div>
-              <button
-                onClick={() => {
-                  s.hostOnline(name(), hostHumans, hostBots, upgrade, "standard");
-                  setOpen(false);
-                }}
-              >
+              <button onClick={() => s.hostOnline(name(), hostHumans, hostBots, upgrade, "standard")}>
                 Host game
               </button>
             </>
@@ -118,13 +113,7 @@ export function OnlineLobby({ s }: { s: Session }) {
                   onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
                 />
               </div>
-              <button
-                disabled={!roomCode.trim()}
-                onClick={() => {
-                  s.joinOnline(name(), roomCode.trim());
-                  setOpen(false);
-                }}
-              >
+              <button disabled={!roomCode.trim()} onClick={() => s.joinOnline(name(), roomCode.trim())}>
                 Join game
               </button>
             </>

@@ -344,7 +344,12 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
           break;
         }
         case "error":
-          setOnlineState((o) => ({ ...o, error: msg.message }));
+          // a rejection while still trying to get INTO a room (bad room code, room full, a
+          // createRoom with an out-of-range player count, ...) must fall back to "offline" so
+          // the lobby button un-sticks from "Connecting…" and the player can retry; a
+          // rejection of an in-game action once already online is exactly like a local
+          // dispatch's illegal action — surfaced, but never kicks the player out of the room
+          setOnlineState((o) => (o.status === "connecting" ? { ...o, status: "offline", error: msg.message } : { ...o, error: msg.message }));
           break;
         case "roomClosed":
           saveOnlineSession(null);
