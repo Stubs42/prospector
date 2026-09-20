@@ -77,6 +77,37 @@ describe("game-server", () => {
     }
   });
 
+  it("syncs real display names — a bot's generated once, a joiner's broadcast to everyone already connected", async () => {
+    const hostWs = fakeSocket();
+    const room = await createRoom(pool, hostWs, {
+      type: "createRoom",
+      displayName: "Alice",
+      humans: 2,
+      bots: 1,
+      upgradeAtStart: "none",
+      variant: "standard",
+    });
+    try {
+      expect(room.names[0]).toBe("Alice");
+      expect(room.names[1]).toBe("Player 2"); // seat 1: human, not yet joined
+      expect(typeof room.names[2]).toBe("string");
+      expect(room.names[2]).not.toBe(""); // seat 2: bot, generated once at creation
+
+      const hostMessagesBeforeJoin = hostWs.sent.length;
+      const guestWs = fakeSocket();
+      await joinRoom(pool, guestWs, { type: "joinRoom", roomCode: room.roomCode, displayName: "Bob" });
+
+      expect(room.names[1]).toBe("Bob");
+      // the already-connected host must also learn the real name, not just the joiner —
+      // regression: joinRoom used to reply only to the joining socket
+      const laterHostMessages = hostWs.sent.slice(hostMessagesBeforeJoin);
+      expect(laterHostMessages.some((m: any) => m.type === "state" && m.names[1] === "Bob")).toBe(true);
+      expect(guestWs.sent.some((m: any) => m.type === "roomJoined" && m.names[1] === "Bob")).toBe(true);
+    } finally {
+      removeRoom(room.roomCode);
+    }
+  });
+
   it("handleAction validates via applyAction, persists, and broadcasts to every socket", async () => {
     const hostWs = fakeSocket();
     const room = await createRoom(pool, hostWs, {

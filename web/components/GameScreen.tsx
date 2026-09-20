@@ -882,6 +882,7 @@ export function GameScreen({
         <Board
           state={displayState}
           seats={seats}
+          names={s.names}
           scores={sc.byPlayer}
           highlight={suppress ? { cells: [], kind: null } : interactive ? highlight : { cells: [], kind: null }}
           spinPath={spinPath}

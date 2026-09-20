@@ -249,6 +249,7 @@ export function SetupScreen({
         <Board
           state={state}
           seats={seats}
+          names={s.names}
           scores={[]}
           highlight={{ cells: highlightCells, kind: "base" }}
           spinHighlight={

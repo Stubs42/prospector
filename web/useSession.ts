@@ -17,12 +17,12 @@ import {
   waitingOn,
   activeIsBot as activeIsBotOf,
   stepBot,
+  randomBotName,
   type Seat,
 } from "../client/index.js";
 import { legalActions } from "../engine/index.js";
 import { deriveMoveAnim, coastAnim, type MoveAnim } from "./anim.js";
 import { movePhaseMs, type Prefs } from "./prefs.js";
-import { randomBotName } from "./nameGen.js";
 import { logPose, resetPoseLog } from "./poseLog.js";
 import type { ClientMessage, ServerMessage } from "../client/index.js";
 
@@ -90,9 +90,12 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   // "New game" until the player changes it in the setup topbar
   const [upgradeAtStart, setUpgradeAtStart] = useState<"none" | "random" | "select">("select");
   const [seats, setSeats] = useState<Seat[]>(() => mkSeats(1, 2));
-  // per-seat display names (index = eventual player id) — see rawNamesFor above
+  // per-seat display names (index = eventual player id) — see rawNamesFor above. Purely local
+  // and offline-only: hot-seat has no per-seat identity to know, so every human seat just
+  // shows this device's own prefs.playerName. Online, real names come from the server instead
+  // (onlineNames, below) — every browser would otherwise invent its own guess per seat.
   const [rawNames, setRawNames] = useState<(string | null)[]>(() => rawNamesFor(mkSeats(1, 2)));
-  const names = rawNames.map((n) => n ?? (prefs.playerName.trim() || "Player"));
+  const [onlineNames, setOnlineNames] = useState<string[]>([]);
   // a fresh game always starts as an interactive setup (state.setup non-null) — pickBase and
   // pickShip are real, logged engine actions, not client-side randomness. See stepSetup in
   // engine/game.ts.
@@ -147,6 +150,10 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     seats: [],
     error: null,
   });
+  // real synced names once online (see onlineNames' own declaration above for why);
+  // hot-seat's per-device rawNames/prefs.playerName scheme is untouched
+  const names =
+    online.status === "offline" ? rawNames.map((n) => n ?? (prefs.playerName.trim() || "Player")) : onlineNames;
   // set by dispatch() right before sending an action over the wire, so the socket handler can
   // attribute the next incoming state to it (for the anim-deriving special cases below that
   // need to know the action type, not just the before/after pose) — cleared once consumed.
@@ -360,11 +367,13 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
             error: null,
           });
           setSeats(msg.seats);
+          setOnlineNames(msg.names);
           break;
         case "state": {
           const actionType = pendingActionTypeRef.current;
           pendingActionTypeRef.current = null;
           commitState(stateRef.current, msg.state, actionType);
+          setOnlineNames(msg.names);
           break;
         }
         case "error":
@@ -405,6 +414,7 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     wsRef.current?.close();
     wsRef.current = null;
     setOnlineState({ status: "offline", roomCode: null, playerIndex: null, seats: [], error: null });
+    setOnlineNames([]);
     openSetup(); // fall back to a fresh local hot-seat game rather than a dead screen
   }
   // auto-reconnect once, on first mount, if a browser refresh left a room behind

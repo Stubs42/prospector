@@ -173,12 +173,12 @@ function OreHex({ c, ores, tag, tip, onTip, rotation }: {
   );
 }
 
-function IdentityHex({ c, name, seat, colour, active, onTip, rotation }: {
-  c: BoardCell; name: string; seat: Seat; colour: Colour; active: boolean; onTip: TipFn; rotation: number;
+function IdentityHex({ c, name, playerName, seat, colour, active, onTip, rotation }: {
+  c: BoardCell; name: string; playerName: string; seat: Seat; colour: Colour; active: boolean; onTip: TipFn; rotation: number;
 }) {
   const { x, y } = rotatePoint(c.x * S, c.y * S, rotation);
   return (
-    <Hoverable tip={`${name} — ${seat === "bot" ? "bot" : "you"}${active ? " · to move" : ""}`} onTip={onTip}>
+    <Hoverable tip={`${name} — ${playerName}${active ? " · to move" : ""}`} onTip={onTip}>
       <polygon points={hexPts(x, y, S * 0.92)} fill={DARK}
         stroke={SHIP_VAR[colour]} strokeWidth={active ? 3.2 : 1.6} />
       <circle cx={x} cy={y - S * 0.46} r={S * 0.12} fill={SHIP_VAR[colour]} />
@@ -186,16 +186,17 @@ function IdentityHex({ c, name, seat, colour, active, onTip, rotation }: {
         {name}
       </text>
       <text x={x} y={y + S * 0.46} textAnchor="middle" fill="#9fb0a6" fontSize={S * 0.22}
-        style={{ letterSpacing: "0.14em" }}>
-        {seat === "bot" ? "BOT" : "YOU"}
+        style={{ letterSpacing: "0.06em" }}>
+        {playerName}
+        {seat === "bot" ? " 🤖" : ""}
       </text>
     </Hoverable>
   );
 }
 
-export function BaseInfo({ board, state, seats, scores, onTip, rotation }: {
-  board: BoardModel; state: GameState; seats: readonly Seat[]; scores: readonly number[]; onTip: TipFn;
-  rotation: number;
+export function BaseInfo({ board, state, seats, names, scores, onTip, rotation }: {
+  board: BoardModel; state: GameState; seats: readonly Seat[]; names: readonly string[]; scores: readonly number[];
+  onTip: TipFn; rotation: number;
 }) {
   const mode = state.config.modes.prospector;
 
@@ -252,7 +253,7 @@ export function BaseInfo({ board, state, seats, scores, onTip, rotation }: {
 
           return (
             <g key={`bi-${p.id}`}>
-              <IdentityHex c={near.cells[nm]!} name={baseShip.name} seat={seats[p.id]!} colour={p.colour} active={active} onTip={onTip} rotation={rotation} />
+              <IdentityHex c={near.cells[nm]!} name={baseShip.name} playerName={names[p.id] ?? "?"} seat={seats[p.id]!} colour={p.colour} active={active} onTip={onTip} rotation={rotation} />
 
               {FREIGHT_GROUP.map((s, i) => aspect(leftBranch[i], s))}
               {DRIVE_GROUP.map((s, i) => aspect(rightBranch[i], s))}

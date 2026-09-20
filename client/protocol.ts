@@ -26,7 +26,16 @@ export type ClientMessage =
   | { type: "leaveRoom" };
 
 export type ServerMessage =
-  | { type: "roomJoined"; roomCode: string; playerIndex: number; reconnectToken: string; seats: Seat[] }
-  | { type: "state"; state: GameState }
+  | {
+      type: "roomJoined";
+      roomCode: string;
+      playerIndex: number;
+      reconnectToken: string;
+      seats: Seat[];
+      /** display name per seat, index = playerIndex — a bot's is generated once at room
+         creation and synced here rather than invented locally by every viewer */
+      names: string[];
+    }
+  | { type: "state"; state: GameState; names: string[] }
   | { type: "error"; message: string }
   | { type: "roomClosed" };
