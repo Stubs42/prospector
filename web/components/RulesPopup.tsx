@@ -1,13 +1,90 @@
 /**
  * The in-game rulebook — adapted from the original physical-game rules (rules.en.html,
  * docs/rules-core.md, docs/rules-prospector.md) to how this implementation actually plays:
- * the real numbers from config/default.config.json, and the real on-screen interactions
- * (burn-target rings, the coast ring, the combat dialog's actual button names, ...) rather
- * than the physical game's cone-moving/dice-rolling procedure. Same overlay shell as
- * LogOverlay.tsx (.overlay-scrim + a centred panel), just wider and organized as sections of
- * prose instead of a log.
+ * real on-screen interactions (burn-target rings, the coast ring, the combat dialog's actual
+ * button names, ...) rather than the physical game's cone-moving/dice-rolling procedure. Same
+ * overlay shell as LogOverlay.tsx (.overlay-scrim + a centred panel), just wider and organized
+ * as sections of prose instead of a log.
+ *
+ * Every NUMBER in here (ship stats, card counts, caps, thresholds) is read from `config`
+ * instead of typed as a literal — this is a config-authored game (config/default.config.json),
+ * and hand-typed numbers here would silently drift the moment that file changes. Only the
+ * mechanics THEMSELVES (that shields defend, that a burn costs fuel per cell) are prose.
  */
-export function RulesPopup({ onClose }: { onClose: () => void }) {
+import type { Config, StatKey } from "../../engine/types.js";
+
+const STAT_LABEL: Record<StatKey, string> = {
+  shields: "Shields",
+  lasers: "Lasers",
+  fuelTanks: "Fuel",
+  cargo: "Cargo",
+  engines: "Engines",
+  booster: "Hand",
+};
+
+function maxKey(deck: Record<string, number>): number {
+  return Math.max(...Object.keys(deck).map(Number));
+}
+
+function deckCounts(deck: Record<string, number>): string {
+  return Object.entries(deck)
+    .sort((a, b) => Number(a[0]) - Number(b[0]))
+    .map(([value, count]) => `${value}×${count}`)
+    .join(", ");
+}
+
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
+export function RulesPopup({ config, onClose }: { config: Config; onClose: () => void }) {
+  const mode = config.modes.prospector;
+  const { movement, board } = config.core;
+  const { ships, upgradeCaps, decks, combat, loadRules, homeBase, resources } = mode;
+
+  const shieldAutoWin = combat.shieldBooster99AutoWin ? maxKey(decks.booster.shield) : null;
+  const laserSolo = combat.laserBooster50SingleCardOnly ? maxKey(decks.booster.laser) : null;
+
+  const boosterRows: { type: string; effect: string; values: string }[] = [
+    {
+      type: "Shield",
+      effect: `+ combat defence${shieldAutoWin != null ? ` (${shieldAutoWin} auto-wins defence)` : ""}`,
+      values: deckCounts(decks.booster.shield),
+    },
+    {
+      type: "Laser",
+      effect: `+ combat attack${laserSolo != null ? ` (${laserSolo} must be played alone)` : ""}`,
+      values: deckCounts(decks.booster.laser),
+    },
+    {
+      type: "Reserve fuel",
+      effect: "refuels immediately, capped at your tank",
+      values: deckCounts(decks.booster.reserveFuel),
+    },
+    {
+      type: "Engine",
+      effect: "+ burn range, this turn only",
+      values: deckCounts(decks.booster.engine),
+    },
+    {
+      type: "Hyperspace",
+      effect: "a jump — on your burn, or as a surprise defence",
+      values: `×${decks.booster.hyperspace}`,
+    },
+  ];
+
+  const capsList: string[] = [];
+  if (upgradeCaps.lasers != null && upgradeCaps.lasers === upgradeCaps.shields) {
+    capsList.push(`lasers/shields ${upgradeCaps.lasers}`);
+  } else {
+    if (upgradeCaps.lasers != null) capsList.push(`lasers ${upgradeCaps.lasers}`);
+    if (upgradeCaps.shields != null) capsList.push(`shields ${upgradeCaps.shields}`);
+  }
+  if (upgradeCaps.engines != null) capsList.push(`engines ${upgradeCaps.engines}`);
+  if (upgradeCaps.cargo != null) capsList.push(`cargo ${upgradeCaps.cargo}`);
+  if (upgradeCaps.booster != null) capsList.push(`hand ${upgradeCaps.booster}`);
+  if (upgradeCaps.fuelTanks != null) capsList.push(`fuel tanks ${upgradeCaps.fuelTanks}`);
+
   return (
     <div className="overlay-scrim" onClick={onClose}>
       <div className="rules-overlay" onClick={(e) => e.stopPropagation()}>
@@ -26,32 +103,32 @@ export function RulesPopup({ onClose }: { onClose: () => void }) {
 
           <h3>Setup</h3>
           <p>
-            Each player picks a home base (four equivalent cells per base region — pure
-            preference) and a ship, either by browsing with the arrows or spinning
-            <b> 🎲 Random</b>. Every ship trades off the same six stats differently: shields
-            (defence), lasers (attack), fuel tanks, cargo, engines (burn range), and hand size.
-            Depending on the table's "upgrade at start" setting you may also draw 3 equipment
-            cards and keep 1 before the game begins.
+            Each player picks a home base ({plural(board.homeBase.cellCount, "equivalent cell")}
+            {" "}per base region — pure preference) and a ship, either by browsing with the
+            arrows or spinning<b> 🎲 Random</b>. Every ship trades off the same{" "}
+            {mode.statSchema.length} stats differently: shields (defence), lasers (attack), fuel
+            tanks, cargo, engines (burn range), and hand size. Depending on the table's "upgrade
+            at start" setting you may also draw {homeBase.setupEquipmentDraw} equipment cards and
+            keep {homeBase.setupEquipmentKeep} before the game begins.
           </p>
           <table className="rules-table">
             <thead>
               <tr>
                 <th>Ship</th>
-                <th>Shields</th>
-                <th>Lasers</th>
-                <th>Fuel</th>
-                <th>Cargo</th>
-                <th>Engines</th>
-                <th>Hand</th>
+                {mode.statSchema.map((k) => (
+                  <th key={k}>{STAT_LABEL[k]}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              <tr><td>Pirate</td><td>0</td><td>2</td><td>10</td><td>2</td><td>1</td><td>3</td></tr>
-              <tr><td>Dove</td><td>2</td><td>0</td><td>10</td><td>2</td><td>1</td><td>3</td></tr>
-              <tr><td>Polo</td><td>1</td><td>0</td><td>13</td><td>2</td><td>1</td><td>3</td></tr>
-              <tr><td>Hermes</td><td>0</td><td>1</td><td>10</td><td>2</td><td>2</td><td>3</td></tr>
-              <tr><td>Atlas</td><td>1</td><td>0</td><td>10</td><td>3</td><td>1</td><td>3</td></tr>
-              <tr><td>Joe</td><td>1</td><td>1</td><td>10</td><td>2</td><td>1</td><td>3</td></tr>
+              {Object.values(ships).map((ship) => (
+                <tr key={ship.name}>
+                  <td>{ship.name}</td>
+                  {mode.statSchema.map((k) => (
+                    <td key={k}>{ship[k]}</td>
+                  ))}
+                </tr>
+              ))}
             </tbody>
           </table>
           <p>
@@ -93,23 +170,27 @@ export function RulesPopup({ onClose }: { onClose: () => void }) {
 
           <h3>Fuel &amp; hyperspace</h3>
           <p>
-            Fuel is a simple pool, capped at your ship's tank rating — burning costs 1 fuel per
-            cell, and arriving home always refills to full. The first cell of a burn leaving
-            your own base is free (no fuel, no engine capacity spent).
+            Fuel is a simple pool, capped at your ship's tank rating — burning costs{" "}
+            {plural(movement.fuelPerCell, "fuel")} per cell, and arriving home always refills to
+            full. The {plural(movement.freeBaseDepartureCells, "cell")} of a burn leaving your
+            own base {movement.freeBaseDepartureCells === 1 ? "is" : "are"} free (no fuel, no
+            engine capacity spent).
           </p>
           <p>
-            With 4+ engines and 4 fuel to spend, you can jump to <b>hyperspace</b> instead of a
-            normal burn: your ship vanishes and reappears at a random spot on the board,
-            immediately ending your turn (no post-move action afterward). A hyperspace booster
-            card grants the same jump without needing the engine/fuel threshold, and can also
-            be played as a surprise escape while defending in combat.
+            With {movement.hyperspace.engineThreshold}+ engines and{" "}
+            {movement.hyperspace.fuelCost} fuel to spend, you can jump to <b>hyperspace</b>{" "}
+            instead of a normal burn: your ship vanishes and reappears at a random spot on the
+            board, immediately ending your turn (no post-move action afterward). A hyperspace
+            booster card grants the same jump without needing the engine/fuel threshold, and can
+            also be played as a surprise escape while defending in combat.
           </p>
 
           <h3>Loading resources</h3>
           <p>
-            End your move next to a resource tile and you may load it (one per turn). A full
-            cargo hold can still swap in a more valuable tile, dropping the old one on your
-            cell. Loading counts as your post-move action, so you can't also attack that turn.
+            End your move next to a resource tile and you may load it ({plural(loadRules.maxPerTurn, "per turn").replace(/^1 /, "one ")}
+            ). A full cargo hold can still swap in a more valuable tile, dropping the old one on
+            your cell. Loading counts as your post-move action, so you can't also attack that
+            turn.
           </p>
 
           <h3>Combat</h3>
@@ -122,8 +203,9 @@ export function RulesPopup({ onClose }: { onClose: () => void }) {
             <li>You arm any laser booster cards you want to add, then <b>Declare attack</b>.</li>
             <li>
               The defender arms shield boosters and clicks <b>Stand</b> — or plays a
-              hyperspace card to <b>Flee</b>, or a shield +99 card, either of which auto-wins
-              the defence with no roll at all.
+              hyperspace card to <b>Flee</b>
+              {shieldAutoWin != null ? <>, or a shield +{shieldAutoWin} card,</> : ""} either of
+              which auto-wins the defence with no roll at all.
             </li>
             <li>
               Both dice roll: attacker's lasers + boosters + roll vs. defender's shields +
@@ -137,8 +219,10 @@ export function RulesPopup({ onClose }: { onClose: () => void }) {
             <b>Defence Successful</b> with a real choice: <b>Counter-attack</b> (the fight
             continues with roles swapped) or <b>End Fight</b>/<b>End Turn</b> to stop there —
             if they stop, the original attacker sees an explicit <b>Attack Failed</b> screen
-            before ending their own turn. Only one fight per turn, and fighting rules out
-            loading this same turn (and vice versa).
+            before ending their own turn. If a defender escapes via hyperspace instead, the
+            attacker sees the same <b>Attack Failed</b> screen once the jump reveals where they
+            landed. Only {plural(combat.attacksPerTurn, "fight")} per turn, and fighting rules
+            out loading this same turn (and vice versa).
           </p>
 
           <h3>Booster cards</h3>
@@ -148,11 +232,13 @@ export function RulesPopup({ onClose }: { onClose: () => void }) {
               <tr><th>Type</th><th>Effect</th><th>Values in the deck</th></tr>
             </thead>
             <tbody>
-              <tr><td>Shield</td><td>+ combat defence (99 auto-wins defence)</td><td>1×4, 2×3, 3×2, 99×3</td></tr>
-              <tr><td>Laser</td><td>+ combat attack (50 must be played alone)</td><td>1×4, 2×3, 3×2, 50×3</td></tr>
-              <tr><td>Reserve fuel</td><td>refuels immediately, capped at your tank</td><td>1×4, 2×3, 3×2</td></tr>
-              <tr><td>Engine</td><td>+ burn range, this turn only</td><td>1×4, 2×3, 3×2</td></tr>
-              <tr><td>Hyperspace</td><td>a jump — on your burn, or as a surprise defence</td><td>×3</td></tr>
+              {boosterRows.map((row) => (
+                <tr key={row.type}>
+                  <td>{row.type}</td>
+                  <td>{row.effect}</td>
+                  <td>{row.values}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
           <p>
@@ -162,10 +248,10 @@ export function RulesPopup({ onClose }: { onClose: () => void }) {
 
           <h3>Equipment</h3>
           <p>
-            Permanent upgrades, capped per stat (lasers/shields 4, engines 3, cargo 4, hand 7,
-            fuel tanks 19). Deliver at least one resource home and you'll draw 3, keep 1 — if
-            all three are identical and unusable you get one free reroll. A fuel-tank upgrade
-            also tops up your current fuel to match.
+            Permanent upgrades, capped per stat ({capsList.join(", ")}). Deliver at least one
+            resource home and you'll draw {homeBase.equipmentDraw}, keep {homeBase.equipmentKeep}{" "}
+            — if all three are identical and unusable you get one free reroll. A fuel-tank
+            upgrade also tops up your current fuel to match.
           </p>
 
           <h3>Home base</h3>
@@ -189,7 +275,14 @@ export function RulesPopup({ onClose }: { onClose: () => void }) {
           <h3>Winning</h3>
           <p>
             The game ends once every tile in the supply has been delivered to some base.
-            Highest total delivered value (green 1 · yellow 2 · red 3) wins.
+            Highest total delivered value (
+            {resources.colours.map((c, i) => (
+              <span key={c}>
+                {i > 0 ? " · " : ""}
+                {c} {resources.values[c]}
+              </span>
+            ))}
+            ) wins.
           </p>
 
           <h3>Playing online</h3>

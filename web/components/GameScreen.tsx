@@ -1045,7 +1045,7 @@ export function GameScreen({
         />
 
         {logOpen && <LogOverlay state={state} onClose={() => setLogOpen(false)} />}
-        {rulesOpen && <RulesPopup onClose={() => setRulesOpen(false)} />}
+        {rulesOpen && <RulesPopup config={state.config} onClose={() => setRulesOpen(false)} />}
       </div>
 
       {needPassGate && (
