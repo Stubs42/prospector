@@ -17,6 +17,7 @@ import type { Colour, Hex } from "../../engine/index.js";
 import { Board } from "./Board.js";
 import { HexPopup } from "./HexPopup.js";
 import { ShipPickerPopup } from "./ShipPickerPopup.js";
+import { RulesPopup } from "./RulesPopup.js";
 import { Topbar } from "./Topbar.js";
 import { StatusPanel } from "./StatusPanel.js";
 import type { Prefs } from "../prefs.js";
@@ -76,6 +77,7 @@ export function SetupScreen({
   // (below) — a bot has no strategy to speak of here, so "spin and land on one" is exactly
   // as good a bot policy as any, and it's the one that's actually watchable.
   const [spinning, setSpinning] = useState<Colour | null>(null);
+  const [rulesOpen, setRulesOpen] = useState(false);
   // only pulse the still-free bases while it's actually a human's turn to pick one — during
   // a bot's turn (or while spinning) nothing is clickable, so nothing should look clickable
   const highlightCells =
@@ -243,7 +245,7 @@ export function SetupScreen({
 
   return (
     <div className="app board-only">
-      <Topbar s={s} prefs={prefs} setPrefs={setPrefs} turnLabel="new game" />
+      <Topbar s={s} prefs={prefs} setPrefs={setPrefs} turnLabel="new game" onOpenRules={() => setRulesOpen(true)} />
 
       <div className="stage">
         <Board
@@ -318,6 +320,8 @@ export function SetupScreen({
             log={setupLog}
           />
         )}
+
+        {rulesOpen && <RulesPopup onClose={() => setRulesOpen(false)} />}
       </div>
 
       {/* the roll-off is public/spectator content, not any one seat's private turn — let it

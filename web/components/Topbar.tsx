@@ -8,10 +8,9 @@
  * just the title/turn label/toggle to reclaim vertical board space — persisted via
  * prefs.topbarCollapsed so it doesn't need re-toggling every reload.
  */
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Settings } from "./Settings.js";
 import { OnlineLobby } from "./OnlineLobby.js";
-import { RulesPopup } from "./RulesPopup.js";
 import type { Prefs } from "../prefs.js";
 import type { Session } from "../useSession.js";
 
@@ -21,6 +20,7 @@ export function Topbar({
   setPrefs,
   turnLabel,
   onOpenLog,
+  onOpenRules,
 }: {
   s: Session;
   prefs: Prefs;
@@ -29,8 +29,11 @@ export function Topbar({
   turnLabel: ReactNode;
   /** absent during setup — there's no move log yet */
   onOpenLog?: (() => void) | undefined;
+  /** the popup itself is rendered by the caller (inside its own .stage), not here — this
+     button just asks for it, same as onOpenLog, so it centres on the board area rather than
+     the whole viewport (Topbar itself sits outside .stage, above it) */
+  onOpenRules: () => void;
 }) {
-  const [rulesOpen, setRulesOpen] = useState(false);
   return (
     <div className={`topbar${prefs.topbarCollapsed ? " collapsed" : ""}`}>
       <h1>Prospector</h1>
@@ -43,7 +46,7 @@ export function Topbar({
               🕘 log
             </button>
           )}
-          <button className="ghost" onClick={() => setRulesOpen(true)} title="Rules">
+          <button className="ghost" onClick={onOpenRules} title="Rules">
             📖 rules
           </button>
           {s.online.status === "offline" && (
@@ -101,7 +104,6 @@ export function Topbar({
       >
         {prefs.topbarCollapsed ? "▾" : "▴"}
       </button>
-      {rulesOpen && <RulesPopup onClose={() => setRulesOpen(false)} />}
     </div>
   );
 }
