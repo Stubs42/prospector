@@ -165,6 +165,15 @@ function CardIcon({ type }: { type: BoosterType }) {
           />
         </svg>
       );
+    case "event":
+      return (
+        <svg viewBox="0 0 40 40" className="cicon" aria-hidden="true">
+          <circle cx={20} cy={20} r={4} fill="currentColor" opacity={0.9} />
+          {[0, 45, 90, 135].map((deg) => (
+            <rect key={deg} x={18.6} y={5} width={2.8} height={12} rx={1.4} fill="currentColor" opacity={0.65} transform={`rotate(${deg} 20 20)`} />
+          ))}
+        </svg>
+      );
   }
 }
 

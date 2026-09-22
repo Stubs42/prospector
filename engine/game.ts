@@ -36,6 +36,7 @@ import { drift, burn, atRestPose, straightPath, hyperspaceLand } from "./movemen
 import { resolveStats, movementInputs, canEquip } from "./ship.js";
 import { rollCoordinateUntil, rollCombat, type CoordinateRoll } from "./dice.js";
 import { resolveCombat, pickSpoil } from "./combat.js";
+import { runEvent, continueEvent } from "./events.js";
 import type {
   Action,
   BoosterCard,
@@ -104,6 +105,7 @@ export function createGame(opts: CreateGameOptions = {}): GameState {
     phase: "start",
     pendingCombat: null,
     pendingEquipment: null,
+    pendingEventChoice: null,
     log: [],
     gameOver: false,
     winnerIds: null,
@@ -634,8 +636,20 @@ export function applyAction(prev: GameState, action: Action): StepResult {
   if (state.pendingEquipment && action.type !== "chooseEquipment" && action.type !== "rerollEquipment") {
     return fail("choose an upgrade first");
   }
+  if (state.pendingEventChoice && action.type !== "resolveEventChoice") {
+    return fail("resolve the pending event first");
+  }
 
   switch (action.type) {
+    // ---- an event card's pending choice (see engine/events.ts) ------------
+    case "resolveEventChoice": {
+      const choice = state.pendingEventChoice;
+      if (!choice) return fail("no event choice pending");
+      if (!choice.options.some((o) => o.id === action.optionId)) return fail("not one of the offered options");
+      withRng(state, (rng) => continueEvent(state, board, choice, action.optionId, rng));
+      return done();
+    }
+
     // ---- homecoming upgrade pick -----------------------------------------
     case "chooseEquipment": {
       const pe = state.pendingEquipment;
@@ -717,7 +731,13 @@ export function applyAction(prev: GameState, action: Action): StepResult {
           state.config.core.cards.reshuffleDiscardWhenEmpty,
         );
         state.decks.booster = deck;
-        p.hand.push(...cards);
+        const events = cards.filter((c) => c.type === "event");
+        const realCards = cards.filter((c) => c.type !== "event");
+        p.hand.push(...realCards);
+        // event cards never sit in hand — they run their workflow immediately and go straight
+        // to discard, same as a booster that's already been played
+        state.decks.booster = discardCards(state.decks.booster, events);
+        for (const card of events) runEvent(state, board, p, card.eventId!, rng);
       });
       p.turn.boosterDrawn = true;
       p.placed = true; // launch cell choice is locked once the turn proper begins
@@ -1106,3 +1126,6 @@ function rollCoordinateUntilSafeOrAny(
 }
 
 export { add, straightPath, hexKey };
+// shared with engine/events.ts — event resolution reuses the exact same primitives combat-flee
+// and ship-loss already use, rather than duplicating hyperspace/reseed/rng-save logic
+export { log, loseShip, resourceKeySet, freeFor, rollCoordinateUntilSafeOrAny, withRng };

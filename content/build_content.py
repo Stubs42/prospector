@@ -25,6 +25,23 @@ BOOSTER_EFFECT = {
     "engine": "burn cap +{v} this turn",
 }
 
+# title/effect text for event cards — kept in sync by hand with the EventDefinition entries in
+# engine/events.ts (title/text there); this is the card-face copy, not the resolution logic.
+EVENT_META = {
+    "pirate-ambush": {
+        "title": "Pirate Ambush",
+        "effect": "roll shields vs. a raider; lose your most valuable ore on a loss",
+    },
+    "hyperspace-quake": {
+        "title": "Hyperspace Quake",
+        "effect": "every ship near a random epicentre is hyperspace-jumped",
+    },
+    "salvage-cache": {
+        "title": "Salvage Cache",
+        "effect": "pick a nearby cell to seed and load a resource, or let it drift",
+    },
+}
+
 
 def _ids(prefix, n):
     return [f"{prefix}-{i:02d}" for i in range(1, n + 1)]
@@ -52,6 +69,17 @@ def build_booster_deck(cfg):
             "value": None,
             "effect": "jump: reroll position via coordinate dice; also playable as combat defence",
         })
+    for event_id, count in b.get("event", {}).items():
+        meta = EVENT_META[event_id]
+        for cid in _ids(f"event-{event_id}", count):
+            cards.append({
+                "id": cid,
+                "deck": "booster",
+                "type": "event",
+                "value": None,
+                "effect": meta["effect"],
+                "eventId": event_id,
+            })
     return cards
 
 

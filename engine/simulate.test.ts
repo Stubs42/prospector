@@ -10,7 +10,11 @@ describe("simulate", () => {
       seed: 1,
     });
     expect(s.finished + s.stalled).toBe(12);
-    expect(s.finished).toBeGreaterThanOrEqual(10); // simple bot; a few games stall out
+    // simple bot; a few games stall out — and since event cards were mixed into the booster
+    // deck, a hyperspace-quake can now scatter or maroon ships mid-heuristic, so the greedy
+    // bot (deliberately simple, doc'd as such) stalls out more often than before events
+    // existed (was >=10/12; measured 7-11/12 across several seeds with events in the deck)
+    expect(s.finished).toBeGreaterThanOrEqual(6);
     expect(s.avgTurns).toBeGreaterThan(0);
     const decided = Object.values(s.winsByColour).reduce((a, b) => a + b, 0);
     const draws = Math.round(s.drawRate * s.finished);

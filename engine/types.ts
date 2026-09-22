@@ -64,6 +64,8 @@ export interface ProspectorConfig {
       reserveFuel: Record<string, number>;
       engine: Record<string, number>;
       hyperspace: number;
+      /** eventId -> how many copies are mixed into the booster deck */
+      event: Record<string, number>;
     };
     equipment: {
       perType: number;
@@ -94,6 +96,9 @@ export interface ProspectorConfig {
   };
   shipLoss: { rerollCargo: boolean; returnToBaseAtRest: boolean; eliminateIfSupplyEmpty: boolean };
   postMoveActions: ("load" | "attack")[];
+  /** per-event tunables, keyed by eventId — each event's own resolve() reads its own slice and
+     casts it locally (a loosely-typed "per-plugin config" shape, same pragmatism as `decks`) */
+  events: Record<string, Record<string, unknown>>;
 }
 
 export interface Config {
@@ -105,7 +110,7 @@ export interface Config {
 // Cards
 // ---------------------------------------------------------------------------
 
-export type BoosterType = "shield" | "laser" | "reserveFuel" | "engine" | "hyperspace";
+export type BoosterType = "shield" | "laser" | "reserveFuel" | "engine" | "hyperspace" | "event";
 
 export interface BoosterCard {
   id: string;
@@ -113,6 +118,36 @@ export interface BoosterCard {
   type: BoosterType;
   value: number | null;
   effect: string;
+  /** only meaningful when type === "event" — which entry of the event registry this card runs */
+  eventId?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Event cards — mixed into the booster deck; drawing one runs a workflow
+// instead of joining the drawer's hand (see engine/events.ts)
+// ---------------------------------------------------------------------------
+
+// StatKey fields read as the ship's rated/capped stat (e.g. "fuelTanks" = tank capacity, via
+// statsOf) — "fuel"/"cargoCount" are the player's current live values instead, since those are
+// what an event like "affecting only ships with less than 5 fuel right now" actually means.
+export type EventField = StatKey | "fuel" | "cargoCount" | "colour" | "shipName";
+export type EventOp = "lt" | "lte" | "gt" | "gte" | "eq" | "neq";
+export interface EventCondition {
+  field: EventField;
+  op: EventOp;
+  value: number | string;
+}
+
+/** an event paused mid-resolve, waiting on a choice from `playerId` (always the drawer today —
+   events never ask a non-active player anything). `stage`/`context` are opaque to the engine,
+   interpreted only by the event definition itself when the choice comes back. */
+export interface PendingEventChoice {
+  eventId: string;
+  playerId: number;
+  stage: string;
+  prompt: string;
+  options: { id: string; label: string }[];
+  context?: Record<string, unknown>;
 }
 
 export interface EquipmentCard {
@@ -281,6 +316,9 @@ export interface GameState {
      delivery reward (always an interactive choice) or the start-of-game upgrade (whose
      `mode` tells a GUI whether to auto-spin to a random one or let the player pick) */
   pendingEquipment: PendingEquipment | null;
+  /** an event card (drawn from the booster deck — see engine/events.ts) paused mid-resolve,
+     waiting on the drawer to pick an option; null the rest of the time */
+  pendingEventChoice: PendingEventChoice | null;
   log: LogEntry[];
   gameOver: boolean;
   winnerIds: number[] | null;
@@ -319,6 +357,7 @@ export type Action =
   | { type: "declineCounter" }
   | { type: "chooseEquipment"; cardId: string }
   | { type: "rerollEquipment" }
+  | { type: "resolveEventChoice"; optionId: string }
   | { type: "endTurn" };
 
 export interface StepResult {

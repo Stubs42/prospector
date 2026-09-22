@@ -44,7 +44,7 @@ describe("createGame", () => {
   });
 
   it("builds full decks", () => {
-    expect(g.decks.booster.draw).toHaveLength(45);
+    expect(g.decks.booster.draw).toHaveLength(50); // 45 real boosters + 5 event cards
     // 36 equipment minus 4 players * 3 drawn (default upgradeAtStart "select" — pending until chosen)
     expect(g.decks.equipment.draw).toHaveLength(36 - 4 * 3);
   });
@@ -362,8 +362,10 @@ describe("hyperspace", () => {
     });
 
     it("landing back in range keeps the same attack live, unresolved", () => {
-      // seed 15 happens to land the defender back within the attacker's reach
-      const s0 = setupAdjacentCombat(15);
+      // seed 19 happens to land the defender back within the attacker's reach (re-picked when
+      // event cards were mixed into the booster deck — the deck-shuffle RNG draw during
+      // createGame now consumes differently, shifting which seed lands where downstream)
+      const s0 = setupAdjacentCombat(19);
       const before = s0.pendingCombat!;
       const s = run(s0, { type: "combatDefend", hyperspaceBoosterId: s0.players[1]!.hand[0]!.id });
       expect(s.pendingCombat).toMatchObject({ attackerId: before.attackerId, defenderId: before.defenderId, round: before.round, awaiting: "defend" });
