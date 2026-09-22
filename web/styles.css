@@ -449,6 +449,38 @@ button.hexbutton {
 }
 .log-overlay-body b { color: var(--ink); }
 
+/* rules overlay — same shell as .log-overlay, just roomier for prose */
+.rules-overlay {
+  width: min(640px, 92vw); max-height: 82vh;
+  display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--line-strong, var(--line));
+  border-radius: 12px; overflow: hidden;
+}
+.rules-overlay-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.6rem 0.9rem; border-bottom: 1px solid var(--line);
+  font-size: 0.72rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted);
+}
+.rules-overlay-head button { padding: 0.2rem 0.5rem; }
+.rules-overlay-body {
+  padding: 0.8rem 1.1rem 1.2rem; overflow-y: auto;
+  font-size: 0.82rem; color: var(--muted); line-height: 1.6;
+}
+.rules-overlay-body h3 {
+  color: var(--gold); font-size: 0.9rem; margin: 1.3rem 0 0.4rem;
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.rules-overlay-body h3:first-child { margin-top: 0; }
+.rules-overlay-body p { margin: 0.4rem 0; }
+.rules-overlay-body ol { margin: 0.4rem 0; padding-left: 1.3rem; }
+.rules-overlay-body li { margin: 0.25rem 0; }
+.rules-overlay-body b { color: var(--ink); }
+.rules-table { width: 100%; border-collapse: collapse; margin: 0.5rem 0 0.8rem; font-size: 0.76rem; }
+.rules-table th, .rules-table td {
+  text-align: left; padding: 0.25rem 0.5rem; border-bottom: 1px solid var(--line);
+}
+.rules-table th { color: var(--ink); font-weight: 600; }
+
 .topbar button.ghost { background: none; border-color: transparent; color: var(--muted); }
 .topbar button.ghost:hover { color: var(--gold); }
 
