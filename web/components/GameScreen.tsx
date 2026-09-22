@@ -645,7 +645,7 @@ export function GameScreen({
   const cardHint = handOwnerOverLimit
     ? null // the centred hex popup carries this message instead
     : preDriftRefuel && p.hand.some((c) => c.type === "reserveFuel")
-      ? "Out of fuel — tap a reserve-fuel card to refuel before drifting."
+      ? "Out of fuel — tap a reserve-fuel card to refuel, or the green ring to just drift as-is."
       : inBurnPhase && p.hand.some((c) => c.type === "engine" || c.type === "reserveFuel" || c.type === "hyperspace")
         ? "Tap an engine card to arm it for this burn, a reserve-fuel card to refuel now, or a hyperspace card to jump instead."
         : combatCardType === "shield"
@@ -932,6 +932,11 @@ export function GameScreen({
     const k = hexKey(h);
     if (afford.placeCells.some((c) => hexKey(c) === k)) return dispatch({ type: "placeShip", cell: h });
     if (afford.loadCells.some((c) => hexKey(c) === k)) return dispatch({ type: "loadResource", from: h });
+    // the free (0-cost) alternative to playing a reserve-fuel card in preDriftRefuel — see its
+    // own declaration: with an empty tank and a reserve-fuel card in hand, auto-advance won't
+    // drift on its own, but the player may still just want to drift as-is without spending the
+    // card, so the drift target itself needs a real, board-native click target too
+    if (preDriftRefuel && driftGhost && hexKey(driftGhost.at) === k) return dispatch({ type: "drift" });
     const bt = afford.burnTargets.find((b) => hexKey(b.cell) === k);
     if (bt) return s.dispatchBurn({ type: "burn", path: bt.path });
     // your own base, and not a burn target right now (arriving home is not scrapping)
@@ -958,7 +963,13 @@ export function GameScreen({
           highlight={suppress ? { cells: [], kind: null } : interactive ? highlight : { cells: [], kind: null }}
           spinPath={spinPath}
           loadCells={loadCellsForBoard}
-          burnTargets={interactive && !suppress ? afford.burnTargets : []}
+          burnTargets={
+            interactive && !suppress
+              ? preDriftRefuel && driftGhost
+                ? [...afford.burnTargets, { cell: driftGhost.at, cost: 0, path: [driftGhost.at] }]
+                : afford.burnTargets
+              : []
+          }
           driftGhost={interactive && !suppress ? driftGhost : null}
           onCoast={suppress ? null : onCoast}
           scrapCells={anim ? [] : scrapCells}
