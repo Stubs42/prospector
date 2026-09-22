@@ -546,7 +546,7 @@ export function GameScreen({
   const clickableAction = (c: BoosterCard): (() => void) | undefined => {
     if (handOwnerOverLimit) return () => dispatch({ type: "discardBooster", cardId: c.id });
     // reserve fuel isn't armed for a later burn — it's used up the instant it's clicked
-    if (inBurnPhase && c.type === "reserveFuel" && canRefuel(c.id)) return () => dispatch({ type: "useReserveFuel", cardId: c.id });
+    if ((inBurnPhase || preDriftRefuel) && c.type === "reserveFuel" && canRefuel(c.id)) return () => dispatch({ type: "useReserveFuel", cardId: c.id });
     if (inBurnPhase && c.type === "engine") return () => s.toggleArmed(c.id);
     // an alternative to burning, not staged/armed — playing it resolves the jump (and the
     // whole move) immediately, same "used up on click" shape as reserve fuel above
@@ -580,6 +580,15 @@ export function GameScreen({
     p.turn.driftDone &&
     !p.turn.moved &&
     !overLimit;
+  // the one case BEFORE drift where a reserve-fuel card must still be clickable: an empty
+  // tank about to drift for that reason (mirrors the engine's own avoidableZeroFuelDrift,
+  // which is exactly why auto-advance refuses to fire that drift on its own — see
+  // useSession.ts). Without this, a 0-fuel ship holding a reserve-fuel card had no way to
+  // ever play it: auto-advance wouldn't drift for them, and inBurnPhase (above) wouldn't
+  // treat the card as clickable until AFTER a drift that could never happen — a real deadlock
+  // (found live: a stuck game, "the only thing I can click is scrap my own ship").
+  const preDriftRefuel =
+    !activeIsBot && !pc && !state.pendingEquipment && state.phase === "start" && !p.turn.driftDone && p.fuel === 0 && !overLimit;
   const combatCardType: "laser" | "shield" | null =
     pc?.awaiting === "defend" && seats[pc.defenderId] === "human"
       ? "shield"
@@ -616,17 +625,19 @@ export function GameScreen({
     !handHidden &&
     handOwner.hand.length > 0 &&
     (handOwnerOverLimit ||
-      ((inBurnPhase || combatCardType !== null) && handHasPlayableCard) ||
+      ((inBurnPhase || preDriftRefuel || combatCardType !== null) && handHasPlayableCard) ||
       handHasNewCard);
   const cardHint = handOwnerOverLimit
     ? null // the centred hex popup carries this message instead
-    : inBurnPhase && p.hand.some((c) => c.type === "engine" || c.type === "reserveFuel" || c.type === "hyperspace")
-      ? "Tap an engine card to arm it for this burn, a reserve-fuel card to refuel now, or a hyperspace card to jump instead."
-      : combatCardType === "shield"
-        ? "Tap shield cards to add to your defence."
-        : combatCardType === "laser"
-          ? "Tap laser cards to add to your attack."
-          : null;
+    : preDriftRefuel && p.hand.some((c) => c.type === "reserveFuel")
+      ? "Out of fuel — tap a reserve-fuel card to refuel before drifting."
+      : inBurnPhase && p.hand.some((c) => c.type === "engine" || c.type === "reserveFuel" || c.type === "hyperspace")
+        ? "Tap an engine card to arm it for this burn, a reserve-fuel card to refuel now, or a hyperspace card to jump instead."
+        : combatCardType === "shield"
+          ? "Tap shield cards to add to your defence."
+          : combatCardType === "laser"
+            ? "Tap laser cards to add to your attack."
+            : null;
 
   // --- combat / bottom-panel buttons -------------------------------
   const combatTitle = pc
