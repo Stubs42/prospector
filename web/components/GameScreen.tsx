@@ -1009,6 +1009,7 @@ export function GameScreen({
         )}
         <DeckPanels state={state} />
         {isWaitingOnBot && !activeIsBot && <div className="board-toast">🤖 waiting on the bot…</div>}
+        {s.reconnecting && <div className="board-toast">🔌 reconnecting…</div>}
         {state.gameOver && (
           <div className="board-scrim">
             <HexPopup
