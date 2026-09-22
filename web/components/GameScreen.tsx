@@ -126,14 +126,27 @@ export function GameScreen({
   // and the whole reveal stuck on whatever single tick the aborted run managed to draw. State
   // only advances once a run actually finishes uncancelled, so a StrictMode remount just
   // replays the same batch from scratch instead of silently dropping it.
-  const [seedProcessed, setSeedProcessed] = useState(0);
+  //
+  // Lazy-initialized from the CURRENT log length, not a literal 0 — this is only a "replay
+  // what happened since I've been watching" cursor, never "replay this game's entire history
+  // from turn 1." A literal 0 start (found live) meant every page refresh — the log already
+  // has every resourceSeeded entry from the whole game in it by then — replayed the full
+  // history of reveals from scratch, several seconds each, with holdAdvance keeping the game
+  // frozen for all of it: a refresh looked like it did nothing, because functionally it undid
+  // nothing except cost the player minutes of forced animation before they got control back.
+  const [seedProcessed, setSeedProcessed] = useState(() => state.log.length);
   // cells that are ALREADY placed in real engine state but not yet revealed on screen —
   // hidden from `displayState` below until their own spin lands (initial seeding hides
   // every starting tile at once; a homecoming re-seed only ever hides the 1-2 new ones,
   // every pre-existing tile on the board stays visible the whole time)
   const [hiddenSeeds, setHiddenSeeds] = useState<Set<string>>(new Set());
   const [spinPath, setSpinPath] = useState<CoordinateSpinPath | null>(null);
-  const [placing, setPlacing] = useState(() => state.log.some((l) => l.event === "resourceSeeded"));
+  // starts false, not "did this game ever have a resourceSeeded entry" — that was almost
+  // always true (any game past its opening seed) and, combined with the seedProcessed==0 bug
+  // above, meant a fresh mount could get stuck showing "Placing resources" indefinitely if the
+  // reveal effect below ever bailed out early without reaching its own setPlacing(false). The
+  // effect reactively flips this true itself the moment it finds real unprocessed entries.
+  const [placing, setPlacing] = useState(false);
   useEffect(() => {
     const newEntries = state.log.slice(seedProcessed).filter((l) => l.event === "resourceSeeded");
     if (newEntries.length === 0) return;
@@ -196,7 +209,9 @@ export function GameScreen({
   // seeding got this animation, hyperspace never did). `lastPoseRef` remembers each player's
   // pose as of the PREVIOUS render so the already-landed pose can be held back on screen
   // (via displayState below) until the spin actually catches up to it.
-  const [hyperspaceProcessed, setHyperspaceProcessed] = useState(0);
+  // same "only replay what happened since I've been watching" fix as seedProcessed above —
+  // lazy-initialized from the current log length, not a literal 0
+  const [hyperspaceProcessed, setHyperspaceProcessed] = useState(() => state.log.length);
   const [hyperspaceReveal, setHyperspaceReveal] = useState<{ playerId: number; pose: PlayerState["pose"] } | null>(null);
   const lastPoseRef = useRef<Record<number, PlayerState["pose"]>>({});
   useEffect(() => {
