@@ -9,8 +9,10 @@ import {
   provideGameData,
   setupLegalActions,
   equipmentRerollEligible,
+  freeFor,
   type CreateGameOptions,
 } from "./game.js";
+import { drift } from "./movement.js";
 import { movementInputs, canEquip } from "./ship.js";
 import type { Action, GameState, PlayerState } from "./types.js";
 
@@ -117,14 +119,11 @@ export function legalActions(state: GameState, opts?: LegalOpts): Action[] {
       for (const c of p.hand) out.push({ type: "discardBooster", cardId: c.id });
       return out;
     }
-    if (!p.turn.driftDone) {
-      out.push({ type: "drift" });
-      return out;
-    }
     if (!p.turn.moved) {
       const stats = statsOf(state, p);
-      // hyperspace: an alternative to burning, offered at the same decision point — any
-      // hyperspace card in hand, or the engine-power jump if the ship qualifies outright
+      // hyperspace: an alternative to a normal move entirely, offered at the same decision
+      // point regardless of where a drift would land — any hyperspace card in hand, or the
+      // engine-power jump if the ship qualifies outright
       for (const c of p.hand) {
         if (c.type === "hyperspace") out.push({ type: "hyperspace", via: "booster", boosterId: c.id });
       }
@@ -132,54 +131,77 @@ export function legalActions(state: GameState, opts?: LegalOpts): Action[] {
       if (stats.engines >= hs.engineThreshold && p.fuel >= hs.fuelCost) {
         out.push({ type: "hyperspace", via: "engines" });
       }
-      const cap = movementInputs(stats, mode).burnCap + Math.max(0, opts?.extraEngines ?? 0);
-      const freeCells = Math.max(
-        0,
-        p.turn.moveStartedOnOwnBase
-          ? state.config.core.movement.freeBaseDepartureCells - p.turn.freeBurnCellsUsed
-          : 0,
-      );
-      const hardCap = state.config.core.movement.burnMaxCells;
-      const stepBudget = Math.min(cap, hardCap) + freeCells;
-      const fuelBudget = Math.min(p.fuel + Math.max(0, opts?.extraFuel ?? 0), p.fuelMax);
 
-      // A burn may turn and may pass through outer cells — and resource/ship-occupied
-      // cells — on its way in; only the destination must be inner and clear (matches
-      // movement.ts's burn(), which only checks offField for intermediate cells, and inner
-      // + isFreeAt for the LAST path cell only). Flying over an obstacle instead of being
-      // walled off by it means a target's reachability is just its real hex distance, never
-      // inflated by however many extra steps a detour around that obstacle would need.
-      const startKey = hexKey(p.pose.current);
-      const depth = new Map<string, number>([[startKey, 0]]);
-      const parent = new Map<string, Hex>();
-      const queue: Hex[] = [p.pose.current];
-      for (let qi = 0; qi < queue.length; qi++) {
-        const cell = queue[qi]!;
-        const d = depth.get(hexKey(cell))!;
-        if (d >= stepBudget) continue;
-        for (const nb of board.neighbours(cell)) {
-          const k = hexKey(nb);
-          if (depth.has(k) || board.offField(nb)) continue;
-          depth.set(k, d + 1);
-          parent.set(k, cell);
-          queue.push(nb);
+      // drift and burn are one decision, not two: reachable cells (0-cost included) are
+      // computed up front from wherever the ship would land, whether or not the real "drift"
+      // action has actually been dispatched yet — see engine/game.ts's ensureDrifted, which
+      // burn/endMove/hyperspace all call to perform this same drift for real the moment any
+      // of them is actually chosen. Speculating it here (via the same pure `drift()`) is what
+      // lets a 0-fuel player see a real, clickable "stay here for free" option from turn one,
+      // instead of nothing at all until an invisible auto-fired drift happened to succeed.
+      const speculative = p.turn.driftDone ? null : drift(p.pose, board, freeFor(state, board, p.id));
+      const landing = speculative ? speculative.pose : p.pose;
+      const wouldNeedBurn = speculative ? speculative.needsBurn : p.turn.mustBurn;
+      const offField = speculative?.offField ?? false;
+      // ensureDrifted (engine/game.ts) only sets this real side-effect once the drift actually
+      // happens — speculate it the same way here so a not-yet-drifted player starting from
+      // their own base still sees their free departure cells, not zero
+      const moveStartedOnOwnBase = p.turn.driftDone
+        ? p.turn.moveStartedOnOwnBase
+        : board.baseOwnerAt(p.pose.current) === p.homeBase;
+
+      if (!offField) {
+        const cap = movementInputs(stats, mode).burnCap + Math.max(0, opts?.extraEngines ?? 0);
+        const freeCells = Math.max(
+          0,
+          moveStartedOnOwnBase
+            ? state.config.core.movement.freeBaseDepartureCells - p.turn.freeBurnCellsUsed
+            : 0,
+        );
+        const hardCap = state.config.core.movement.burnMaxCells;
+        const stepBudget = Math.min(cap, hardCap) + freeCells;
+        const fuelBudget = Math.min(p.fuel + Math.max(0, opts?.extraFuel ?? 0), p.fuelMax);
+
+        // A burn may turn and may pass through outer cells — and resource/ship-occupied
+        // cells — on its way in; only the destination must be inner and clear (matches
+        // movement.ts's burn(), which only checks offField for intermediate cells, and inner
+        // + isFreeAt for the LAST path cell only). Flying over an obstacle instead of being
+        // walled off by it means a target's reachability is just its real hex distance, never
+        // inflated by however many extra steps a detour around that obstacle would need.
+        const startKey = hexKey(landing.current);
+        const depth = new Map<string, number>([[startKey, 0]]);
+        const parent = new Map<string, Hex>();
+        const queue: Hex[] = [landing.current];
+        for (let qi = 0; qi < queue.length; qi++) {
+          const cell = queue[qi]!;
+          const d = depth.get(hexKey(cell))!;
+          if (d >= stepBudget) continue;
+          for (const nb of board.neighbours(cell)) {
+            const k = hexKey(nb);
+            if (depth.has(k) || board.offField(nb)) continue;
+            depth.set(k, d + 1);
+            parent.set(k, cell);
+            queue.push(nb);
+          }
+        }
+        for (const [k, d] of depth) {
+          if (d === 0) continue; // the landing cell itself is the free "endMove here" option below
+          const cell = parseHexKey(k);
+          if (!board.isInner(cell)) continue; // a burn must end on an inner cell
+          if (d - Math.min(d, freeCells) > fuelBudget) continue; // can't fuel it
+          if (!isFree(cell)) continue; // can't come to rest on another ship
+          const path: Hex[] = [];
+          for (let node: Hex | undefined = cell; node && hexKey(node) !== startKey; node = parent.get(hexKey(node))) {
+            path.unshift(node);
+          }
+          out.push({ type: "burn", path });
         }
       }
-      for (const [k, d] of depth) {
-        if (d === 0) continue;
-        const cell = parseHexKey(k);
-        if (!board.isInner(cell)) continue; // a burn must end on an inner cell
-        if (d - Math.min(d, freeCells) > fuelBudget) continue; // can't fuel it
-        if (!isFree(cell)) continue; // can't come to rest on another ship
-        const path: Hex[] = [];
-        for (let node: Hex | undefined = cell; node && hexKey(node) !== startKey; node = parent.get(hexKey(node))) {
-          path.unshift(node);
-        }
-        out.push({ type: "burn", path });
-      }
-      // endMove is legal when the move settled cleanly, OR as the "ship lost" escape when a
-      // mandatory burn cannot be afforded / reached.
-      if (!p.turn.mustBurn || !out.some((a) => a.type === "burn")) out.push({ type: "endMove" });
+      // endMove is legal when the (real or would-be) landing settled cleanly — the free,
+      // always-available "stay right here" choice — OR, when it's off-field or otherwise
+      // forces a burn nothing can afford, as the "ship lost" escape hatch (its handler
+      // performs the real drift, discovers the loss, and resolves it).
+      if (offField || !wouldNeedBurn || !out.some((a) => a.type === "burn")) out.push({ type: "endMove" });
       return out;
     }
     out.push({ type: "endMove" });

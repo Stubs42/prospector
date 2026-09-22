@@ -477,7 +477,14 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   }, [newCardIds]);
 
   // --- previews --------------------------------------------------------
-  const driftGhost = afford.legal.some((a) => a.type === "drift") ? driftPreview(state) : null;
+  // drift is folded into burn/endMove/hyperspace now (see engine/index.ts's legalActions) —
+  // "drift" itself never appears as its own legal action any more, so this preview is no
+  // longer gated on it; driftPreview already returns null on its own for an at-rest ship.
+  // Still gated on !state.setup, though: during setup state.players is empty, and
+  // driftPreview indexes state.players[state.activePlayerIndex] directly (crashes otherwise —
+  // found live) — the old `afford.legal.some(drift)` check used to hide this for free, since
+  // setup's own legalActions branch never returns "drift" either.
+  const driftGhost = state.setup ? null : driftPreview(state);
 
   // --- timers ---------------------------------------------------------
   useEffect(() => {
@@ -538,12 +545,10 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     // broadcast would then be wrongly attributed to — exactly the shape of a reported "move
     // animation glitches" bug, since the anim-deriving special cases key off actionType.
     isMe(state.activePlayerIndex) &&
-    // never auto-fire the "ship is lost" endMove while a reserve-fuel card could still save
-    // it — see Affordances.avoidableShipLoss
-    !afford.avoidableShipLoss &&
-    // never auto-fire an empty-tank drift while a reserve-fuel card could top it up and
-    // open real burn targets first — see Affordances.avoidableZeroFuelDrift
-    !afford.avoidableZeroFuelDrift
+    // never auto-fire the free "stay here" endMove while a reserve-fuel or engine card in
+    // hand could still open up a real burn target (or save the ship, if the landing was
+    // unsafe) — see Affordances.avoidableShipLoss
+    !afford.avoidableShipLoss
       ? (soleAutoCandidate ?? soleClosingAction)
       : null;
   useEffect(() => {
@@ -608,6 +613,20 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
         const r = applyAction(s, step);
         if (r.ok) s = r.state;
       }
+    }
+    if (qs.get("zerofuel") === "1") {
+      // DEBUG ONLY — preview the empty-tank move decision directly: 0 fuel, a reserve-fuel
+      // card in hand, pre-drift, to confirm the merged drift/burn decision surface live
+      const activeIdx = s.activePlayerIndex;
+      s = {
+        ...s,
+        players: s.players.map((pl, i) => {
+          if (i !== activeIdx) return pl;
+          const hasCard = pl.hand.some((c) => c.type === "reserveFuel");
+          const card = { id: "debug-reservefuel", deck: "booster" as const, type: "reserveFuel" as const, value: 2, effect: "" };
+          return { ...pl, fuel: 0, hand: hasCard ? pl.hand : [...pl.hand, card] };
+        }),
+      };
     }
     if (
       qs.get("combattest") === "onturn" ||

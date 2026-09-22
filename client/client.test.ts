@@ -100,25 +100,52 @@ describe("affordances", () => {
     expect(a.avoidableShipLoss).toBe(false); // resolved — safe to auto-advance again if forced
   });
 
-  it("flags avoidableZeroFuelDrift when the tank is empty and a reserve-fuel card could still open up burn targets", () => {
+  it("flags avoidableShipLoss BEFORE drift too, when the tank is empty and a reserve-fuel card could still open up burn targets", () => {
+    // drift and burn are one decision now (see engine/index.ts's legalActions) — a 0-fuel
+    // player must see this same protection before the (now implicit) drift has even run,
+    // not just after — this is exactly the deadlock reported live: driftDone was false, the
+    // old avoidableZeroFuelDrift blocked auto-advance, but nothing else offered a way forward.
+    // At rest, off their own base (no free departure cells), so 0 fuel truly means 0 burn
+    // targets until a card helps — isolates this from the free-departure-cell case below.
     let g = createGame({ seed: 7, colours: ["red", "black"], startPlayer: 0, upgradeAtStart: "none" });
+    g.players[0]!.pose = { current: { q: 9, r: 0 }, previous: { q: 9, r: 0 }, atRest: true };
     g.players[0]!.placed = true;
     g.players[0]!.fuel = 0;
     const card = { id: "test-fuel", deck: "booster" as const, type: "reserveFuel" as const, value: 3, effect: "" };
     g = run(g, { type: "drawBooster" });
-    g.players[0]!.hand = [...g.players[0]!.hand, card];
-    while (g.players[0]!.hand.length > 4) g = run(g, { type: "discardBooster", cardId: g.players[0]!.hand[0]!.id });
+    g.players[0]!.hand = [...g.players[0]!.hand.filter((c) => c.type !== "reserveFuel"), card];
+    while (g.players[0]!.hand.length > 4) {
+      g = run(g, { type: "discardBooster", cardId: g.players[0]!.hand.find((c) => c.id !== card.id)!.id });
+    }
 
     let a = affordances(g);
     expect(g.players[0]!.turn.driftDone).toBe(false);
-    expect(a.legal.some((x) => x.type === "drift")).toBe(true);
+    // the free "stay here" option is already offered, pre-drift — this is the fix
+    expect(a.legal.some((x) => x.type === "endMove")).toBe(true);
+    expect(a.legal.some((x) => x.type === "burn")).toBe(false); // nothing affordable yet
     expect(a.legal.some((x) => x.type === "useReserveFuel")).toBe(true);
-    expect(a.avoidableZeroFuelDrift).toBe(true); // a GUI's auto-advance must not fire drift here
+    expect(a.avoidableShipLoss).toBe(true); // a GUI's auto-advance must not fire endMove here
 
     g = run(g, { type: "useReserveFuel", cardId: card.id });
     a = affordances(g);
     expect(g.players[0]!.fuel).toBeGreaterThan(0);
-    expect(a.avoidableZeroFuelDrift).toBe(false); // resolved — safe to auto-advance again if forced
+    expect(a.burnTargets.length).toBeGreaterThan(0); // refuelling opened up real burn targets
+    expect(a.avoidableShipLoss).toBe(false); // resolved — safe to auto-advance again if forced
+  });
+
+  it("lets the free option auto-fire for a 0-fuel player with no helpful card", () => {
+    let g = createGame({ seed: 7, colours: ["red", "black"], startPlayer: 0, upgradeAtStart: "none" });
+    g.players[0]!.pose = { current: { q: 9, r: 0 }, previous: { q: 9, r: 0 }, atRest: true };
+    g.players[0]!.placed = true;
+    g.players[0]!.fuel = 0;
+    g = run(g, { type: "drawBooster" });
+    g.players[0]!.hand = g.players[0]!.hand.filter((c) => c.type !== "reserveFuel" && c.type !== "engine");
+    const a = affordances(g);
+    expect(g.players[0]!.turn.driftDone).toBe(false);
+    expect(a.legal.some((x) => x.type === "endMove")).toBe(true);
+    expect(a.legal.some((x) => x.type === "useReserveFuel")).toBe(false);
+    // no card could change the outcome — safe for a GUI's auto-advance to just proceed
+    expect(a.avoidableShipLoss).toBe(false);
   });
 });
 
