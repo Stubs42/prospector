@@ -321,7 +321,7 @@ export function SetupScreen({
           />
         )}
 
-        {rulesOpen && <RulesPopup onClose={() => setRulesOpen(false)} />}
+        {rulesOpen && <RulesPopup config={state.config} onClose={() => setRulesOpen(false)} />}
       </div>
 
       {/* the roll-off is public/spectator content, not any one seat's private turn — let it
