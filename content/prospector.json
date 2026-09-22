@@ -94,7 +94,7 @@
  },
  "decks": {
   "booster": {
-   "count": 45,
+   "count": 50,
    "cards": [
     {
      "id": "booster-shield-1-01",
@@ -410,6 +410,46 @@
      "type": "hyperspace",
      "value": null,
      "effect": "jump: reroll position via coordinate dice; also playable as combat defence"
+    },
+    {
+     "id": "event-pirate-ambush-01",
+     "deck": "booster",
+     "type": "event",
+     "value": null,
+     "effect": "roll shields vs. a raider; lose your most valuable ore on a loss",
+     "eventId": "pirate-ambush"
+    },
+    {
+     "id": "event-pirate-ambush-02",
+     "deck": "booster",
+     "type": "event",
+     "value": null,
+     "effect": "roll shields vs. a raider; lose your most valuable ore on a loss",
+     "eventId": "pirate-ambush"
+    },
+    {
+     "id": "event-hyperspace-quake-01",
+     "deck": "booster",
+     "type": "event",
+     "value": null,
+     "effect": "every ship near a random epicentre is hyperspace-jumped",
+     "eventId": "hyperspace-quake"
+    },
+    {
+     "id": "event-salvage-cache-01",
+     "deck": "booster",
+     "type": "event",
+     "value": null,
+     "effect": "pick a nearby cell to seed and load a resource, or let it drift",
+     "eventId": "salvage-cache"
+    },
+    {
+     "id": "event-salvage-cache-02",
+     "deck": "booster",
+     "type": "event",
+     "value": null,
+     "effect": "pick a nearby cell to seed and load a resource, or let it drift",
+     "eventId": "salvage-cache"
     }
    ]
   },

@@ -67,6 +67,10 @@ export function legalActions(state: GameState, opts?: LegalOpts): Action[] {
     return out2;
   }
 
+  if (state.pendingEventChoice) {
+    return state.pendingEventChoice.options.map((o) => ({ type: "resolveEventChoice", optionId: o.id }));
+  }
+
   if (state.pendingEquipment) {
     const pe = state.pendingEquipment;
     const caps = state.config.modes.prospector.upgradeCaps;

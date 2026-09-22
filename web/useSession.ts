@@ -572,6 +572,37 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     let s = state;
     while (s.setup) s = stepBot(s, rng); // setup always resolves first, however small n is
     for (let i = 0; i < n && !s.gameOver; i++) s = stepBot(s, rng);
+    const eventtest = qs.get("eventtest");
+    if (eventtest) {
+      // the N stepBot calls above may not have caught up with every seat's start-of-game
+      // upgrade pick yet — that pendingEquipment blocks drawBooster too, same reasoning as
+      // combattest's own drain loop below
+      while (s.pendingEquipment) {
+        const eqCard = s.pendingEquipment.cards[0];
+        if (!eqCard) break;
+        const r = applyAction(s, { type: "chooseEquipment", cardId: eqCard.id });
+        if (!r.ok) break;
+        s = r.state;
+      }
+      // the N random bot steps above may have already left the active seat mid-turn (or past
+      // their own draw already) — force them back to a fresh "just started this turn" state so
+      // the drawBooster step below is guaranteed legal regardless of what those steps did
+      const activeIdx = s.activePlayerIndex;
+      s = {
+        ...s,
+        phase: "start",
+        players: s.players.map((pl, i) =>
+          i === activeIdx
+            ? { ...pl, turn: { ...pl.turn, boosterDrawn: false, driftDone: false, moved: false, postMoveActionTaken: null, mustBurn: false } }
+            : pl,
+        ),
+      };
+      // DEBUG ONLY — force-draw a specific event card (pirate-ambush / hyperspace-quake /
+      // salvage-cache) by putting it on top of the booster deck before the real drawBooster
+      // step below runs, so this exercises the exact same engine code path a real draw would
+      const card = { id: "debug-event", deck: "booster" as const, type: "event" as const, value: null, effect: "", eventId: eventtest };
+      s = { ...s, decks: { ...s.decks, booster: { ...s.decks.booster, draw: [card, ...s.decks.booster.draw] } } };
+    }
     for (const step of [{ type: "drawBooster" }, { type: "drift" }] as Action[]) {
       if (legalActions(s).some((a) => a.type === step.type)) {
         const r = applyAction(s, step);

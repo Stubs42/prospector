@@ -12,6 +12,7 @@
  * mechanics THEMSELVES (that shields defend, that a burn costs fuel per cell) are prose.
  */
 import type { Config, StatKey } from "../../engine/types.js";
+import { EVENTS } from "../../engine/events.js";
 
 const STAT_LABEL: Record<StatKey, string> = {
   shields: "Shields",
@@ -72,6 +73,13 @@ export function RulesPopup({ config, onClose }: { config: Config; onClose: () =>
       values: `×${decks.booster.hyperspace}`,
     },
   ];
+
+  const eventRows = Object.entries(decks.booster.event ?? {})
+    .filter(([, count]) => count > 0)
+    .map(([id, count]) => {
+      const def = EVENTS[id];
+      return { id, count, title: def?.title ?? id, text: def?.text ?? "" };
+    });
 
   const capsList: string[] = [];
   if (upgradeCaps.lasers != null && upgradeCaps.lasers === upgradeCaps.shields) {
@@ -245,6 +253,31 @@ export function RulesPopup({ config, onClose }: { config: Config; onClose: () =>
             Reserve-fuel cards play the instant you tap them; engine and laser/shield cards
             arm when tapped and apply the moment you actually burn or declare/defend.
           </p>
+
+          {eventRows.length > 0 && (
+            <>
+              <h3>Events</h3>
+              <p>
+                A few of the cards in that same deck aren't boosters at all — drawing one runs
+                its own short event immediately instead of joining your hand, then your turn
+                carries on as normal.
+              </p>
+              <table className="rules-table">
+                <thead>
+                  <tr><th>Event</th><th>What happens</th><th>In the deck</th></tr>
+                </thead>
+                <tbody>
+                  {eventRows.map((row) => (
+                    <tr key={row.id}>
+                      <td>{row.title}</td>
+                      <td>{row.text}</td>
+                      <td>×{row.count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
 
           <h3>Equipment</h3>
           <p>

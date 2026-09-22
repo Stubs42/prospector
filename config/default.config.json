@@ -85,7 +85,8 @@
           "laser":       { "1": 4, "2": 3, "3": 2, "50": 3 },
           "reserveFuel": { "1": 4, "2": 3, "3": 2 },
           "engine":      { "1": 4, "2": 3, "3": 2 },
-          "hyperspace":  3
+          "hyperspace":  3,
+          "event": { "pirate-ambush": 2, "hyperspace-quake": 1, "salvage-cache": 2 }
         },
         "equipment": {
           "perType": 6,
@@ -130,7 +131,13 @@
 
       "postMoveActions": ["load", "attack"],
       "scoring": "resource-value-sum",
-      "endTrigger": "supply-empty-and-delivered"
+      "endTrigger": "supply-empty-and-delivered",
+
+      "events": {
+        "pirate-ambush": { "pirateLasers": 2 },
+        "hyperspace-quake": { "radius": 2, "conditions": [] },
+        "salvage-cache": { "radius": 2, "maxOptions": 3 }
+      }
     }
   }
 }

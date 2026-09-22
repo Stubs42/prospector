@@ -430,6 +430,28 @@ export function GameScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.log.length]);
 
+  // an event card's flavour text (engine/events.ts's `eventDrawn` log entry) — shown to every
+  // browser the same way spectators already see everything else, briefly, in the "⚙ System"
+  // status-panel slot (same slot "Placing resources" uses during setup's resource seeding).
+  // Auto-resolving events (pirate-ambush, hyperspace-quake) have no other pause point at all,
+  // so without this the flavour text would never be seen — a choice event's own popup (see
+  // eventChoiceBox above) additionally stays up until the drawer answers.
+  const [eventBanner, setEventBanner] = useState<{ title: string; text: string } | null>(null);
+  const eventLogLen = useRef(state.log.length);
+  useEffect(() => {
+    if (state.log.length <= eventLogLen.current) {
+      eventLogLen.current = state.log.length;
+      return;
+    }
+    const drawn = state.log.slice(eventLogLen.current).find((e) => e.event === "eventDrawn");
+    eventLogLen.current = state.log.length;
+    if (!drawn) return;
+    const d = drawn.detail as { title: string; text: string };
+    setEventBanner({ title: d.title, text: d.text });
+    const id = window.setTimeout(() => setEventBanner(null), reducedMotion ? 300 : 3500);
+    return () => window.clearTimeout(id);
+  }, [state.log.length, reducedMotion]);
+
   const anim = s.animLive; // a move is actively playing — hold back prompts/targets
   const suppress = anim || scrapConfirmOpen || placing || !!hyperspaceReveal; // also true while placing / the scrap dialog is up
   // online, only the browser whose own seat is actually active gets an interactive board/
@@ -827,6 +849,22 @@ export function GameScreen({
         }
       : null;
 
+  // an event card (drawn from the booster deck, see engine/events.ts) paused mid-resolve,
+  // waiting on the drawer to pick an option — same family as attackFailedBox/equipBox, gated
+  // to the drawer's own browser the same way (pendingEventChoice.playerId is always the
+  // drawer today; events never ask a non-active player anything)
+  const eventChoiceBox =
+    state.pendingEventChoice && s.isMe(state.pendingEventChoice.playerId)
+      ? {
+          lines: [state.pendingEventChoice.prompt],
+          actions: state.pendingEventChoice.options.map((o) => ({
+            label: o.label,
+            ...(o.id === "skip" ? {} : { kind: "primary" as const }),
+            onClick: () => dispatch({ type: "resolveEventChoice", optionId: o.id }),
+          })),
+        }
+      : null;
+
   // the equipment popup replaces the plain guidance popup while a choice (homecoming, or the
   // start-of-game upgrade) is pending for the deciding human — a bot's own pending choice of
   // either kind never reaches here, it resolves invisibly via stepBot's greedy policy
@@ -988,7 +1026,8 @@ export function GameScreen({
         {/* guidance popup / combat box: fixed overlays, like the zoom controls or the status
            panel — outside the board's own pan/zoom transform, so they never collide with it */}
         {!suppress && attackFailedBox && <HexPopup lines={attackFailedBox.lines} actions={attackFailedBox.actions} />}
-        {!suppress && !attackFailedBox && popup && <HexPopup lines={popup.lines} />}
+        {!suppress && !attackFailedBox && eventChoiceBox && <HexPopup lines={eventChoiceBox.lines} actions={eventChoiceBox.actions} />}
+        {!suppress && !attackFailedBox && !eventChoiceBox && popup && <HexPopup lines={popup.lines} />}
         {/* attackFailedBox wins if both are somehow still true at once — it's the fight's
            final word, and a stale combatReveal box (something else's decline having already
            force-cleared it above) must never sit on top of it, same principle as `popup` */}
@@ -1008,7 +1047,9 @@ export function GameScreen({
           </div>
         )}
 
-        {placing ? (
+        {eventBanner ? (
+          <StatusPanel colour={null} name="⚙ System" bot={false} log={[eventBanner.title, eventBanner.text]} system />
+        ) : placing ? (
           <StatusPanel colour={null} name="⚙ System" bot={false} log={["Placing resources"]} system />
         ) : (
           <StatusPanel
