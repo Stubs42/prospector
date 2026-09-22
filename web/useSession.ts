@@ -143,6 +143,13 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   // Once online, dispatch instead sends the action to the server and waits for its broadcast
   // "state" message to arrive — see dispatch() and the socket message handler below.
   const wsRef = useRef<WebSocket | null>(null);
+  // an unexpected drop mid-session (server restart, network blip, laptop sleep, ...) used to
+  // just sit in status:"offline" forever — only a full page reload's own mount effect ever
+  // tried rejoining. Found live: a player's tab silently froze on stale state for several
+  // turns (a bot kept moving server-side the whole time) with zero visible indication
+  // anything was wrong — looked exactly like a stuck game. This timer drives a background
+  // retry loop instead.
+  const reconnectTimerRef = useRef<number | null>(null);
   const [online, setOnlineState] = useState<OnlineState>({
     status: "offline",
     roomCode: null,
@@ -353,7 +360,26 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     wsRef.current = ws;
     ws.onopen = () => onOpen(ws);
     ws.onerror = () => setOnlineState((o) => ({ ...o, status: "offline", error: "Could not reach the server" }));
-    ws.onclose = () => setOnlineState((o) => (o.status === "offline" ? o : { ...o, status: "offline" }));
+    ws.onclose = () => {
+      // a socket already superseded by a newer, deliberate openSocket() call (joining a
+      // different room, etc.) still fires its own onclose when we .close() it above — that's
+      // not a real drop, and retrying with ITS stale saved session would race the new connection
+      if (wsRef.current !== ws) return;
+      setOnlineState((o) => (o.status === "offline" ? o : { ...o, status: "offline" }));
+      if (reconnectTimerRef.current != null) return; // a retry is already queued
+      reconnectTimerRef.current = window.setTimeout(() => {
+        reconnectTimerRef.current = null;
+        // re-read fresh at fire time, not the closure's own copy — leaveOnline() or a
+        // roomClosed message may have cleared it in the meantime, and then this is exactly
+        // the "deliberately left" case: just stop, don't reconnect to a room that's gone
+        const saved = loadSavedOnlineSession();
+        if (!saved) return;
+        openSocket((ws2) => {
+          const msg: ClientMessage = { type: "joinRoom", roomCode: saved.roomCode, displayName: "", reconnectToken: saved.token };
+          ws2.send(JSON.stringify(msg));
+        });
+      }, 2000);
+    };
     ws.onmessage = (ev) => {
       const msg: ServerMessage = JSON.parse(ev.data as string);
       switch (msg.type) {
@@ -410,6 +436,10 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     });
   }
   function leaveOnline(): void {
+    if (reconnectTimerRef.current != null) {
+      window.clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
     saveOnlineSession(null);
     wsRef.current?.close();
     wsRef.current = null;
@@ -738,6 +768,10 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     toggleCombatSel: toggle(setCombatSel),
     setAttackTarget,
     online,
+    // true while a background reconnect attempt is in flight after an unexpected drop mid-
+    // game — distinct from a genuine hot-seat "offline" (no saved session at all) and from
+    // the lobby's own "connecting" for a fresh create/join click
+    reconnecting: online.status !== "online" && loadSavedOnlineSession() !== null,
     isMe,
     hostOnline,
     joinOnline,
