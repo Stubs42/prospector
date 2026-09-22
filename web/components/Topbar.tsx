@@ -8,9 +8,10 @@
  * just the title/turn label/toggle to reclaim vertical board space — persisted via
  * prefs.topbarCollapsed so it doesn't need re-toggling every reload.
  */
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Settings } from "./Settings.js";
 import { OnlineLobby } from "./OnlineLobby.js";
+import { RulesPopup } from "./RulesPopup.js";
 import type { Prefs } from "../prefs.js";
 import type { Session } from "../useSession.js";
 
@@ -29,6 +30,7 @@ export function Topbar({
   /** absent during setup — there's no move log yet */
   onOpenLog?: (() => void) | undefined;
 }) {
+  const [rulesOpen, setRulesOpen] = useState(false);
   return (
     <div className={`topbar${prefs.topbarCollapsed ? " collapsed" : ""}`}>
       <h1>Prospector</h1>
@@ -41,6 +43,9 @@ export function Topbar({
               🕘 log
             </button>
           )}
+          <button className="ghost" onClick={() => setRulesOpen(true)} title="Rules">
+            📖 rules
+          </button>
           {s.online.status === "offline" && (
             <>
               <label className="turn">
@@ -96,6 +101,7 @@ export function Topbar({
       >
         {prefs.topbarCollapsed ? "▾" : "▴"}
       </button>
+      {rulesOpen && <RulesPopup onClose={() => setRulesOpen(false)} />}
     </div>
   );
 }
