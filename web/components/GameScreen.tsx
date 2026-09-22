@@ -16,6 +16,7 @@ import { CombatBox, type CombatBoxProps, type CombatCardChip } from "./CombatBox
 import { EquipmentPopup } from "./EquipmentPopup.js";
 import { HexPopup } from "./HexPopup.js";
 import { LogOverlay } from "./LogOverlay.js";
+import { RulesPopup } from "./RulesPopup.js";
 import { Topbar } from "./Topbar.js";
 import { StatusPanel } from "./StatusPanel.js";
 import { DeckPanels } from "./DeckPanels.js";
@@ -83,6 +84,7 @@ export function GameScreen({
   reducedMotion: boolean;
 }) {
   const [logOpen, setLogOpen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
   const [scrapConfirmOpen, setScrapConfirmOpen] = useState(
     () => typeof location !== "undefined" && new URLSearchParams(location.search).get("scrap") === "1",
   );
@@ -876,7 +878,14 @@ export function GameScreen({
 
   return (
     <div className="app board-only">
-      <Topbar s={s} prefs={prefs} setPrefs={setPrefs} turnLabel={`turn ${state.turnNumber}`} onOpenLog={() => setLogOpen(true)} />
+      <Topbar
+        s={s}
+        prefs={prefs}
+        setPrefs={setPrefs}
+        turnLabel={`turn ${state.turnNumber}`}
+        onOpenLog={() => setLogOpen(true)}
+        onOpenRules={() => setRulesOpen(true)}
+      />
 
       <div className="stage">
         <Board
@@ -998,9 +1007,10 @@ export function GameScreen({
           forceOpen={showCards}
           ownerId={handOwner.id}
         />
-      </div>
 
-      {logOpen && <LogOverlay state={state} onClose={() => setLogOpen(false)} />}
+        {logOpen && <LogOverlay state={state} onClose={() => setLogOpen(false)} />}
+        {rulesOpen && <RulesPopup onClose={() => setRulesOpen(false)} />}
+      </div>
 
       {needPassGate && (
         <div className="pass">

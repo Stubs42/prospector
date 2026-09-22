@@ -425,14 +425,16 @@ button.hexbutton {
   50%, 100% { stroke-opacity: 1; }
 }
 
-/* log / history overlay */
+/* log / history overlay — `absolute` (not `fixed`), scoped to .stage exactly like
+   .actionbox is, so this centres on the board display area, excluding the topbar, instead
+   of the full viewport — consistent whether the topbar is expanded or collapsed */
 .overlay-scrim {
-  position: fixed; inset: 0; z-index: 45;
+  position: absolute; inset: 0; z-index: 45;
   background: rgba(4, 10, 7, 0.6);
   display: flex; align-items: center; justify-content: center;
 }
 .log-overlay {
-  width: min(520px, 92vw); max-height: 74vh;
+  width: min(520px, 92vw); max-height: 88%;
   display: flex; flex-direction: column;
   background: var(--panel); border: 1px solid var(--line-strong, var(--line));
   border-radius: 12px; overflow: hidden;
@@ -451,7 +453,7 @@ button.hexbutton {
 
 /* rules overlay — same shell as .log-overlay, just roomier for prose */
 .rules-overlay {
-  width: min(640px, 92vw); max-height: 82vh;
+  width: min(640px, 92vw); max-height: 88%;
   display: flex; flex-direction: column;
   background: var(--panel); border: 1px solid var(--line-strong, var(--line));
   border-radius: 12px; overflow: hidden;
