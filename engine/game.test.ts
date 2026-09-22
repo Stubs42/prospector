@@ -176,6 +176,73 @@ describe("reserve fuel card", () => {
   });
 });
 
+describe("drift and burn are one decision (no separate driftDone gate for the player)", () => {
+  it("burn dispatched directly (no prior drift) implicitly drifts first, landing at drift-target + path", () => {
+    let s = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "none" });
+    const Y = () => s.players[0]!;
+    s = run(s, { type: "placeShip", cell: Y().pose.current });
+    s = run(s, { type: "drawBooster" });
+    expect(Y().turn.driftDone).toBe(false);
+    // an at-rest ship's drift target is its own current cell — burn's path picks up from there
+    const target = boardFor(s).neighbours(Y().pose.current).find((h) => boardFor(s).isInner(h))!;
+    s = run(s, { type: "burn", path: [target] });
+    expect(Y().turn.driftDone).toBe(true); // performed implicitly
+    expect(Y().turn.moved).toBe(true);
+    expect(Y().pose.current).toEqual(target);
+  });
+
+  it("endMove dispatched pre-drift performs the implicit drift and finalizes the move in one step", () => {
+    let s = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "none" });
+    const Y = () => s.players[0]!;
+    s = run(s, { type: "placeShip", cell: Y().pose.current });
+    s = run(s, { type: "drawBooster" });
+    expect(Y().turn.driftDone).toBe(false);
+    expect(legalActions(s).some((a) => a.type === "endMove")).toBe(true);
+    s = run(s, { type: "endMove" });
+    expect(Y().turn.driftDone).toBe(true);
+    expect(s.phase).toBe("moved");
+  });
+
+  it("a mandatory burn with nothing affordable still loses the ship via endMove, even pre-drift", () => {
+    let s = createGame({ seed: 7, colours: ["red", "black"], startPlayer: 0, upgradeAtStart: "none" });
+    const R = () => s.players[0]!;
+    // moving at velocity (1,0) from the inner boundary drifts one ring further out onto an
+    // outer cell — mustBurn — with 0 fuel and no free cells, nothing is affordable
+    R().pose = { current: { q: 9, r: 0 }, previous: { q: 8, r: 0 }, atRest: false };
+    R().placed = true;
+    R().fuel = 0;
+    s = run(s, { type: "drawBooster" });
+    expect(R().turn.driftDone).toBe(false);
+    const acts = legalActions(s);
+    expect(acts.some((a) => a.type === "burn")).toBe(false);
+    expect(acts.some((a) => a.type === "endMove")).toBe(true); // the only option — the loss escape hatch
+    s = run(s, { type: "endMove" });
+    expect(s.log.some((e) => e.event === "shipLost")).toBe(true);
+    expect(R().pose.atRest).toBe(true); // back at rest on the home base
+  });
+
+  it("a fresh start-of-game upgrade offer interrupts a burn-past-the-drift-target click; re-clicking after resolving it completes the move", () => {
+    let s = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "select" });
+    const Y = () => s.players[0]!;
+    s = run(s, { type: "placeShip", cell: Y().pose.current });
+    s = run(s, { type: "drawBooster" });
+    expect(Y().startEquipment).not.toBeNull();
+    const target = boardFor(s).neighbours(Y().pose.current).find((h) => boardFor(s).isInner(h))!;
+    s = run(s, { type: "burn", path: [target] });
+    // the implicit drift ran (revealing the upgrade offer) but the burn itself didn't
+    // complete yet — the player must resolve the offer first
+    expect(Y().turn.driftDone).toBe(true);
+    expect(Y().turn.moved).toBe(false);
+    expect(s.pendingEquipment).not.toBeNull();
+    s = run(s, { type: "chooseEquipment", cardId: s.pendingEquipment!.cards[0]!.id });
+    expect(s.pendingEquipment).toBeNull();
+    expect(Y().turn.moved).toBe(false); // still needs the re-click
+    s = run(s, { type: "burn", path: [target] });
+    expect(Y().turn.moved).toBe(true);
+    expect(Y().pose.current).toEqual(target);
+  });
+});
+
 describe("homecoming upgrade pick", () => {
   it("a delivery pauses for a 3-card equipment choice, then applies it", () => {
     let s = createGame({ seed: 8, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "none" });
@@ -247,14 +314,17 @@ describe("homecoming upgrade pick", () => {
 });
 
 describe("hyperspace", () => {
-  it("is offered as a legal action once drifted, for any hyperspace card in hand", () => {
+  it("is offered as a legal action for any hyperspace card in hand, drifted or not", () => {
     let s = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "none" });
     const Y = () => s.players[0]!;
     const card: BoosterCard = { id: "test-hyperspace", deck: "booster", type: "hyperspace", value: null, effect: "" };
     Y().hand = [card];
     s = run(s, { type: "drawBooster" });
     while (Y().hand.length > 3) s = run(s, { type: "discardBooster", cardId: Y().hand.find((c) => c.id !== card.id)!.id });
-    expect(legalActions(s).some((a) => a.type === "hyperspace")).toBe(false); // not yet — drift first
+    // offered immediately, even pre-drift — hyperspace is an alternative to a normal move
+    // entirely, not gated behind the (now implicit) drift step
+    const before = legalActions(s).filter((a) => a.type === "hyperspace") as Extract<Action, { type: "hyperspace" }>[];
+    expect(before.some((a) => a.via === "booster" && a.boosterId === card.id)).toBe(true);
     s = run(s, { type: "drift" });
     const acts = legalActions(s).filter((a) => a.type === "hyperspace") as Extract<Action, { type: "hyperspace" }>[];
     expect(acts.some((a) => a.via === "booster" && a.boosterId === card.id)).toBe(true);

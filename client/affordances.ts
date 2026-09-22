@@ -11,7 +11,6 @@ import { burnCost } from "./preview.js";
 /** actions rendered as ordinary buttons (not board clicks, not the combat panel, not discard) */
 export const PLAIN_ACTION_TYPES: readonly Action["type"][] = [
   "drawBooster",
-  "drift",
   "endMove",
   "endTurn",
   "scrapShip",
@@ -52,17 +51,19 @@ export interface Affordances {
   equipmentChoice: PendingEquipment | null;
   /** true when the current equipmentChoice may be rerolled once (all 3 cards identical) */
   canRerollEquipment: boolean;
-  /** true when the only progress available right now is an endMove that would strand/lose
-     the ship (mustBurn, no reachable burn target), but a reserve-fuel card in hand could
-     still avoid that by widening the affordable range. A GUI's auto-advance must never fire
-     that endMove on its own here — the player needs a real chance to play the card first. */
+  /** true when the only progress available right now is the free "stay here" endMove — no
+     real burn target is currently reachable — while a card in hand (a reserve-fuel card with
+     room to use it, already reflected as its own legal `useReserveFuel`; or an unplayed
+     engine card, which never appears as its own legal action since it's only ever a `burn`
+     parameter) could still open up real burn targets, or even avoid losing the ship outright
+     if the landing was unsafe. Covers this both once actually drifted AND before (drift is
+     now folded into burn/endMove/hyperspace — see engine/index.ts's legalActions — so this
+     same signal already applies pre-drift too, without needing a separate flag for that case).
+     A GUI's auto-advance must never fire that endMove on its own here — the player needs a
+     real chance to play the card first. (A hyperspace alternative doesn't need its own check
+     here: it's always its own separate legal action, which already keeps endMove from being
+     the sole thing on offer.) */
   avoidableShipLoss: boolean;
-  /** true when the ship is out of fuel and about to drift for that reason (drift is legal,
-     the tank is empty) while a reserve-fuel card in hand could top it up first and open up
-     real burn targets instead. Same rule as avoidableShipLoss: a GUI's auto-advance must
-     never fire that drift on its own — the player needs a real chance to play the card and
-     see burn options widen before committing to just drifting. */
-  avoidableZeroFuelDrift: boolean;
 }
 
 export interface AffordanceOpts {
@@ -115,12 +116,9 @@ export function affordances(state: GameState, opts: AffordanceOpts = {}): Afford
     equipmentChoice: state.pendingEquipment ?? null,
     canRerollEquipment: legal.some((a) => a.type === "rerollEquipment"),
     avoidableShipLoss:
-      !!state.players[state.activePlayerIndex]?.turn.mustBurn &&
       legal.some((a) => a.type === "endMove") &&
-      legal.some((a) => a.type === "useReserveFuel"),
-    avoidableZeroFuelDrift:
-      state.players[state.activePlayerIndex]?.fuel === 0 &&
-      legal.some((a) => a.type === "drift") &&
-      legal.some((a) => a.type === "useReserveFuel"),
+      !legal.some((a) => a.type === "burn") &&
+      (legal.some((a) => a.type === "useReserveFuel") ||
+        (state.players[state.activePlayerIndex]?.hand.some((c) => c.type === "engine") ?? false)),
   };
 }

@@ -583,7 +583,7 @@ export function GameScreen({
   const clickableAction = (c: BoosterCard): (() => void) | undefined => {
     if (handOwnerOverLimit) return () => dispatch({ type: "discardBooster", cardId: c.id });
     // reserve fuel isn't armed for a later burn — it's used up the instant it's clicked
-    if ((inBurnPhase || preDriftRefuel) && c.type === "reserveFuel" && canRefuel(c.id)) return () => dispatch({ type: "useReserveFuel", cardId: c.id });
+    if (inBurnPhase && c.type === "reserveFuel" && canRefuel(c.id)) return () => dispatch({ type: "useReserveFuel", cardId: c.id });
     if (inBurnPhase && c.type === "engine") return () => s.toggleArmed(c.id);
     // an alternative to burning, not staged/armed — playing it resolves the jump (and the
     // whole move) immediately, same "used up on click" shape as reserve fuel above
@@ -604,28 +604,15 @@ export function GameScreen({
     const dimmed = !clickable && handHasPlayableCard;
     return { clickable, selected: armed.has(id) || combatSel.has(id), onClick, pulse, dimmed };
   };
-  // NOT yet true while the start-of-game upgrade choice is pending: that interrupt sits
-  // between drift (driftDone) and the player's first real chance to arm a burn booster —
-  // p.turn.driftDone is already true at that point (see engine's "drift" reducer case),
-  // so without this check the hand panel force-opened for reserve-fuel/engine cards well
-  // before there was any burn to arm them for
+  // covers the whole move decision, not just "after drift": drift and burn are one decision
+  // now (see engine/index.ts's legalActions and engine/game.ts's ensureDrifted), so a reserve-
+  // fuel/engine/hyperspace card is clickable from the moment a move could start, not gated
+  // behind a driftDone that's now just an internal implementation detail. NOT yet true while
+  // the start-of-game upgrade choice is pending (!state.pendingEquipment already covers that
+  // interrupt window) — without that check the hand panel would force-open for these cards
+  // before there was any real move to use them on.
   const inBurnPhase =
-    !activeIsBot &&
-    !pc &&
-    !state.pendingEquipment &&
-    state.phase === "start" &&
-    p.turn.driftDone &&
-    !p.turn.moved &&
-    !overLimit;
-  // the one case BEFORE drift where a reserve-fuel card must still be clickable: an empty
-  // tank about to drift for that reason (mirrors the engine's own avoidableZeroFuelDrift,
-  // which is exactly why auto-advance refuses to fire that drift on its own — see
-  // useSession.ts). Without this, a 0-fuel ship holding a reserve-fuel card had no way to
-  // ever play it: auto-advance wouldn't drift for them, and inBurnPhase (above) wouldn't
-  // treat the card as clickable until AFTER a drift that could never happen — a real deadlock
-  // (found live: a stuck game, "the only thing I can click is scrap my own ship").
-  const preDriftRefuel =
-    !activeIsBot && !pc && !state.pendingEquipment && state.phase === "start" && !p.turn.driftDone && p.fuel === 0 && !overLimit;
+    !activeIsBot && !pc && !state.pendingEquipment && state.phase === "start" && !p.turn.moved && !overLimit;
   const combatCardType: "laser" | "shield" | null =
     pc?.awaiting === "defend" && seats[pc.defenderId] === "human"
       ? "shield"
@@ -661,20 +648,16 @@ export function GameScreen({
   const showCards =
     !handHidden &&
     handOwner.hand.length > 0 &&
-    (handOwnerOverLimit ||
-      ((inBurnPhase || preDriftRefuel || combatCardType !== null) && handHasPlayableCard) ||
-      handHasNewCard);
+    (handOwnerOverLimit || ((inBurnPhase || combatCardType !== null) && handHasPlayableCard) || handHasNewCard);
   const cardHint = handOwnerOverLimit
     ? null // the centred hex popup carries this message instead
-    : preDriftRefuel && p.hand.some((c) => c.type === "reserveFuel")
-      ? "Out of fuel — tap a reserve-fuel card to refuel, or the green ring to just drift as-is."
-      : inBurnPhase && p.hand.some((c) => c.type === "engine" || c.type === "reserveFuel" || c.type === "hyperspace")
-        ? "Tap an engine card to arm it for this burn, a reserve-fuel card to refuel now, or a hyperspace card to jump instead."
-        : combatCardType === "shield"
-          ? "Tap shield cards to add to your defence."
-          : combatCardType === "laser"
-            ? "Tap laser cards to add to your attack."
-            : null;
+    : inBurnPhase && p.hand.some((c) => c.type === "engine" || c.type === "reserveFuel" || c.type === "hyperspace")
+      ? "Tap an engine card to arm it for this burn, a reserve-fuel card to refuel now, or a hyperspace card to jump instead."
+      : combatCardType === "shield"
+        ? "Tap shield cards to add to your defence."
+        : combatCardType === "laser"
+          ? "Tap laser cards to add to your attack."
+          : null;
 
   // --- combat / bottom-panel buttons -------------------------------
   const combatTitle = pc
@@ -970,11 +953,9 @@ export function GameScreen({
     const k = hexKey(h);
     if (afford.placeCells.some((c) => hexKey(c) === k)) return dispatch({ type: "placeShip", cell: h });
     if (afford.loadCells.some((c) => hexKey(c) === k)) return dispatch({ type: "loadResource", from: h });
-    // the free (0-cost) alternative to playing a reserve-fuel card in preDriftRefuel — see its
-    // own declaration: with an empty tank and a reserve-fuel card in hand, auto-advance won't
-    // drift on its own, but the player may still just want to drift as-is without spending the
-    // card, so the drift target itself needs a real, board-native click target too
-    if (preDriftRefuel && driftGhost && hexKey(driftGhost.at) === k) return dispatch({ type: "drift" });
+    // the free "stay here" cell (drifted or not — see engine/index.ts's legalActions) is its
+    // own board element with its own click handler (the coast ring, wired to onCoast below),
+    // not routed through here
     const bt = afford.burnTargets.find((b) => hexKey(b.cell) === k);
     if (bt) return s.dispatchBurn({ type: "burn", path: bt.path });
     // your own base, and not a burn target right now (arriving home is not scrapping)
@@ -1001,13 +982,7 @@ export function GameScreen({
           highlight={suppress ? { cells: [], kind: null } : interactive ? highlight : { cells: [], kind: null }}
           spinPath={spinPath}
           loadCells={loadCellsForBoard}
-          burnTargets={
-            interactive && !suppress
-              ? preDriftRefuel && driftGhost
-                ? [...afford.burnTargets, { cell: driftGhost.at, cost: 0, path: [driftGhost.at] }]
-                : afford.burnTargets
-              : []
-          }
+          burnTargets={interactive && !suppress ? afford.burnTargets : []}
           driftGhost={interactive && !suppress ? driftGhost : null}
           onCoast={suppress ? null : onCoast}
           scrapCells={anim ? [] : scrapCells}

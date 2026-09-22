@@ -486,6 +486,38 @@ function loseShip(state: GameState, board: BoardModel, p: PlayerState, reason: s
   }
 }
 
+/** Drift and burn used to be two separate player decisions — drift always auto-fired
+   invisibly, and burn targets (including the always-free "just accept the drift" option)
+   only ever appeared afterward. That split was the direct cause of a real stuck-game report:
+   blocking the invisible drift step (to give a 0-fuel player a chance to play a reserve-fuel
+   card first) blocked everything, since no burn target — not even the free one — could be
+   computed until driftDone was true. Now drift is folded into whichever action actually
+   resolves the move (burn/endMove/hyperspace all call this first); legalActions computes the
+   same target set from the (possibly still-pending) drift landing up front, so a 0-fuel player
+   always has a real, clickable "stay here for free" option from turn one. Idempotent: a no-op
+   if this player has already drifted this turn. */
+function ensureDrifted(state: GameState, board: BoardModel, p: PlayerState): { lost: boolean } {
+  if (p.turn.driftDone) return { lost: false };
+  p.turn.moveStarted = true;
+  p.turn.moveStartedOnOwnBase = board.baseOwnerAt(p.pose.current) === p.homeBase;
+  const res = drift(p.pose, board, freeFor(state, board, p.id));
+  p.turn.driftDone = true;
+  if (res.offField) {
+    loseShip(state, board, p, "drifted off the field");
+    return { lost: true };
+  }
+  p.pose = res.pose;
+  p.turn.mustBurn = res.needsBurn;
+  // the one-time "upgrade at game start" draw (see populateGame) interrupts here, right
+  // before this player would otherwise choose a burn target
+  if (p.startEquipment) {
+    const { cards, mode: pickMode } = p.startEquipment;
+    withRng(state, (rng) => offerEquipment(state, rng, p, cards, { reason: "start", mode: pickMode }));
+    p.startEquipment = null;
+  }
+  return { lost: false };
+}
+
 // ---------------------------------------------------------------------------
 // home base arrival: brake, refuel, deliver, equip, seed
 // ---------------------------------------------------------------------------
@@ -753,27 +785,14 @@ export function applyAction(prev: GameState, action: Action): StepResult {
     }
 
     case "drift": {
+      // kept as a real, directly-dispatchable action (tests, internal reuse) — no longer
+      // independently offered by legalActions, since burn/endMove/hyperspace now perform this
+      // implicitly via ensureDrifted the moment any of them is actually dispatched
       if (state.phase !== "start" || !p.turn.boosterDrawn) return fail("draw a booster first");
       if (overHandLimit(state, p)) return fail("discard down to the booster hand limit first");
       if (p.turn.driftDone) return fail("already drifted");
-      p.turn.moveStarted = true;
-      p.turn.moveStartedOnOwnBase = board.baseOwnerAt(p.pose.current) === p.homeBase;
-      const res = drift(p.pose, board, freeFor(state, board, p.id));
-      p.turn.driftDone = true;
-      if (res.offField) {
-        loseShip(state, board, p, "drifted off the field");
-        return advanceTurn(state, board);
-      }
-      p.pose = res.pose;
-      p.turn.mustBurn = res.needsBurn;
-      // the one-time "upgrade at game start" draw (see populateGame) interrupts here,
-      // right before this player would otherwise choose a burn target
-      if (p.startEquipment) {
-        const { cards, mode: pickMode } = p.startEquipment;
-        withRng(state, (rng) => offerEquipment(state, rng, p, cards, { reason: "start", mode: pickMode }));
-        p.startEquipment = null;
-      }
-      return done();
+      const { lost } = ensureDrifted(state, board, p);
+      return lost ? advanceTurn(state, board) : done();
     }
 
     case "useReserveFuel": {
@@ -794,8 +813,18 @@ export function applyAction(prev: GameState, action: Action): StepResult {
     }
 
     case "burn": {
-      if (state.phase !== "start" || !p.turn.driftDone) return fail("drift first");
+      if (state.phase !== "start") return fail("not your move to make");
       if (p.turn.moved) return fail("already burned this turn");
+      if (!p.turn.driftDone) {
+        const { lost } = ensureDrifted(state, board, p);
+        if (lost) return advanceTurn(state, board);
+        // the start-of-game upgrade offer just interrupted mid-click — a real (non-empty)
+        // burn beyond the drift target can't complete until it's resolved; the player re-clicks
+        // their burn target afterward, now against the already-landed position (path:[] "just
+        // accept the drift" needs nothing more either way, so this only ever costs an extra
+        // click on turn one, for a burn that also goes past the drift target)
+        if (state.pendingEquipment && action.path.length > 0) return done();
+      }
 
       const engineCards = useBoosters(action.engineBoosters, "engine");
       if (engineCards === null) return fail("bad engine booster id");
@@ -835,8 +864,16 @@ export function applyAction(prev: GameState, action: Action): StepResult {
     }
 
     case "hyperspace": {
-      if (state.phase !== "start" || !p.turn.driftDone) return fail("drift first");
+      if (state.phase !== "start") return fail("not your move to make");
       if (p.turn.moved) return fail("already moved");
+      if (!p.turn.driftDone) {
+        // hyperspace overrides wherever a normal drift would have landed anyway — this just
+        // keeps p.turn's invariants (driftDone, mustBurn, the start-of-game upgrade offer)
+        // consistent with every other move-resolving action
+        const { lost } = ensureDrifted(state, board, p);
+        if (lost) return advanceTurn(state, board);
+        if (state.pendingEquipment) return done(); // resolve the upgrade offer, then jump for real
+      }
       if (action.via === "booster") {
         const card = p.hand.find((c) => c.id === action.boosterId && c.type === "hyperspace");
         if (!card) return fail("no hyperspace booster with that id");
@@ -876,7 +913,12 @@ export function applyAction(prev: GameState, action: Action): StepResult {
     }
 
     case "endMove": {
-      if (state.phase !== "start" || !p.turn.driftDone) return fail("nothing to end");
+      if (state.phase !== "start") return fail("nothing to end");
+      if (!p.turn.driftDone) {
+        const { lost } = ensureDrifted(state, board, p);
+        if (lost) return advanceTurn(state, board);
+        if (state.pendingEquipment) return done(); // resolve the upgrade offer, then finish
+      }
       if (p.turn.mustBurn) {
         loseShip(state, board, p, "no free inner cell reachable after drift");
         return advanceTurn(state, board);

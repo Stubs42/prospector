@@ -10,6 +10,7 @@ import {
 } from "react";
 import { boardFor } from "../../engine/game.js";
 import { hexKey } from "../../engine/hex.js";
+import { driftTarget } from "../../engine/movement.js";
 import type { GameState, Hex, Colour, OreColour } from "../../engine/index.js";
 import { SHIP_BOARD_VAR, SHIP_BOARD_HI_VAR, SHIP_BASE_VAR, SHIP_BASE_HI_VAR, ORE_VAR } from "./kit.js";
 import { BaseInfo, type TipFn } from "./BaseInfo.js";
@@ -327,7 +328,12 @@ export function Board({
   // dereferences `active` below is itself gated on state only ever being non-empty there
   // (onCoast, highlight.kind === "place")
   const active = state.players[state.activePlayerIndex] ?? null;
-  const activeAt = active ? px(active.pose.current) : { x: 0, y: 0 };
+  // the coast ring's position: the real current position once drift has actually happened
+  // this turn, or — since drift is now folded into burn/endMove/hyperspace (see
+  // engine/index.ts's legalActions) and may not have run for real yet — the same speculative
+  // landing legalActions itself previews. driftTarget is a no-op for an at-rest ship (its own
+  // velocity is zero), so this needs no separate at-rest check.
+  const activeAt = active ? px(active.turn.driftDone ? active.pose.current : driftTarget(active.pose)) : { x: 0, y: 0 };
 
   // drive the slide animation with rAF; end it (and let the timers resume) when done.
   // a held "drift" has no motion — it just sits there, so it needs no loop.
