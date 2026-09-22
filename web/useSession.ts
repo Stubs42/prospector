@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { applyAction, boardFor, createGame, statsOf } from "../engine/index.js";
 import { makeRng, type Rng } from "../engine/rng.js";
 import { add, hexKey } from "../engine/hex.js";
-import type { Action, Colour, GameState, Hex, OreColour } from "../engine/index.js";
+import type { Action, BoosterCard, Colour, GameState, Hex, OreColour } from "../engine/index.js";
 import {
   affordances,
   driftPreview,
@@ -551,7 +551,8 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     if (
       qs.get("combattest") === "onturn" ||
       qs.get("combattest") === "offturn" ||
-      qs.get("combattest") === "resolve"
+      qs.get("combattest") === "resolve" ||
+      qs.get("combattest") === "flee"
     ) {
       // DEBUG ONLY — preview the counter-attack decision box directly (skips the whole
       // declare/defend/resolve dance): "offturn" is the original defender being asked to
@@ -580,12 +581,19 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
         const spot = add(active.pose.current, { q: 1, r: 0 });
         const onTurn = qs.get("combattest") === "onturn";
         const resolving = qs.get("combattest") === "resolve";
+        const fleeing = qs.get("combattest") === "flee";
         s = {
           ...s,
           phase: "moved",
-          players: s.players.map((pl) =>
-            pl.id === enemy.id ? { ...pl, pose: { current: spot, previous: spot, atRest: true } } : pl,
-          ),
+          players: s.players.map((pl) => {
+            if (pl.id !== enemy.id) return pl;
+            const pose = { current: spot, previous: spot, atRest: true };
+            if (!fleeing || pl.hand.some((c) => c.type === "hyperspace")) return { ...pl, pose };
+            // "flee" previews the defender's Flee button, which only ever appears with a
+            // hyperspace card in hand — guarantee one regardless of what was actually drawn
+            const card: BoosterCard = { id: "debug-hyperspace", deck: "booster", type: "hyperspace", value: null, effect: "" };
+            return { ...pl, pose, hand: [...pl.hand, card] };
+          }),
           pendingCombat: resolving
             ? {
                 attackerId: active.id,
@@ -598,14 +606,23 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
                 lastAttackFailed: false,
                 defShields: statsOf(s, enemy).shields,
               }
-            : {
-                attackerId: onTurn ? enemy.id : active.id,
-                defenderId: onTurn ? active.id : enemy.id,
-                round: onTurn ? 2 : 1,
-                attackerLaserBoost: 0,
-                awaiting: "counter",
-                lastAttackFailed: true,
-              },
+            : fleeing
+              ? {
+                  attackerId: active.id,
+                  defenderId: enemy.id,
+                  round: 1,
+                  attackerLaserBoost: 0,
+                  awaiting: "defend",
+                  lastAttackFailed: false,
+                }
+              : {
+                  attackerId: onTurn ? enemy.id : active.id,
+                  defenderId: onTurn ? active.id : enemy.id,
+                  round: onTurn ? 2 : 1,
+                  attackerLaserBoost: 0,
+                  awaiting: "counter",
+                  lastAttackFailed: true,
+                },
         };
       }
     }

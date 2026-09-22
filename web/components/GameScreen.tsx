@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { score, statsOf } from "../../engine/index.js";
 import { waitingOn } from "../../client/index.js";
 import { boardFor } from "../../engine/game.js";
-import { add, hexKey, scale } from "../../engine/hex.js";
+import { hexKey } from "../../engine/hex.js";
 import type { BoosterCard, Colour, Hex } from "../../engine/index.js";
 import { Board } from "./Board.js";
 import { HandPanel, type PanelButton } from "./HandPanel.js";
@@ -21,10 +21,10 @@ import { Topbar } from "./Topbar.js";
 import { StatusPanel } from "./StatusPanel.js";
 import { DeckPanels } from "./DeckPanels.js";
 import type { Prefs } from "../prefs.js";
-import { buildSpinSchedule, runSpinSchedule, SkipGate } from "../spin.js";
+import { spinCoordinateDice, SkipGate, type CoordinateSpinPath } from "../spin.js";
 import { theme } from "../theme.js";
 import type { Session } from "../useSession.js";
-import type { GameState } from "../../engine/types.js";
+import type { GameState, PlayerState } from "../../engine/types.js";
 
 // final ranking for the game-over popup: same total-value score the engine already uses to
 // pick winnerIds, but broken into a full ordering — ties broken by counting the most
@@ -132,7 +132,7 @@ export function GameScreen({
   // every starting tile at once; a homecoming re-seed only ever hides the 1-2 new ones,
   // every pre-existing tile on the board stays visible the whole time)
   const [hiddenSeeds, setHiddenSeeds] = useState<Set<string>>(new Set());
-  const [spinPath, setSpinPath] = useState<{ dots: Hex[]; live: Hex | null } | null>(null);
+  const [spinPath, setSpinPath] = useState<CoordinateSpinPath | null>(null);
   const [placing, setPlacing] = useState(() => state.log.some((l) => l.event === "resourceSeeded"));
   useEffect(() => {
     const newEntries = state.log.slice(seedProcessed).filter((l) => l.event === "resourceSeeded");
@@ -143,68 +143,25 @@ export function GameScreen({
     setPlacing(true);
     s.setHoldAdvance(true);
     let cancelled = false;
-    // spins all 3 rounds (ring 3, 2, 1) for one tile, each round taking the same real time
-    // (theme.spin.resourceDurationMs split evenly in 3) and each independently decelerating
-    // fast-to-slow — see spin.ts's buildSpinSchedule, shared with every other lucky-wheel
-    // spin in the app. Every wait goes through `gate`, so a click anywhere on the board
-    // (see onSkipAnimation) jumps straight through the rest of THIS tile's reveal to its
-    // real result — `gate` is a fresh SkipGate per tile (see the loop below), not shared
-    // across the whole batch, so skipping one tile still plays the next one at full speed
-    // instead of instantly dumping every remaining tile in the delivery at once.
-    const spinAllThree = async (dice: { step: number; colour: Colour }[], gate: SkipGate): Promise<void> => {
-      // the 3 rounds' candidates/target/center are already fully determined (the dice
-      // are the real, already-decided result) — precompute them all up front so the
-      // animation is just replaying a known sequence
-      let pt: Hex = { q: 0, r: 0 };
-      let dotsSoFar: Hex[] = [pt];
-      const rounds = dice.map((die) => {
-        const candidates = ALL_COLOURS.map((c) => add(pt, scale(board.directionOf(c), die.step)));
-        const targetIndex = ALL_COLOURS.indexOf(die.colour);
-        const dotsPrefix = dotsSoFar;
-        pt = candidates[targetIndex]!;
-        dotsSoFar = [...dotsSoFar, pt];
-        return { candidates, targetIndex, dotsPrefix };
-      });
-      if (reducedMotion) {
-        setSpinPath({ dots: dotsSoFar, live: null });
-        await gate.wait(40);
-        return;
-      }
-      const n = ALL_COLOURS.length;
-      const perRoundMs = theme.spin.resourceDurationMs / rounds.length;
-      // one continuous fast->slow curve spans all 3 rounds — round i covers the slice of
-      // that curve from t=i/3 to t=(i+1)/3, so round 2 picks up exactly as fast/slow as
-      // round 1 left off (no reset to fast at each round's start), while each round still
-      // gets an equal time share (perRoundMs) by deriving its own tick count to fit it
-      const delayAt = (t: number) => theme.spin.startIntervalMs + t * t * (theme.spin.endIntervalMs - theme.spin.startIntervalMs);
-      for (let roundIdx = 0; roundIdx < rounds.length; roundIdx++) {
-        if (cancelled) return;
-        const { candidates, targetIndex, dotsPrefix } = rounds[roundIdx]!;
-        const schedule = buildSpinSchedule(n, targetIndex, {
-          startMs: delayAt(roundIdx / rounds.length),
-          endMs: delayAt((roundIdx + 1) / rounds.length),
-          totalMs: perRoundMs,
-        });
-        await runSpinSchedule(schedule, (i) => setSpinPath({ dots: dotsPrefix, live: candidates[i]! }), () => cancelled, gate);
-        if (cancelled) return;
-        const landed = candidates[targetIndex]!;
-        const isLastRound = roundIdx + 1 >= rounds.length;
-        // no pause here at all — the next round's own spin starts immediately, right from
-        // the point this one just landed on, so the whole 3-round reveal reads as one
-        // unbroken motion. The very last round clears the live mark, since nothing spins
-        // again after it.
-        setSpinPath({ dots: [...dotsPrefix, landed], live: isLastRound ? null : landed });
-      }
-    };
     (async () => {
       for (const entry of newEntries) {
         // a fresh gate per tile — skipping this one's reveal must not also fast-forward
-        // every tile still queued after it in the same delivery (see spinAllThree's comment)
+        // every tile still queued after it in the same delivery (see spinCoordinateDice's
+        // own doc comment — this is the shared 3-round coordinate-dice spin, same one a
+        // hyperspace jump reveal uses below)
         const gate = new SkipGate();
         skipGateRef.current = gate;
         const d = entry.detail as { cell: Hex; dice: { step: number; colour: Colour }[] };
         const dice = [...d.dice].sort((a, b) => b.step - a.step); // coarse to fine: ring 3, 2, 1
-        await spinAllThree(dice, gate);
+        await spinCoordinateDice(
+          dice,
+          (c) => board.directionOf(c),
+          ALL_COLOURS,
+          setSpinPath,
+          () => cancelled,
+          gate,
+          { reducedMotion, totalMs: theme.spin.resourceDurationMs, startIntervalMs: theme.spin.startIntervalMs, endIntervalMs: theme.spin.endIntervalMs },
+        );
         if (cancelled) return;
         await gate.wait(reducedMotion ? 20 : 250); // let the finished path linger a beat
         setHiddenSeeds((h) => {
@@ -229,12 +186,79 @@ export function GameScreen({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.log.length, seedProcessed]);
-  const displayState = hiddenSeeds.size
+
+  // --- hyperspace reveal: the exact same 3-round coordinate-dice spin as resource seeding,
+  // just landing on the ship's own new position instead of a resource tile. A hyperspaceRoll
+  // log entry (a normal burn-phase jump AND a combat-flee both emit the identical shape)
+  // already carries the real, already-decided dice — the engine has already committed the
+  // ship's new pose to state the instant the jump happened, so without this the ship just
+  // silently snapped there with no reveal at all (a real, previously-unbuilt gap — resource
+  // seeding got this animation, hyperspace never did). `lastPoseRef` remembers each player's
+  // pose as of the PREVIOUS render so the already-landed pose can be held back on screen
+  // (via displayState below) until the spin actually catches up to it.
+  const [hyperspaceProcessed, setHyperspaceProcessed] = useState(0);
+  const [hyperspaceReveal, setHyperspaceReveal] = useState<{ playerId: number; pose: PlayerState["pose"] } | null>(null);
+  const lastPoseRef = useRef<Record<number, PlayerState["pose"]>>({});
+  useEffect(() => {
+    const newEntries = state.log.slice(hyperspaceProcessed).filter((l) => l.event === "hyperspaceRoll");
+    if (newEntries.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      for (const entry of newEntries) {
+        const d = entry.detail as { player: number; dice: { step: number; colour: Colour }[] };
+        const frozen = lastPoseRef.current[d.player];
+        if (!frozen) continue; // no known "before" pose to hold on screen — skip rather than crash the reveal
+        setHyperspaceReveal({ playerId: d.player, pose: frozen });
+        s.setHoldAdvance(true);
+        const gate = new SkipGate();
+        skipGateRef.current = gate;
+        const dice = [...d.dice].sort((a, b) => b.step - a.step); // coarse to fine: ring 3, 2, 1
+        await spinCoordinateDice(
+          dice,
+          (c) => board.directionOf(c),
+          ALL_COLOURS,
+          setSpinPath,
+          () => cancelled,
+          gate,
+          {
+            reducedMotion,
+            totalMs: theme.spin.resourceDurationMs,
+            startIntervalMs: theme.spin.startIntervalMs,
+            endIntervalMs: theme.spin.endIntervalMs,
+          },
+        );
+        if (cancelled) return;
+        await gate.wait(reducedMotion ? 20 : 250); // let the landed path linger a beat
+        setSpinPath(null);
+        setHyperspaceReveal(null);
+        await gate.wait(reducedMotion ? 20 : 200);
+      }
+      if (!cancelled) {
+        setHyperspaceProcessed(state.log.length);
+        s.setHoldAdvance(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      skipGateRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.log.length, hyperspaceProcessed]);
+  // runs after the reveal effect above on the same render (declaration order), so it only
+  // ever overwrites lastPoseRef AFTER that effect has already read the still-previous value
+  useEffect(() => {
+    for (const pl of state.players) lastPoseRef.current[pl.id] = pl.pose;
+  });
+
+  const displayState = hiddenSeeds.size || hyperspaceReveal
     ? {
         ...state,
         board: {
           resources: Object.fromEntries(Object.entries(state.board.resources).filter(([k]) => !hiddenSeeds.has(k))),
         },
+        players: hyperspaceReveal
+          ? state.players.map((pl) => (pl.id === hyperspaceReveal.playerId ? { ...pl, pose: hyperspaceReveal.pose } : pl))
+          : state.players,
       }
     : state;
 
@@ -273,7 +297,7 @@ export function GameScreen({
   // attacker's own browser online — derived below from the pendingCombat transition itself,
   // not from whichever browser happened to click decline (that used to be the same browser in
   // hot-seat by construction, but online the decliner is a different seat/device entirely).
-  const [attackFailedSummary, setAttackFailedSummary] = useState<number | null>(null);
+  const [attackFailedSummary, setAttackFailedSummary] = useState<{ attackerId: number; reason: "declined" | "fled" } | null>(null);
   // watches pendingCombat go from "awaiting a declined/failed counter" to null — every
   // browser (attacker's, decliner's, any spectator's) evaluates this identically off shared
   // state, so the resulting summary always attributes to the real attacker regardless of who
@@ -282,8 +306,9 @@ export function GameScreen({
   useEffect(() => {
     const prev = prevPendingCombatRef.current;
     prevPendingCombatRef.current = state.pendingCombat;
-    if (prev && !state.pendingCombat && prev.awaiting === "counter" && prev.lastAttackFailed) {
-      setAttackFailedSummary(prev.attackerId);
+    if (!prev || state.pendingCombat) return;
+    if (prev.awaiting === "counter" && prev.lastAttackFailed) {
+      setAttackFailedSummary({ attackerId: prev.attackerId, reason: "declined" });
       // the attacker's own combatReveal ("Defence Successful" + Confirm) is local state that
       // only clears when THIS browser clicks its own Confirm — but decline happened on the
       // DEFENDER's browser, so if the attacker hasn't confirmed yet, their stale reveal box
@@ -294,6 +319,14 @@ export function GameScreen({
       // ever acknowledged its own reveal, so both get force-cleared here.
       setCombatReveal(null);
       s.setHoldAdvance(false);
+    } else if (prev.awaiting === "defend") {
+      // the ONLY way "defend" ever clears to null without ever reaching "resolve" is a
+      // successful hyperspace flee (engine/game.ts's combatDefend) — no dice roll happened, so
+      // there's no combatReveal to clear here. holdAdvance is deliberately left alone: the
+      // hyperspace-reveal effect above is already holding it for the spin animation and will
+      // release it itself once that finishes, so the attacker's "Attack Failed" box (gated by
+      // `suppress`, same as everything else) naturally waits for the reveal to land first.
+      setAttackFailedSummary({ attackerId: prev.attackerId, reason: "fled" });
     }
   }, [state.pendingCombat]);
   const combatLogLen = useRef(state.log.length);
@@ -383,7 +416,7 @@ export function GameScreen({
   }, [state.log.length]);
 
   const anim = s.animLive; // a move is actively playing — hold back prompts/targets
-  const suppress = anim || scrapConfirmOpen || placing; // also true while placing / the scrap dialog is up
+  const suppress = anim || scrapConfirmOpen || placing || !!hyperspaceReveal; // also true while placing / the scrap dialog is up
   // online, only the browser whose own seat is actually active gets an interactive board/
   // popup — everyone else just watches state changes and animations play out (see plan doc:
   // "Gate interactive UI to the deciding player online"). s.isMe is always true offline, so
@@ -749,9 +782,12 @@ export function GameScreen({
   // declaration — since online the browser that clicked decline is a different seat entirely).
   // attackerId can legitimately be 0, so this checks `!== null`, never plain truthiness.
   const attackFailedBox =
-    attackFailedSummary !== null && !pc && s.isMe(attackFailedSummary)
+    attackFailedSummary !== null && !pc && s.isMe(attackFailedSummary.attackerId)
       ? {
-          lines: ["Attack Failed"],
+          lines:
+            attackFailedSummary.reason === "fled"
+              ? ["Attack Failed", "The defender escaped via hyperspace."]
+              : ["Attack Failed"],
           actions: [
             {
               label: "End Turn",

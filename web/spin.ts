@@ -3,8 +3,12 @@
  * predetermined target for a couple of laps, decelerating (fast at the start, slow by the
  * landing), then settle on it. Used everywhere something spins to a known outcome — base
  * pick, ship pick, the start-player roll-off, and each of the 3 coordinate-dice rounds for
- * resource placement — so its timing lives in one place instead of four near-duplicates.
+ * resource placement / a hyperspace jump — so its timing lives in one place instead of
+ * several near-duplicates.
  */
+import { add, scale } from "../engine/hex.js";
+import type { Colour, Hex } from "../engine/index.js";
+
 export interface SpinSchedule {
   /** the candidate index to display at each tick */
   seq: number[];
@@ -89,4 +93,66 @@ export async function runSpinSchedule(
     onTick(schedule.seq[k]!);
     if (k < schedule.seq.length - 1) await gate.wait(schedule.delays[k]!);
   }
+}
+
+/** A round-by-round settled point, plus the currently-cycling candidate (if this round is
+   still spinning) — the "3 nested wheels" coordinate-dice reveal, i.e. Board.tsx's
+   `spinPath` prop. Shared between resource seeding and a hyperspace jump reveal: both are
+   the exact same coordinate-dice roll (engine/game.ts's rollCoordinateUntil, always from the
+   golden origin), just landing on a different kind of thing. */
+export interface CoordinateSpinPath {
+  dots: Hex[];
+  live: Hex | null;
+}
+
+/**
+ * Replays an already-decided 3-round coordinate-dice roll (coarse-to-fine ring 3/2/1) as a
+ * spin, calling `onFrame` with the path-so-far after every tick — same one continuous
+ * fast→slow curve across all 3 rounds (round 2 picks up exactly as fast/slow as round 1 left
+ * off), each round getting an equal time share of `totalMs`. Resolves to the final landed
+ * cell once the last round settles. `gate` fast-forwards the whole thing on skip (see
+ * SkipGate); `cancelled()` is checked before every tick, same as `runSpinSchedule`.
+ */
+export async function spinCoordinateDice(
+  dice: readonly { step: number; colour: Colour }[],
+  directionOf: (colour: Colour) => Hex,
+  allColours: readonly Colour[],
+  onFrame: (path: CoordinateSpinPath) => void,
+  cancelled: () => boolean,
+  gate: SkipGate,
+  opts: { reducedMotion: boolean; totalMs: number; startIntervalMs: number; endIntervalMs: number },
+): Promise<Hex> {
+  let pt: Hex = { q: 0, r: 0 }; // the golden origin — see this fn's own doc comment
+  let dotsSoFar = [pt];
+  const rounds = dice.map((die) => {
+    const candidates = allColours.map((c) => add(pt, scale(directionOf(c), die.step)));
+    const targetIndex = allColours.indexOf(die.colour);
+    const dotsPrefix = dotsSoFar;
+    pt = candidates[targetIndex]!;
+    dotsSoFar = [...dotsSoFar, pt];
+    return { candidates, targetIndex, dotsPrefix };
+  });
+  if (opts.reducedMotion) {
+    onFrame({ dots: dotsSoFar, live: null });
+    await gate.wait(40);
+    return pt;
+  }
+  const n = allColours.length;
+  const perRoundMs = opts.totalMs / rounds.length;
+  const delayAt = (t: number) => opts.startIntervalMs + t * t * (opts.endIntervalMs - opts.startIntervalMs);
+  for (let roundIdx = 0; roundIdx < rounds.length; roundIdx++) {
+    if (cancelled()) return pt;
+    const { candidates, targetIndex, dotsPrefix } = rounds[roundIdx]!;
+    const schedule = buildSpinSchedule(n, targetIndex, {
+      startMs: delayAt(roundIdx / rounds.length),
+      endMs: delayAt((roundIdx + 1) / rounds.length),
+      totalMs: perRoundMs,
+    });
+    await runSpinSchedule(schedule, (i) => onFrame({ dots: dotsPrefix, live: candidates[i]! }), cancelled, gate);
+    if (cancelled()) return pt;
+    const landed = candidates[targetIndex]!;
+    const isLastRound = roundIdx + 1 >= rounds.length;
+    onFrame({ dots: [...dotsPrefix, landed], live: isLastRound ? null : landed });
+  }
+  return pt;
 }
