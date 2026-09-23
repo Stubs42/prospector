@@ -254,6 +254,19 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     if (!anim && actionType === "endMove" && heldAnim?.kind === "drift" && heldAnim.playerId === cur.activePlayerIndex) {
       anim = coastAnim(heldAnim);
     }
+    // clicking the 0-cost coast target directly dispatches `endMove` with driftDone still
+    // false — ensureDrifted runs the implicit drift AND finalizes the move (phase -> "moved")
+    // in this one dispatch, so deriveMoveAnim correctly identifies it as a "drift"-kind
+    // transition, but there's no later dispatch left to convert that hold into a slide the
+    // way the case above does — it would just sit there frozen forever. Resolve it into a
+    // slide right here instead. Found live: the ship appeared stuck in place (still showing
+    // the pre-move position) while the real state had already moved on — visible as a
+    // blinking loadable-resource target with no ship there — until an unrelated later
+    // dispatch (e.g. the turn ending) cleared the stale hold and snapped the ship to its
+    // true position with no animation.
+    if (anim && anim.kind === "drift" && actionType === "endMove") {
+      anim = coastAnim(anim);
+    }
     if (anim) {
       playAnim(anim);
     } else if (actionType === "scrapShip" || next.activePlayerIndex !== cur.activePlayerIndex) {
@@ -495,6 +508,12 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
       logPose("bot", "bot", cur, next);
       let anim = deriveMoveAnim(cur, next, phaseMs, moveAnim);
       if (!anim && moveAnim?.kind === "drift") anim = coastAnim(moveAnim); // bot coasted out of the drift
+      // same fix as commitState's own endMove case: a bot clicking the 0-cost coast target
+      // with driftDone still false drifts AND finalizes the move in one stepBot call, which
+      // deriveMoveAnim reports as a "drift" hold with nothing left to resolve it into a slide
+      if (anim && anim.kind === "drift" && cur.players[cur.activePlayerIndex]?.turn.driftDone === false && next.phase === "moved") {
+        anim = coastAnim(anim);
+      }
       playAnim(anim);
       stateRef.current = next;
       setState(next);
