@@ -647,7 +647,7 @@ export function Board({
              onClick={() => onCell(cell)}>
             <circle cx={x} cy={y} r={S * 0.6} fill={col} fillOpacity={0.14} stroke={col} strokeWidth={2.6} />
             <text x={x} y={y + 4} textAnchor="middle" fontSize={11} fontWeight={700} fill={col}>
-              {cost === 0 ? "◇" : cost}
+              {cost}
             </text>
           </g>
         );
