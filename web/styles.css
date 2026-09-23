@@ -319,6 +319,16 @@ button.danger { border-color: #6a3a2f; }
 .actionbox-line { font-weight: 700; font-size: 0.95rem; }
 .actionbox-title { font-weight: 700; font-size: 0.95rem; }
 .actionbox-sub { color: var(--muted); font-size: 0.78rem; }
+/* several sub lines (e.g. combat's Attacker/Defender/Handicap breakdown) read as one tight
+   block, not spaced out like separate elements — actionbox-content's own gap already
+   separates this block from the title above and whatever comes after it */
+.actionbox-sub-block { display: flex; flex-direction: column; gap: 0.1rem; }
+/* the 3rd line of the attacker/defender/handicap breakdown (client/combat.ts's
+   combatStatsLines) is always the handicap itself — the one number that actually answers
+   "who's favoured" — so it reads as the block's own emphasized conclusion, not a 4th
+   equally-weighted caption; :nth-child(3), not :last-child, so a plain single-line sub
+   elsewhere is never accidentally bolded by this rule */
+.actionbox-sub-block .actionbox-sub:nth-child(3) { font-weight: 700; color: inherit; margin-top: 0.15rem; }
 .actionbox-outcome { font-weight: 700; margin-top: 0.15rem; }
 .actionbox-buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center; margin-top: 0.3rem; }
 
