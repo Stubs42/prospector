@@ -441,8 +441,17 @@ export function GameScreen({
       if (cancelled) return;
       // the reveal itself is done the instant both dice settle — holdAdvance stays true
       // (and combatReveal stays set) until the player explicitly confirms the outcome
-      // (see fightBox's Confirm button below), not a fixed timeout
+      // (see fightBox's Confirm button below), not a fixed timeout — EXCEPT the attacker on
+      // a loss gets no button at all there (by design: nothing for them to decide while the
+      // defender's counter-attack/decline choice is still pending), so nothing would ever
+      // call setHoldAdvance(false) for them. That same flag also gates the bot-turn timer
+      // (isWaitingOnBot) — solo/hot-seat, THIS browser is who steps every bot too, so
+      // holding it here deadlocked a bot defender's own counter-attack/decline decision
+      // forever (found live: "Rolling for combat" stuck, Attack Failed shown, nothing
+      // clickable, not even scrap). The reveal is already fully settled; release it now —
+      // there's nothing left here for holdAdvance to protect.
       setCombatReveal((cr) => (cr ? { ...cr, showOutcome: true } : cr));
+      if (entry.event === "attackFailed" && s.isMe(d.attacker)) s.setHoldAdvance(false);
     })();
     return () => {
       cancelled = true;
