@@ -321,27 +321,41 @@ export function GameScreen({
   useEffect(() => {
     const prev = prevPendingCombatRef.current;
     prevPendingCombatRef.current = state.pendingCombat;
-    if (!prev || state.pendingCombat) return;
-    if (prev.awaiting === "counter" && prev.lastAttackFailed) {
-      setAttackFailedSummary({ attackerId: prev.attackerId, reason: "declined" });
-      // the attacker's own combatReveal ("Defence Successful" + Confirm) is local state that
-      // only clears when THIS browser clicks its own Confirm — but decline happened on the
-      // DEFENDER's browser, so if the attacker hasn't confirmed yet, their stale reveal box
-      // would otherwise keep rendering right on top of the new Attack Failed box (found live:
-      // "the window showing the dice is displayed above it and I cannot end my turn") — and
-      // holdAdvance would stay stuck true forever, since nothing else was ever going to flip
-      // it back. The fight has unambiguously ended by now regardless of whether this browser
-      // ever acknowledged its own reveal, so both get force-cleared here.
+    if (!prev) return;
+    if (!state.pendingCombat) {
+      if (prev.awaiting === "counter" && prev.lastAttackFailed) {
+        setAttackFailedSummary({ attackerId: prev.attackerId, reason: "declined" });
+        // the attacker's own combatReveal ("Defence Successful" + Confirm) is local state that
+        // only clears when THIS browser clicks its own Confirm — but decline happened on the
+        // DEFENDER's browser, so if the attacker hasn't confirmed yet, their stale reveal box
+        // would otherwise keep rendering right on top of the new Attack Failed box (found live:
+        // "the window showing the dice is displayed above it and I cannot end my turn") — and
+        // holdAdvance would stay stuck true forever, since nothing else was ever going to flip
+        // it back. The fight has unambiguously ended by now regardless of whether this browser
+        // ever acknowledged its own reveal, so both get force-cleared here.
+        setCombatReveal(null);
+        s.setHoldAdvance(false);
+      } else if (prev.awaiting === "defend") {
+        // the ONLY way "defend" ever clears to null without ever reaching "resolve" is a
+        // successful hyperspace flee (engine/game.ts's combatDefend) — no dice roll happened, so
+        // there's no combatReveal to clear here. holdAdvance is deliberately left alone: the
+        // hyperspace-reveal effect above is already holding it for the spin animation and will
+        // release it itself once that finishes, so the attacker's "Attack Failed" box (gated by
+        // `suppress`, same as everything else) naturally waits for the reveal to land first.
+        setAttackFailedSummary({ attackerId: prev.attackerId, reason: "fled" });
+      }
+      return;
+    }
+    // a NEW round already started (the losing side chose to counter-attack) while this
+    // browser's own reveal of the PREVIOUS round was still up — the losing attacker gets no
+    // button on that reveal (see fightBox's reveal branch), so nothing else was ever going
+    // to dismiss it; without this, that stale "Attack Failed" box would keep covering the
+    // new round's own live box (now THEIR turn to defend, roles swapped) indefinitely — found
+    // live: "the attacker's box still showed End Fight while the defender was declaring a
+    // counter-attack" (a round-1 leftover, not the live round-2 state it should show instead)
+    if (prev.round !== state.pendingCombat.round) {
       setCombatReveal(null);
       s.setHoldAdvance(false);
-    } else if (prev.awaiting === "defend") {
-      // the ONLY way "defend" ever clears to null without ever reaching "resolve" is a
-      // successful hyperspace flee (engine/game.ts's combatDefend) — no dice roll happened, so
-      // there's no combatReveal to clear here. holdAdvance is deliberately left alone: the
-      // hyperspace-reveal effect above is already holding it for the spin animation and will
-      // release it itself once that finishes, so the attacker's "Attack Failed" box (gated by
-      // `suppress`, same as everything else) naturally waits for the reveal to land first.
-      setAttackFailedSummary({ attackerId: prev.attackerId, reason: "fled" });
     }
   }, [state.pendingCombat]);
   const combatLogLen = useRef(state.log.length);
@@ -726,13 +740,6 @@ export function GameScreen({
   // (a counter-attack round swaps the roles). Online, only that seat's own browser gets real
   // buttons; everyone else sees the box (table, message) with nothing to click.
   const myDecision = s.isMe(waitingOn(state));
-  // a handicap outside the range any roll could change (decisiveCombat) — the "Roll the
-  // dice" step is pointless theatre once we already know who wins, so it's skipped
-  // entirely (see the auto-resolve effect below) rather than asking for a pointless click.
-  const resolveDecisive =
-    pc && pc.awaiting === "resolve"
-      ? decisiveCombat(afford.combat?.attackLasers ?? 0, afford.combat?.defenceShields ?? 0, state.config.core.dice.combat, mode.combat.winTest)
-      : null;
   const hasLaserCard = (playerId: number) => state.players[playerId]?.hand.some((c) => c.type === "laser") ?? false;
   const hasShieldOrHyperCard = (playerId: number) =>
     state.players[playerId]?.hand.some((c) => c.type === "shield" || c.type === "hyperspace") ?? false;
@@ -866,20 +873,26 @@ export function GameScreen({
               : [],
         }
       : pc
-        ? // defend or resolve — shared, everyone-sees-it box; the attacker's lasers are
-          // already fixed the instant `pc` exists (the "attack" action bundles them), so
-          // every viewer sees that row filled in from the very first render of this box
+        ? // defend or resolve — shared, everyone-sees-it box. The attacker's lasers are
+          // technically fixed the instant `pc` exists (the "attack" action bundles them),
+          // but withheld from the table until the defender has actually committed — the
+          // defender's shield/flee decision must be made blind to the attacker's real
+          // total, not with it already spoiled in the same box they're deciding from.
           {
             title: fightTitle(pc.attackerId, pc.defenderId, pc.round > 1),
-            rows: fightRows(afford.combat?.attackLasers ?? null, pc.defShields ?? null, null, false),
+            rows: fightRows(
+              pc.awaiting === "defend" ? null : (afford.combat?.attackLasers ?? null),
+              pc.defShields ?? null,
+              null,
+              false,
+            ),
             message:
               pc.awaiting === "defend" && myDecision && seats[pc.defenderId] === "human" && hasShieldOrHyperCard(pc.defenderId)
                 ? "Optionally add shield boosters or Hyperspace, then Defend."
                 : null,
             cards: combatCards,
-            buttons: !myDecision
-              ? []
-              : pc.awaiting === "defend" && seats[pc.defenderId] === "human" && hasShieldOrHyperCard(pc.defenderId)
+            buttons:
+              myDecision && pc.awaiting === "defend" && seats[pc.defenderId] === "human" && hasShieldOrHyperCard(pc.defenderId)
                 ? [
                     {
                       label: `Defend${pickedIds("shield").length ? ` (+${selSum("shield")})` : ""}`,
@@ -890,9 +903,7 @@ export function GameScreen({
                       ? [{ label: "Flee (hyperspace)", onClick: () => dispatch({ type: "combatDefend", hyperspaceBoosterId: hyperspaceId }) }]
                       : []),
                   ]
-                : pc.awaiting === "resolve" && !resolveDecisive && (seats[pc.attackerId] === "human" || seats[pc.defenderId] === "human")
-                  ? [{ label: "Roll the dice", kind: "primary" as const, onClick: () => dispatch({ type: "combatResolve" }) }]
-                  : [],
+                : [],
           }
         : attackTarget !== null && hasLaserCard(state.activePlayerIndex)
           ? // the very first step: local to the attacker's own browser only — nothing is
@@ -935,17 +946,16 @@ export function GameScreen({
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, pc, myDecision, suppress, reducedMotion]);
-  // a decisive resolve (see resolveDecisive above) has no button to click — dispatch
-  // combatResolve on its own, same short beat as every other auto-advance in this app, so
-  // the reveal box (with its own real Confirm/next-step buttons) comes up on its own instead
-  // of waiting on a "Roll the dice" click that could never have changed anything
+  // the dice roll is never a manual click — once the defender has committed (or auto-
+  // skipped, above), roll automatically; the reveal box that follows (with its own real
+  // Confirm/next-step buttons) is where the player actually interacts, not this step
   useEffect(() => {
-    if (!resolveDecisive || !pc || !myDecision || suppress) return;
+    if (!pc || pc.awaiting !== "resolve" || !myDecision || suppress) return;
     if (!(seats[pc.attackerId] === "human" || seats[pc.defenderId] === "human")) return;
     const id = setTimeout(() => dispatch({ type: "combatResolve" }), reducedMotion ? 30 : 260);
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, resolveDecisive, myDecision, suppress, reducedMotion]);
+  }, [state, myDecision, suppress, reducedMotion]);
 
   // the fight is fully over and it was the OFF-turn player who called it off (End Fight) —
   // the on-turn attacker gets one explicit "Attack Failed" / "End Turn" beat, folded into the
@@ -1137,8 +1147,13 @@ export function GameScreen({
           highlight={suppress ? { cells: [], kind: null } : interactive ? highlight : { cells: [], kind: null }}
           spinPath={spinPath}
           loadCells={loadCellsForBoard}
-          burnTargets={interactive && !suppress ? afford.burnTargets : []}
-          driftGhost={interactive && !suppress ? driftGhost : null}
+          // an about-to-auto-fire drift (needsImplicitDriftFirst, useSession.ts) means these
+          // targets are pre-upgrade-cost and already stale — showing them for the ~220ms
+          // before the auto-drift reveals the real start-of-game upgrade offer is exactly
+          // the "flash before it vanishes" this app avoids elsewhere (see coastAction's own
+          // autoPendingType check below)
+          burnTargets={interactive && !suppress && autoPendingType !== "drift" ? afford.burnTargets : []}
+          driftGhost={interactive && !suppress && autoPendingType !== "drift" ? driftGhost : null}
           onCoast={suppress ? null : onCoast}
           scrapCells={anim ? [] : scrapCells}
           attackTargets={attackTargets}
