@@ -313,10 +313,19 @@ export const greedyBot: Bot = (state, rng) => {
 
   // head home once anything is aboard, or once the tank can no longer be trusted to cover
   // the trip back from here — not a flat "<=3" any more, so a ship that strays far while
-  // hunting still turns for home in time instead of running the tank dry out in the field
+  // hunting still turns for home in time instead of running the tank dry out in the field.
+  // "carrying" alone doesn't count while already sitting ON the ship's own base, though: a
+  // real delivery needs a genuine arrival (see engine/game.ts's arriveHomeBaseIfAny — moving
+  // within the base cluster while departing never brakes/delivers, on purpose), so a ship
+  // that picked up cargo without ever having to travel for it (e.g. a salvage-cache event
+  // landing ore straight into the hold) has nothing to "go home" for — it's already there.
+  // Without this, goHome stayed permanently true while onOwnBase, aiming every "nearest"
+  // search at the base cluster itself instead of any real resource, and the ship never
+  // actually departed at all — found live: a bot sat bouncing between its own base cells
+  // forever, cargo never delivered, never leaving home.
   const fuelMargin = 1; // a little slack so it doesn't shave things razor-thin
   const fuelLow = p.fuel <= homeDist + fuelMargin;
-  const goHome = carrying || fuelLow;
+  const goHome = (carrying && !onOwnBase) || fuelLow;
   const reserveFuelIds = fuelLow ? p.hand.filter((c) => c.type === "reserveFuel").map((c) => c.id) : [];
 
   const resourceCells = Object.keys(state.board.resources).map(parseHexKey);
@@ -347,7 +356,17 @@ export const greedyBot: Bot = (state, rng) => {
   if (burns.length || endMove) {
     const goal = nearest();
     const scoreDest = (dest: Hex, fuelSpent: number): number => {
-      if (goHome && baseKeys.has(hexKey(dest))) return -1000; // land on base: deliver + brake
+      // landing on a base cell only actually delivers when the move is a genuine arrival —
+      // engine/game.ts's arriveHomeBaseIfAny explicitly does NOT brake/deliver when the move
+      // started on the ship's own base (moving within the base cluster while departing keeps
+      // its velocity, on purpose, so a real departure can freely pass across its own base
+      // without accidentally re-triggering a delivery). A bot already sitting on its own base
+      // this turn (e.g. cargo it never had to travel for, like a salvage-cache event) doesn't
+      // know that distinction — the OLD unconditional bonus here made "hop to a different one
+      // of my own 4 base cells" score as an irresistible "delivered!" every single turn, a
+      // real dead end found live: a bot sat bouncing between its own base cells forever,
+      // fuel full, cargo never delivered, never actually leaving home.
+      if (goHome && !onOwnBase && baseKeys.has(hexKey(dest))) return -1000; // land on base: deliver + brake
       if (!goHome && board.neighbours(dest).some((n) => state.board.resources[hexKey(n)])) {
         return -100; // end adjacent to a resource: can load this turn
       }
