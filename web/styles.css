@@ -319,18 +319,25 @@ button.danger { border-color: #6a3a2f; }
 .actionbox-line { font-weight: 700; font-size: 0.95rem; }
 .actionbox-title { font-weight: 700; font-size: 0.95rem; }
 .actionbox-sub { color: var(--muted); font-size: 0.78rem; }
-/* several sub lines (e.g. combat's Attacker/Defender/Handicap breakdown) read as one tight
+/* several sub/message lines (e.g. FightBox's outcome title + loot detail) read as one tight
    block, not spaced out like separate elements — actionbox-content's own gap already
-   separates this block from the title above and whatever comes after it */
+   separates this block from whatever comes before/after it */
 .actionbox-sub-block { display: flex; flex-direction: column; gap: 0.1rem; }
-/* the 3rd line of the attacker/defender/handicap breakdown (client/combat.ts's
-   combatStatsLines) is always the handicap itself — the one number that actually answers
-   "who's favoured" — so it reads as the block's own emphasized conclusion, not a 4th
-   equally-weighted caption; :nth-child(3), not :last-child, so a plain single-line sub
-   elsewhere is never accidentally bolded by this rule */
-.actionbox-sub-block .actionbox-sub:nth-child(3) { font-weight: 700; color: inherit; margin-top: 0.15rem; }
-.actionbox-outcome { font-weight: 700; margin-top: 0.15rem; }
 .actionbox-buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center; margin-top: 0.3rem; }
+
+/* FightBox's stats table (Lasers/Shields/Win/Attack/Defend/Result) — two aligned columns,
+   values right-aligned with tabular (fixed-width) digits so they don't jitter as the dice
+   animate through different face values every frame. A blank cell (stat not known yet) is
+   just empty text, not a placeholder dash — the row label alone is enough context. */
+.fight-table {
+  display: grid; grid-template-columns: auto auto; column-gap: 0.9rem; row-gap: 0.15rem;
+  align-self: stretch; justify-content: center; font-size: 0.82rem;
+}
+.fight-label { color: var(--muted); text-align: left; }
+.fight-value {
+  text-align: right; font-variant-numeric: tabular-nums; font-weight: 600;
+  display: flex; align-items: center; justify-content: flex-end; gap: 0.35rem;
+}
 
 /* game-over ranking table, inside a HexPopup */
 .gameover-table { border-collapse: collapse; font-size: 0.82rem; }
@@ -394,14 +401,6 @@ button.hexbutton {
 .hexbutton.combat-chip:hover .hexbutton-hex polygon { fill: rgba(255, 255, 255, 0.08); }
 .combat-chip .cc-tag { font-size: 0.62rem; font-weight: 700; }
 .combat-chip .cc-val { font-size: 0.95rem; font-weight: 700; }
-/* the roll: "<lasers>+<die>=<total>" and "<shields>+<die>=<total>" flank the two dice
-   (rather than sit cramped directly under each die) so a wide result like "3+99=102" (a
-   shield-99 auto-repel card) never wraps or crowds the dice themselves */
-.combat-roll { display: flex; align-items: center; justify-content: center; gap: 0.6rem; margin-top: 0.2rem; }
-.combat-dice { display: flex; gap: 8px; }
-.combat-calc { font-size: 0.72rem; color: var(--muted); min-width: 4.2rem; white-space: nowrap; }
-.combat-calc.attack { text-align: right; }
-.combat-calc.defence { text-align: left; }
 
 /* general "you can act on this" guide: anything clickable on the board (a loadable
    resource, an attackable ship, your own ship when it can end the turn, ...) breathes
