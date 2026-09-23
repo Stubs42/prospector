@@ -295,13 +295,17 @@ button.danger { border-color: #6a3a2f; }
 /* the "action box" family (guidance popup, ship picker, combat box, confirm dialog): a
    fixed overlay, like the zoom controls or the status panel — NOT board content, so
    panning/zooming the board never touches it (see HexPopup.tsx's note on why this moved
-   out of board space). Centred a little above true middle so it clears the bottom panel.
+   out of board space). Dead-centre of .stage, which — at the default unpanned/unzoomed
+   view — is exactly where the board's own rendered centre sits too (Board.tsx's SVG fills
+   .stage at width/height 100% with preserveAspectRatio="xMidYMid meet"): 50%, not the old
+   46%, which put every one of these boxes visibly above the board's true centre (found
+   live: "Select Your Base" clearly off-centre from the hex field behind it).
    The hex silhouette itself is an SVG polygon (see ActionBox.tsx) sized to the box's real
    pixels, reproducing the old SVG hex buttons' exact 60°-cut geometry — a plain CSS
    clip-path's percentages warp that angle as content height changes, which varies a lot
    here (a two-line message vs. the full combat box). */
 .actionbox {
-  position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%);
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
   z-index: 22;
   /* a regular hexagon's side padding grows with height (see ActionBox.tsx) — a tall box
      (the full combat box) needs real headroom here, or squeezing the width just makes it
