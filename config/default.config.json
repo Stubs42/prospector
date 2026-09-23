@@ -86,7 +86,7 @@
           "reserveFuel": { "1": 4, "2": 3, "3": 2 },
           "engine":      { "1": 4, "2": 3, "3": 2 },
           "hyperspace":  3,
-          "event": { "pirate-ambush": 2, "hyperspace-quake": 1, "salvage-cache": 2 }
+          "event": { "pirate-ambush": 2, "hyperspace-quake": 1, "salvage-cache": 1 }
         },
         "equipment": {
           "perType": 6,
