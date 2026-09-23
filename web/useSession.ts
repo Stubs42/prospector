@@ -250,21 +250,25 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     // never see anything past whatever moveAnim was at connect time
     const heldAnim = moveAnimRef.current;
     let anim = deriveMoveAnim(cur, next, phaseMs, heldAnim);
-    // coasting ends the move without a burn — slide the held drift to its target
-    if (!anim && actionType === "endMove" && heldAnim?.kind === "drift" && heldAnim.playerId === cur.activePlayerIndex) {
+    // A held "drift" (from this dispatch or an earlier one) must resolve into a visible slide
+    // the instant the move it belongs to is actually finalized (phase "start" -> "moved") —
+    // detected from the STATE transition itself, never from `actionType`: that's only ever
+    // known on the browser that actually dispatched the action (see pendingActionTypeRef's own
+    // note above) — every other connected browser (a spectator, or the opposing player during
+    // their own combat decision) receives this exact same broadcast with actionType===null and
+    // must resolve the hold identically, or it just sits frozen at the pre-move position for
+    // that viewer until some unrelated later dispatch clears it. Found live: a defender never
+    // saw the attacking ship approach before combat started — only jumping to its true
+    // position once the fight (and the attacker's whole turn) had already ended, because the
+    // slide-conversion only ever fired on the attacker's own browser.
+    const finalizedThisDispatch = cur.phase === "start" && next.phase === "moved";
+    if (!anim && heldAnim?.kind === "drift" && heldAnim.playerId === cur.activePlayerIndex && finalizedThisDispatch) {
+      // coasting ends the move without a burn — slide the already-held drift to its target
       anim = coastAnim(heldAnim);
-    }
-    // clicking the 0-cost coast target directly dispatches `endMove` with driftDone still
-    // false — ensureDrifted runs the implicit drift AND finalizes the move (phase -> "moved")
-    // in this one dispatch, so deriveMoveAnim correctly identifies it as a "drift"-kind
-    // transition, but there's no later dispatch left to convert that hold into a slide the
-    // way the case above does — it would just sit there frozen forever. Resolve it into a
-    // slide right here instead. Found live: the ship appeared stuck in place (still showing
-    // the pre-move position) while the real state had already moved on — visible as a
-    // blinking loadable-resource target with no ship there — until an unrelated later
-    // dispatch (e.g. the turn ending) cleared the stale hold and snapped the ship to its
-    // true position with no animation.
-    if (anim && anim.kind === "drift" && actionType === "endMove") {
+    } else if (anim && anim.kind === "drift" && finalizedThisDispatch) {
+      // the 0-cost coast target was clicked with driftDone still false — ensureDrifted ran
+      // the implicit drift AND finalized the move in this one dispatch, so deriveMoveAnim
+      // reports a "drift" hold with nothing left to convert it into a slide
       anim = coastAnim(anim);
     }
     if (anim) {
@@ -507,11 +511,12 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
       const next = stepBot(cur, botRng.current);
       logPose("bot", "bot", cur, next);
       let anim = deriveMoveAnim(cur, next, phaseMs, moveAnim);
-      if (!anim && moveAnim?.kind === "drift") anim = coastAnim(moveAnim); // bot coasted out of the drift
+      const finalizedThisDispatch = cur.phase === "start" && next.phase === "moved";
+      if (!anim && moveAnim?.kind === "drift" && finalizedThisDispatch) anim = coastAnim(moveAnim); // bot coasted out of the drift
       // same fix as commitState's own endMove case: a bot clicking the 0-cost coast target
       // with driftDone still false drifts AND finalizes the move in one stepBot call, which
       // deriveMoveAnim reports as a "drift" hold with nothing left to resolve it into a slide
-      if (anim && anim.kind === "drift" && cur.players[cur.activePlayerIndex]?.turn.driftDone === false && next.phase === "moved") {
+      if (anim && anim.kind === "drift" && finalizedThisDispatch) {
         anim = coastAnim(anim);
       }
       playAnim(anim);
