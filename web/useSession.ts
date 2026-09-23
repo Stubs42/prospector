@@ -541,7 +541,14 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
   // the free landing and reveals the offer, without pre-committing to ending the move, same
   // as the old auto-fired drift never did either.
   const activeForStart = state.players[state.activePlayerIndex];
-  const needsImplicitDriftFirst = !!activeForStart && !activeForStart.turn.driftDone && !!activeForStart.startEquipment;
+  // boosterDrawn is required: "drift" itself fails ("draw a booster first") before that's
+  // true, same as it always has — without this check, a fresh turn stalled completely (found
+  // live, hosting an online game): startEquipment is set from populateGame for every player
+  // until their first move ever, so this fired an illegal drift attempt before drawBooster
+  // even had a chance to run, silently failing and replacing the correct auto-fire candidate
+  // with nothing, every single turn.
+  const needsImplicitDriftFirst =
+    !!activeForStart && activeForStart.turn.boosterDrawn && !activeForStart.turn.driftDone && !!activeForStart.startEquipment;
   const autoAction =
     prefs.autoSingle &&
     !state.setup &&
