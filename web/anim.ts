@@ -11,7 +11,7 @@
  *            chosen target; coast slides it to the drift target.
  */
 import type { GameState, Hex } from "../engine/index.js";
-import { hexEq } from "../engine/hex.js";
+import { hexEq, distance } from "../engine/hex.js";
 
 export interface MoveAnim {
   playerId: number;
@@ -19,6 +19,14 @@ export interface MoveAnim {
   p0: Hex; // dot start
   c0: Hex; // ring start
   target: Hex; // ring end (drift target for a reach, burn/coast target for a slide)
+  /** dot end, if different from c0 — only set when the ship brakes to a full stop this same
+     move (see deriveMoveAnim's braking case): the dot needs to converge on the SAME cell the
+     ring ends at (previous and current end up equal, atRest), not just catch up to where the
+     ring started, or the real post-animation pose (both fields already collapsed to the
+     final cell) wouldn't match where the animation actually left the dot — a visible jump
+     right as the tween hands off to plain state-driven rendering. Undefined everywhere else:
+     the dot always ends at c0, as before. */
+  dotTarget?: Hex;
   startedAt: number;
   phaseMs: number;
 }
@@ -68,6 +76,31 @@ export function deriveMoveAnim(
         phaseMs,
       };
     }
+    // braked to a full stop (atRest) — e.g. landing exactly on the player's own base, which
+    // zeroes velocity (previous snaps to equal the new current) instead of leaving a real
+    // trailing previous behind. That exact shape (a.previous === a.current) is indistinguishable
+    // from a hyperspace jump's landing pose by shape alone, so distance is the only reliable
+    // state-only signal: no ordinary burn can ever travel further than the hard cap + free
+    // cells in one dispatch, while a hyperspace jump can land anywhere in the inner field —
+    // found live: the dot just snapped to the new position instead of animating the
+    // deceleration when a burn target happened to brake the ship to a stop.
+    if (hexEq(a.previous, a.current) && !hexEq(a.current, b.current)) {
+      const maxBurnDistance =
+        after.config.core.movement.burnMaxCells + after.config.core.movement.freeBaseDepartureCells;
+      if (distance(a.current, b.current) <= maxBurnDistance) {
+        const from = held && held.playerId === i ? held : null;
+        return {
+          playerId: i,
+          kind: "slide",
+          p0: from ? from.p0 : b.previous,
+          c0: from ? from.c0 : b.current,
+          target: a.current,
+          dotTarget: a.current, // braking: dot converges on the same cell the ring lands at
+          startedAt: performance.now(),
+          phaseMs,
+        };
+      }
+    }
     // launch / hyperspace / loss — no tween, let it snap
     return null;
   }
@@ -107,9 +140,10 @@ export function moveFrame(anim: MoveAnim, now: number, px: (h: Hex) => XY): Move
     // held: nothing moves, the tether just stays between the fixed dot and ring
     return { dot: P0, ring: C0, tether: [P0, C0] };
   }
-  // slide: both ends move one step, tether stays between them
+  // slide: both ends move one step, tether stays between them — unless braking to a stop
+  // (dotTarget set), where the dot's own end is the ring's landing cell too, not c0
   const u = easeInOut(clamp01((now - anim.startedAt) / anim.phaseMs));
-  const dot = lerp(P0, C0, u);
+  const dot = lerp(P0, anim.dotTarget ? px(anim.dotTarget) : C0, u);
   const ring = lerp(C0, px(anim.target), u);
   return { dot, ring, tether: [dot, ring] };
 }
