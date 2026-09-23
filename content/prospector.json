@@ -94,7 +94,7 @@
  },
  "decks": {
   "booster": {
-   "count": 50,
+   "count": 49,
    "cards": [
     {
      "id": "booster-shield-1-01",
@@ -437,14 +437,6 @@
     },
     {
      "id": "event-salvage-cache-01",
-     "deck": "booster",
-     "type": "event",
-     "value": null,
-     "effect": "pick a nearby cell to seed and load a resource, or let it drift",
-     "eventId": "salvage-cache"
-    },
-    {
-     "id": "event-salvage-cache-02",
      "deck": "booster",
      "type": "event",
      "value": null,
