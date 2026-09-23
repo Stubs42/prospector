@@ -75,3 +75,19 @@ sudo systemctl restart prospector
 ```
 Games in progress survive the restart — state is persisted to Postgres on every move, and
 `server/main.ts` reloads every game from the database at boot.
+
+## Database retention
+
+Games are never deleted automatically — every one ever created stays in the `games` table
+(and gets reloaded into memory on every server start) forever. `server/deploy/dbcleanup.sh`
+is a manual maintenance script for this:
+
+```sh
+server/deploy/dbcleanup.sh --status              # finished / active / total counts
+server/deploy/dbcleanup.sh --keep 30             # delete FINISHED games untouched 30+ days
+server/deploy/dbcleanup.sh --keep 90 --force     # ALSO delete abandoned/active games 90+ days old
+```
+
+It reads `DATABASE_URL` from `.env` (same file the app uses) by default, previews what it's
+about to delete, and asks for confirmation unless run with `-y`/`--yes`. Not on a timer —
+run it by hand whenever the table's grown enough to care.
