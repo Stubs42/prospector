@@ -3,7 +3,10 @@ import { deriveMoveAnim, coastAnim } from "./anim.js";
 import type { GameState, Hex } from "../engine/index.js";
 
 function stateWithPose(current: Hex, previous: Hex, atRest = false): GameState {
-  return { players: [{ pose: { current, previous, atRest } }] } as unknown as GameState;
+  return {
+    players: [{ pose: { current, previous, atRest } }],
+    config: { core: { movement: { burnMaxCells: 3, freeBaseDepartureCells: 1 } } },
+  } as unknown as GameState;
 }
 
 /**
@@ -40,6 +43,32 @@ describe("deriveMoveAnim across a combined implicit-drift + burn dispatch", () =
     const anim = deriveMoveAnim(before, after, 300, null);
     expect(anim).not.toBeNull();
     expect(anim!.kind).toBe("drift");
+  });
+});
+
+describe("deriveMoveAnim when a burn brakes the ship to a full stop", () => {
+  it("slides both dot and ring to the landing cell, instead of snapping", () => {
+    // arriving exactly on the player's own base (or anywhere else that zeroes velocity)
+    // collapses previous to equal the new current — engine/game.ts's atRestPose — a shape
+    // that used to fall through deriveMoveAnim's other cases and snap instead of animate
+    const before = stateWithPose({ q: 0, r: 0 }, { q: -1, r: 0 });
+    const after = stateWithPose({ q: 2, r: 0 }, { q: 2, r: 0 }); // atRest: previous === current
+    const anim = deriveMoveAnim(before, after, 300, null);
+    expect(anim).not.toBeNull();
+    expect(anim!.kind).toBe("slide");
+    expect(anim!.p0).toEqual({ q: -1, r: 0 });
+    expect(anim!.c0).toEqual({ q: 0, r: 0 });
+    expect(anim!.target).toEqual({ q: 2, r: 0 });
+    // the dot must converge on the SAME cell the ring lands at (both fields already equal
+    // that cell in the real post-animation state) — not stop at c0, or the hand-off from the
+    // tween to plain state-driven rendering would itself be a visible jump
+    expect(anim!.dotTarget).toEqual({ q: 2, r: 0 });
+  });
+
+  it("still snaps for a jump too far to ever be an ordinary burn (hyperspace)", () => {
+    const before = stateWithPose({ q: 0, r: 0 }, { q: -1, r: 0 });
+    const after = stateWithPose({ q: 20, r: 0 }, { q: 20, r: 0 }); // far past burnMaxCells+free
+    expect(deriveMoveAnim(before, after, 300, null)).toBeNull();
   });
 });
 
