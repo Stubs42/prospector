@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createGame, applyAction } from "../engine/index.js";
+import { createGame, applyAction, boardFor } from "../engine/index.js";
 import type { Action, GameState } from "../engine/index.js";
 import { affordances, mkSeats, humansIn, waitingOn, formatLogEntry, driftPreview, burnCost } from "./index.js";
 
@@ -145,6 +145,28 @@ describe("affordances", () => {
     expect(a.legal.some((x) => x.type === "endMove")).toBe(true);
     expect(a.legal.some((x) => x.type === "useReserveFuel")).toBe(false);
     // no card could change the outcome — safe for a GUI's auto-advance to just proceed
+    expect(a.avoidableShipLoss).toBe(false);
+  });
+
+  it("does NOT flag avoidableShipLoss once a real burn already happened, even holding an unplayed engine card", () => {
+    // found live: a completed move (a real burn already happened) sat showing a stray "0"
+    // coast ring instead of auto-advancing to end the turn, because the player still held an
+    // unplayed engine card — irrelevant once turn.moved is true (set only by a real burn/
+    // hyperspace, not by endMove's own "coast" use), since arming it can no longer change
+    // anything about a move that's already finished
+    let g = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "none" });
+    const Y = () => g.players[0]!;
+    g = run(g, { type: "placeShip", cell: Y().pose.current });
+    g = run(g, { type: "drawBooster" });
+    const engineCard = { id: "test-engine", deck: "booster" as const, type: "engine" as const, value: 1, effect: "" };
+    Y().hand = [...Y().hand, engineCard];
+    const target = boardFor(g).neighbours(Y().pose.current).find((h) => boardFor(g).isInner(h))!;
+    g = run(g, { type: "burn", path: [target] }); // implicitly drifts (at-rest, no-op), then a real burn
+    expect(Y().turn.moved).toBe(true);
+    expect(Y().hand.some((c) => c.type === "engine")).toBe(true); // still holding it, unplayed
+    const a = affordances(g);
+    expect(a.legal.some((x) => x.type === "endMove")).toBe(true);
+    expect(a.legal.some((x) => x.type === "burn")).toBe(false); // already moved — nothing left to burn
     expect(a.avoidableShipLoss).toBe(false);
   });
 });

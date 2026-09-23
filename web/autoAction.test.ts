@@ -118,6 +118,49 @@ describe("auto-advance never ends the move while a stranded player could still p
   });
 });
 
+describe("a pending start-of-game upgrade offer surfaces before any real move decision", () => {
+  // reimplements useSession's exact needsImplicitDriftFirst check (see that file) — a pending
+  // startEquipment offer must reveal itself via a plain, directly-dispatched "drift" BEFORE the
+  // player ever sees a real burn-target menu computed off pre-upgrade stats. Before the drift/
+  // burn merge, "drift" was always the sole legal action here, so it auto-fired unconditionally
+  // and this was never an issue; now a full burn-target menu is visible immediately even
+  // pre-drift, so nothing about it is "sole" any more and the offer would otherwise stay hidden
+  // behind a real (and about-to-be-wrong) decision — found live.
+  function needsImplicitDriftFirst(s: GameState): boolean {
+    const p = s.players[s.activePlayerIndex];
+    return !!p && !p.turn.driftDone && !!p.startEquipment;
+  }
+
+  it("is true the instant a fresh turn with a start-of-game upgrade offer begins", () => {
+    let s = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "select" });
+    s = run(s, { type: "placeShip", cell: s.players[0]!.pose.current });
+    s = run(s, { type: "drawBooster" });
+    expect(s.players[0]!.startEquipment).not.toBeNull();
+    expect(s.players[0]!.turn.driftDone).toBe(false);
+    // the real bug: legalActions already offers a full (pre-upgrade-cost) burn-target menu here
+    expect(legalActions(s).some((a) => a.type === "burn")).toBe(true);
+    expect(needsImplicitDriftFirst(s)).toBe(true);
+  });
+
+  it("clears once the implicit drift reveals the offer, and again once the offer is resolved", () => {
+    let s = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "select" });
+    s = run(s, { type: "placeShip", cell: s.players[0]!.pose.current });
+    s = run(s, { type: "drawBooster" });
+    s = run(s, { type: "drift" }); // the fix: dispatched proactively instead of waiting for a click
+    expect(s.players[0]!.turn.driftDone).toBe(true);
+    expect(needsImplicitDriftFirst(s)).toBe(false); // driftDone now true — no longer needed
+    expect(s.pendingEquipment).not.toBeNull(); // the offer is now visible, exactly as before the merge
+  });
+
+  it("is false once there's no upgrade offer pending at all (the common case)", () => {
+    let s = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "none" });
+    s = run(s, { type: "placeShip", cell: s.players[0]!.pose.current });
+    s = run(s, { type: "drawBooster" });
+    expect(s.players[0]!.startEquipment).toBeNull();
+    expect(needsImplicitDriftFirst(s)).toBe(false);
+  });
+});
+
 describe("auto-advance still ends an ordinary move on its own (scrapShip is always technically legal too)", () => {
   it("after a normal burn with fuel to spare: endMove auto-fires despite scrapShip also being legal", () => {
     let s = createGame({ seed: 11, colours: ["black", "red"], startPlayer: 0, upgradeAtStart: "none" });

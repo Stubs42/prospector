@@ -115,10 +115,17 @@ export function affordances(state: GameState, opts: AffordanceOpts = {}): Afford
     combat,
     equipmentChoice: state.pendingEquipment ?? null,
     canRerollEquipment: legal.some((a) => a.type === "rerollEquipment"),
-    avoidableShipLoss:
-      legal.some((a) => a.type === "endMove") &&
-      !legal.some((a) => a.type === "burn") &&
-      (legal.some((a) => a.type === "useReserveFuel") ||
-        (state.players[state.activePlayerIndex]?.hand.some((c) => c.type === "engine") ?? false)),
+    avoidableShipLoss: (() => {
+      const active = state.players[state.activePlayerIndex];
+      if (!active) return false;
+      if (!legal.some((a) => a.type === "endMove") || legal.some((a) => a.type === "burn")) return false;
+      if (legal.some((a) => a.type === "useReserveFuel")) return true;
+      // an unplayed engine card only ever matters BEFORE the move is finalized — once
+      // p.turn.moved is true there's nothing left it could widen, so it must never keep the
+      // final "just end the move/turn" endMove stuck waiting on a card that can't do anything
+      // any more (found live: a real move that already completed sat showing a stray "0"
+      // coast ring instead of auto-advancing, because the player still held an engine card)
+      return !active.turn.moved && active.hand.some((c) => c.type === "engine");
+    })(),
   };
 }
