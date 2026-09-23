@@ -101,6 +101,29 @@ export function deriveMoveAnim(
         };
       }
     }
+    // braked to a stop WITHOUT the ring moving in this dispatch — the real, common shape for
+    // "arrive home and stop": arriveHomeBaseIfAny (engine/game.ts) is only ever called from
+    // the "endMove" case, never from "burn" itself, so a burn that lands exactly on the
+    // player's own base does NOT brake there — it lands with atRest still false (matches the
+    // ordinary slide case above, animates fine on its own). The actual braking happens on the
+    // SEPARATE endMove dispatch that follows shortly after (today usually auto-fired) —
+    // arriveHomeBaseIfAny just collapses `previous` onto the `current` the ring already sits
+    // at, moving the ring nowhere at all. None of the cases above match that (they all require
+    // the ring to move); it used to fall through to an unanimated snap of the dot alone —
+    // found live, after the first attempt at this fix only covered the (rarer) same-dispatch
+    // case above, e.g. a hyperspace-flee landing.
+    if (hexEq(a.current, b.current) && hexEq(a.previous, a.current)) {
+      const from = held && held.playerId === i ? held : null;
+      return {
+        playerId: i,
+        kind: "slide",
+        p0: from ? from.p0 : b.previous,
+        c0: a.current,
+        target: a.current, // the ring doesn't move — only the dot needs to catch up to it
+        startedAt: performance.now(),
+        phaseMs,
+      };
+    }
     // launch / hyperspace / loss — no tween, let it snap
     return null;
   }
