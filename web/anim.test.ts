@@ -70,6 +70,24 @@ describe("deriveMoveAnim when a burn brakes the ship to a full stop", () => {
     const after = stateWithPose({ q: 20, r: 0 }, { q: 20, r: 0 }); // far past burnMaxCells+free
     expect(deriveMoveAnim(before, after, 300, null)).toBeNull();
   });
+
+  it("animates the dot alone when braking happens on a LATER dispatch that doesn't move the ring", () => {
+    // the actual, common shape: arriveHomeBaseIfAny (engine/game.ts) is only ever called from
+    // the "endMove" case, never from "burn" itself — a burn landing exactly on the player's
+    // own base does NOT brake there (lands with atRest still false, an ordinary slide). The
+    // real braking happens on the SEPARATE endMove dispatch that follows: it collapses
+    // `previous` onto the `current` the ring already sits at, moving the ring nowhere. The
+    // first attempt at this fix only covered the rarer same-dispatch case above (e.g. a
+    // hyperspace-flee landing) and missed this one entirely — found live, still snapping.
+    const before = stateWithPose({ q: 2, r: 0 }, { q: 1, r: 0 }, false); // just landed via burn, still in motion
+    const after = stateWithPose({ q: 2, r: 0 }, { q: 2, r: 0 }, true); // endMove brakes: ring unchanged, tether collapses
+    const anim = deriveMoveAnim(before, after, 300, null);
+    expect(anim).not.toBeNull();
+    expect(anim!.kind).toBe("slide");
+    expect(anim!.p0).toEqual({ q: 1, r: 0 });
+    expect(anim!.c0).toEqual({ q: 2, r: 0 });
+    expect(anim!.target).toEqual({ q: 2, r: 0 }); // the ring doesn't move at all
+  });
 });
 
 describe("coastAnim resolves a held drift into a real slide", () => {
