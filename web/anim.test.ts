@@ -1,0 +1,61 @@
+import { describe, it, expect } from "vitest";
+import { deriveMoveAnim, coastAnim } from "./anim.js";
+import type { GameState, Hex } from "../engine/index.js";
+
+function stateWithPose(current: Hex, previous: Hex, atRest = false): GameState {
+  return { players: [{ pose: { current, previous, atRest } }] } as unknown as GameState;
+}
+
+/**
+ * Regression coverage for two live-reported bugs after the drift/burn merge (engine/game.ts's
+ * ensureDrifted is now called from inside burn/endMove/hyperspace whenever driftDone is still
+ * false — i.e. on almost every ordinary first click of a turn, not just via a separate "drift"
+ * dispatch): a plain burn snapped with no animation at all, and the 0-cost coast target left
+ * the ship visually frozen at its old spot (while the real state had already moved on) until
+ * some unrelated later dispatch snapped it to the correct position.
+ */
+describe("deriveMoveAnim across a combined implicit-drift + burn dispatch", () => {
+  it("still derives a slide when ensureDrifted rewrites `previous` before the burn moves further", () => {
+    // before: ship in flight, current (0,0) previous (-1,0) — a real burn dispatch with
+    // driftDone still false first drifts (previous -> old current, current -> drift target
+    // (1,0)), THEN burns further to (3,0), all in one dispatch. The pose that reaches
+    // deriveMoveAnim therefore has previous = (0,0) [the PRE-dispatch current], not the
+    // pre-dispatch previous (-1,0) — the pattern a lone "burn" case used to require.
+    const before = stateWithPose({ q: 0, r: 0 }, { q: -1, r: 0 });
+    const after = stateWithPose({ q: 3, r: 0 }, { q: 0, r: 0 });
+    const anim = deriveMoveAnim(before, after, 300, null);
+    expect(anim).not.toBeNull();
+    expect(anim!.kind).toBe("slide");
+    // the tail belongs at the dispatch's true starting previous, and the ring slides from
+    // the ship's actual pre-dispatch position all the way to the final burn target — not
+    // through the intermediate (never-shown) drift waypoint
+    expect(anim!.p0).toEqual({ q: -1, r: 0 });
+    expect(anim!.c0).toEqual({ q: 0, r: 0 });
+    expect(anim!.target).toEqual({ q: 3, r: 0 });
+  });
+
+  it("a bare drift (no further burn) still holds, not slides", () => {
+    const before = stateWithPose({ q: 0, r: 0 }, { q: -1, r: 0 });
+    const after = stateWithPose({ q: 1, r: 0 }, { q: 0, r: 0 }); // exactly the drift target
+    const anim = deriveMoveAnim(before, after, 300, null);
+    expect(anim).not.toBeNull();
+    expect(anim!.kind).toBe("drift");
+  });
+});
+
+describe("coastAnim resolves a held drift into a real slide", () => {
+  it("converts a 'drift' hold into a 'slide' ending at the same target", () => {
+    const held = deriveMoveAnim(
+      stateWithPose({ q: 0, r: 0 }, { q: -1, r: 0 }),
+      stateWithPose({ q: 1, r: 0 }, { q: 0, r: 0 }),
+      300,
+      null,
+    )!;
+    expect(held.kind).toBe("drift");
+    const resolved = coastAnim(held);
+    expect(resolved.kind).toBe("slide");
+    expect(resolved.target).toEqual(held.target);
+    expect(resolved.p0).toEqual(held.p0);
+    expect(resolved.c0).toEqual(held.c0);
+  });
+});

@@ -47,8 +47,16 @@ export function deriveMoveAnim(
     if (hexEq(a.previous, b.current) && hexEq(a.current, driftTarget(b.current, b.previous))) {
       return { playerId: i, kind: "drift", p0: b.previous, c0: b.current, target: a.current, startedAt: performance.now(), phaseMs };
     }
-    // burn: previous is unchanged, current jumps to the burn target
-    if (hexEq(a.previous, b.previous) && !hexEq(a.current, b.current)) {
+    // burn: previous is unchanged, current jumps to the burn target. Also matches a burn
+    // that implicitly drifted first in this same dispatch (the common case now that drift/
+    // burn are one decision — see engine/game.ts's ensureDrifted): that rewrites `previous`
+    // to the pre-dispatch `current` before the real burn move happens, so `a.previous` lands
+    // on `b.current` instead of `b.previous`. Either way the tail (dot) belongs at the
+    // dispatch's true starting previous (b.previous, via p0 below) and the ring slides
+    // straight from the ship's pre-dispatch position to the final target — found live: a
+    // compound drift+burn matched neither this nor the drift case above and fell through to
+    // an unanimated snap.
+    if ((hexEq(a.previous, b.previous) || hexEq(a.previous, b.current)) && !hexEq(a.current, b.current)) {
       const from = held && held.playerId === i ? held : null;
       return {
         playerId: i,
