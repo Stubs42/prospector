@@ -530,6 +530,18 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
           : null
         : legalMinusScrap[0]!
       : null;
+  // a pending start-of-game upgrade offer must surface BEFORE any real move decision. Before
+  // the drift/burn merge, "drift" was always the sole legal action pre-decision, so it
+  // auto-fired unconditionally and revealed the offer immediately. Now that a full burn-
+  // target menu is visible even pre-drift (see engine/index.ts's legalActions), nothing about
+  // it is "sole" any more, so soleAutoCandidate never fires here — found live: burn targets
+  // showing pre-upgrade costs, only recomputing correctly (and the offer only appearing)
+  // after an unrelated click happened to trigger the real drift. Dispatching a bare "drift"
+  // (still a real, valid, directly-dispatchable action — see engine/game.ts) resolves just
+  // the free landing and reveals the offer, without pre-committing to ending the move, same
+  // as the old auto-fired drift never did either.
+  const activeForStart = state.players[state.activePlayerIndex];
+  const needsImplicitDriftFirst = !!activeForStart && !activeForStart.turn.driftDone && !!activeForStart.startEquipment;
   const autoAction =
     prefs.autoSingle &&
     !state.setup &&
@@ -549,7 +561,9 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     // hand could still open up a real burn target (or save the ship, if the landing was
     // unsafe) — see Affordances.avoidableShipLoss
     !afford.avoidableShipLoss
-      ? (soleAutoCandidate ?? soleClosingAction)
+      ? needsImplicitDriftFirst
+        ? ({ type: "drift" } as Action)
+        : (soleAutoCandidate ?? soleClosingAction)
       : null;
   useEffect(() => {
     if (!autoAction) return;
