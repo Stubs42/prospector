@@ -14,6 +14,16 @@ export interface Prefs {
   /** hide everything in the topbar except the title/turn/toggle itself — reclaims vertical
      space on a small phone screen; persisted so it doesn't need re-toggling every reload */
   topbarCollapsed: boolean;
+  /** last-used display name for the online Host/Join forms (OnlineLobby.tsx) — kept separate
+     from `playerName` so someone who wants a different name online isn't forced to share it
+     with hot-seat; blank falls back to `playerName`, then "Player" (same chain the forms'
+     own placeholder text shows) */
+  onlineDisplayName: string;
+  /** last-used "host a game" setup, so re-hosting doesn't mean re-picking the same
+     humans/bots/upgrade combination every time */
+  onlineHostHumans: number;
+  onlineHostBots: number;
+  onlineHostUpgrade: "none" | "random" | "select";
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -23,6 +33,10 @@ export const DEFAULT_PREFS: Prefs = {
   animations: "auto",
   moveSpeed: "normal",
   topbarCollapsed: false,
+  onlineDisplayName: "",
+  onlineHostHumans: 1,
+  onlineHostBots: 1,
+  onlineHostUpgrade: "select",
 };
 
 const MOVE_PHASE_MS: Record<Prefs["moveSpeed"], number> = { slow: 780, normal: 440, fast: 220 };

@@ -118,7 +118,7 @@ export function Topbar({
             </>
           )}
           <Settings prefs={prefs} onChange={setPrefs} />
-          <OnlineLobby s={s} />
+          <OnlineLobby s={s} prefs={prefs} setPrefs={setPrefs} />
           {s.online.status === "offline" && <button onClick={() => s.openSetup()}>New game</button>}
         </>
       )}
