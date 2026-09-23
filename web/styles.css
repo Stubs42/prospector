@@ -82,6 +82,15 @@ body {
   margin: 0; font-weight: 700;
 }
 .topbar .turn { color: var(--muted); font-variant-numeric: tabular-nums; }
+/* the viewer's own colour/ship reminder — sits between a matched pair of flex:1 spacers
+   (Topbar.tsx) so it centres between the left and right groups while staying in normal
+   flow, wrapping gracefully along with the rest of the bar instead of floating loose */
+.topbar-identity {
+  display: flex; align-items: center; gap: 0.5rem;
+  font-weight: 700; font-size: 0.85rem; color: var(--ink);
+  max-width: min(46vw, 420px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.topbar-identity-dot { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
 .topbar .spacer { flex: 1; }
 /* collapsed: title/turn/toggle only, on one thin row — reclaims vertical space on a small
    phone screen. The spacer still pushes the toggle to the far right either way. */
