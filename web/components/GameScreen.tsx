@@ -1127,6 +1127,20 @@ export function GameScreen({
     if (scrapCells.some((c) => hexKey(c) === k)) setScrapConfirmOpen(true);
   }
 
+  // "which seat is actually me" — online, that's the seat the server assigned this
+  // connection; offline it's only ever well-defined for a solo human (soloHumanId, computed
+  // above) — a shared hot-seat device has no single fixed "you" to remind, so this stays
+  // null there and the header shows nothing extra, same as always
+  const myPlayerId = s.online.status !== "offline" ? s.online.playerIndex : soloHumanId >= 0 ? soloHumanId : null;
+  const myIdentity =
+    myPlayerId != null && state.players[myPlayerId]
+      ? {
+          colour: state.players[myPlayerId]!.colour,
+          playerName: s.names[myPlayerId] ?? "Player",
+          shipName: mode.ships[state.players[myPlayerId]!.colour].name,
+        }
+      : null;
+
   return (
     <div className="app board-only">
       <Topbar
@@ -1134,6 +1148,7 @@ export function GameScreen({
         prefs={prefs}
         setPrefs={setPrefs}
         turnLabel={`turn ${state.turnNumber}`}
+        identity={myIdentity}
         onOpenLog={() => setLogOpen(true)}
         onOpenRules={() => setRulesOpen(true)}
       />

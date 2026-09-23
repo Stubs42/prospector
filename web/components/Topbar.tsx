@@ -13,12 +13,20 @@ import { Settings } from "./Settings.js";
 import { OnlineLobby } from "./OnlineLobby.js";
 import type { Prefs } from "../prefs.js";
 import type { Session } from "../useSession.js";
+import type { Colour } from "../../engine/index.js";
+
+export interface TopbarIdentity {
+  colour: Colour;
+  playerName: string;
+  shipName: string;
+}
 
 export function Topbar({
   s,
   prefs,
   setPrefs,
   turnLabel,
+  identity,
   onOpenLog,
   onOpenRules,
 }: {
@@ -27,6 +35,12 @@ export function Topbar({
   setPrefs: (p: Prefs) => void;
   /** "turn N" once a real game is running, "new game" during setup */
   turnLabel: ReactNode;
+  /** the viewer's own seat (colour + ship + display name) — a constant reminder of which
+     colour this browser is playing, centred in the header. Only well-defined online (the
+     seat the server assigned this connection) or for a solo human offline; absent during
+     setup and for a shared hot-seat device with no single fixed "you" — GameScreen is the
+     only caller that ever passes it. Shown even while the header is collapsed. */
+  identity?: TopbarIdentity | null;
   /** absent during setup — there's no move log yet */
   onOpenLog?: (() => void) | undefined;
   /** the popup itself is rendered by the caller (inside its own .stage), not here — this
@@ -38,6 +52,19 @@ export function Topbar({
     <div className={`topbar${prefs.topbarCollapsed ? " collapsed" : ""}`}>
       <h1>Prospector</h1>
       <span className="turn">{turnLabel}</span>
+      {/* centred between the left (title/turn) and right (buttons/toggle) groups via a
+         matched pair of flex:1 spacers, not absolute positioning — the topbar can wrap to
+         two lines on a narrow width (the offline humans/bots/upgrade selectors are wide),
+         and an absolutely-positioned element centred on the whole (now taller) bar would
+         land in the gap between wrapped rows instead of visually reading as part of either
+         one; staying in normal flow lets it wrap along with everything else instead */}
+      <span className="spacer" />
+      {identity && (
+        <span className="topbar-identity">
+          <i className="topbar-identity-dot" style={{ background: `var(--ship-${identity.colour})` }} />
+          {identity.playerName} commanding {identity.shipName}
+        </span>
+      )}
       <span className="spacer" />
       {!prefs.topbarCollapsed && (
         <>
