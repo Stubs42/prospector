@@ -6,13 +6,13 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { score, statsOf } from "../../engine/index.js";
-import { waitingOn, decisiveCombat, combatStatsLines } from "../../client/index.js";
+import { waitingOn, decisiveCombat, winProbability } from "../../client/index.js";
 import { boardFor } from "../../engine/game.js";
 import { hexKey } from "../../engine/hex.js";
 import type { BoosterCard, Colour, Hex } from "../../engine/index.js";
 import { Board } from "./Board.js";
 import { HandPanel, type PanelButton } from "./HandPanel.js";
-import { CombatBox, type CombatBoxProps, type CombatCardChip } from "./CombatBox.js";
+import { FightBox, type FightBoxProps, type FightTableRow, type CombatCardChip } from "./FightBox.js";
 import { EquipmentPopup } from "./EquipmentPopup.js";
 import { HexPopup } from "./HexPopup.js";
 import { LogOverlay } from "./LogOverlay.js";
@@ -427,7 +427,7 @@ export function GameScreen({
       if (cancelled) return;
       // the reveal itself is done the instant both dice settle — holdAdvance stays true
       // (and combatReveal stays set) until the player explicitly confirms the outcome
-      // (see combatBox's Confirm button below), not a fixed timeout
+      // (see fightBox's Confirm button below), not a fixed timeout
       setCombatReveal((cr) => (cr ? { ...cr, showOutcome: true } : cr));
     })();
     return () => {
@@ -666,26 +666,50 @@ export function GameScreen({
           ? "Tap laser cards to add to your attack."
           : null;
 
-  // --- combat / bottom-panel buttons -------------------------------
-  const combatTitle = pc
-    ? `${mode.ships[state.players[pc.attackerId]!.colour].name} ${pc.round > 1 ? "counter attacks" : "attacks"} ${
-        mode.ships[state.players[pc.defenderId]!.colour].name
-      }`
-    : attackTarget !== null
-      ? `Attacking ${mode.ships[state.players[attackTarget]!.colour].name}`
-      : null;
-  const combatSub: string | string[] | null = pc
-    ? combatStatsLines(afford.combat?.attackLasers ?? 0, afford.combat?.defenceShields ?? 0)
-    : attackTarget !== null
-      ? "Pick laser boosters, then declare."
-      : null;
-  // a handicap outside the range any roll could change (decisiveCombat) — the "Roll the
-  // dice" step is pointless theatre once we already know who wins, so it's skipped
-  // entirely (see the auto-resolve effect below) rather than asking for a pointless click.
-  const resolveDecisive =
-    pc && pc.awaiting === "resolve"
-      ? decisiveCombat(afford.combat?.attackLasers ?? 0, afford.combat?.defenceShields ?? 0, state.config.core.dice.combat, mode.combat.winTest)
-      : null;
+  // --- the ONE fight box -------------------------------------------
+  // Everything about a fight — declaring, defending, the dice reveal, a possible counter
+  // round with roles swapped, and the final outcome — renders through this single derivation
+  // into one FightBox, instead of the three separately-shaped popups this used to be
+  // (a live declare/defend/counter box, a completely separate dice-reveal object, and a third
+  // "Attack Failed" box). Every browser builds the exact same box off the exact same data;
+  // only `buttons` differs by role (empty for anyone who isn't the current decider).
+  const fmtPct = (p: number) => `${Math.round(p * 100)}%`;
+  const fmtSigned = (n: number) => (n > 0 ? `+${n}` : `${n}`);
+  // the six-row stats table — a `null` value renders blank (that stat genuinely isn't known
+  // yet), not "0"; `dice` is only ever populated once the actual reveal is playing out.
+  const fightRows = (
+    lasers: number | null,
+    shields: number | null,
+    dice: { attack: { value: number; settled: boolean } | null; defence: { value: number; settled: boolean } | null } | null,
+    autoRepel: boolean,
+  ): FightTableRow[] => {
+    const win =
+      lasers != null && shields != null
+        ? fmtPct(winProbability(lasers, shields, state.config.core.dice.combat, mode.combat.winTest))
+        : null;
+    const attackTotal = dice?.attack?.settled ? (lasers ?? 0) + dice.attack.value : null;
+    const defenceTotal = dice?.defence?.settled ? (shields ?? 0) + dice.defence.value : null;
+    return [
+      { label: "Lasers", value: lasers != null ? String(lasers) : null },
+      { label: "Shields", value: shields != null ? String(shields) : null },
+      { label: "Win", value: win },
+      {
+        label: "Attack",
+        value: attackTotal != null ? `${lasers}+${dice!.attack!.value}=${attackTotal}` : null,
+        die: dice?.attack ? { value: dice.attack.value, tone: "attack" } : null,
+      },
+      {
+        label: "Defend",
+        value: defenceTotal != null ? `${shields}+${dice!.defence!.value}=${defenceTotal}${autoRepel ? " (auto-repel)" : ""}` : null,
+        die: dice?.defence ? { value: dice.defence.value, tone: "defence" } : null,
+      },
+      { label: "Result", value: attackTotal != null && defenceTotal != null ? fmtSigned(attackTotal - defenceTotal) : null },
+    ];
+  };
+  const fightTitle = (attackerId: number, defenderId: number, isCounter: boolean): string =>
+    `${mode.ships[state.players[attackerId]!.colour].name} ${isCounter ? "counter attacks" : "attacks"} ${
+      mode.ships[state.players[defenderId]!.colour].name
+    }`;
 
   // declining a counter-attack reads as two different real moves depending on WHO declines:
   // the on-turn player (the original attacker, having just defended a counter) is genuinely
@@ -700,41 +724,217 @@ export function GameScreen({
   // combat's real decider is whichever seat pendingCombat.awaiting is actually asking —
   // attacker while resolving/rolling, defender otherwise — not always state.activePlayerIndex
   // (a counter-attack round swaps the roles). Online, only that seat's own browser gets real
-  // buttons; everyone else sees the box (title, dice, outcome) with nothing to click.
+  // buttons; everyone else sees the box (table, message) with nothing to click.
   const myDecision = s.isMe(waitingOn(state));
-  const buttons: PanelButton[] = [];
-  if (!myDecision) {
-    // spectating this decision — leave buttons empty, just watch
-  } else if (pc && pc.awaiting === "defend" && seats[pc.defenderId] === "human") {
-    buttons.push({
-      label: `Stand${pickedIds("shield").length ? ` (+${selSum("shield")})` : ""}`,
-      kind: "primary",
-      onClick: () => dispatch({ type: "combatDefend", shieldBoosters: pickedIds("shield") }),
-    });
-    if (hyperspaceId)
-      buttons.push({ label: "Flee (hyperspace)", onClick: () => dispatch({ type: "combatDefend", hyperspaceBoosterId: hyperspaceId }) });
-  } else if (pc && pc.awaiting === "resolve" && (seats[pc.attackerId] === "human" || seats[pc.defenderId] === "human")) {
-    // decisive: nothing to click here — the auto-resolve effect below dispatches
-    // combatResolve on its own, straight into the reveal box (which has its own Confirm)
-    if (!resolveDecisive) buttons.push({ label: "Roll the dice", kind: "primary", onClick: () => dispatch({ type: "combatResolve" }) });
-  } else if (pc && pc.awaiting === "counter" && seats[pc.defenderId] === "human") {
-    if (afford.counterAttack)
-      buttons.push({
-        label: `Counter-attack${pickedIds("laser").length ? ` (+${selSum("laser")})` : ""}`,
-        kind: "danger",
-        onClick: () => dispatch({ ...afford.counterAttack!, laserBoosters: pickedIds("laser") }),
-      });
-    buttons.push({ label: declineIsOnTurn ? "End Turn" : "End Fight", onClick: onDeclineCounter });
-  } else if (!pc && attackTarget !== null) {
-    buttons.push({
-      label: `Declare attack${pickedIds("laser").length ? ` (+${selSum("laser")})` : ""}`,
-      kind: "danger",
-      onClick: () =>
-        dispatch({ type: "attack", targetPlayerId: attackTarget, laserBoosters: pickedIds("laser") }),
-    });
-    buttons.push({ label: "Cancel", onClick: () => s.setAttackTarget(null) });
-  }
+  // a handicap outside the range any roll could change (decisiveCombat) — the "Roll the
+  // dice" step is pointless theatre once we already know who wins, so it's skipped
+  // entirely (see the auto-resolve effect below) rather than asking for a pointless click.
+  const resolveDecisive =
+    pc && pc.awaiting === "resolve"
+      ? decisiveCombat(afford.combat?.attackLasers ?? 0, afford.combat?.defenceShields ?? 0, state.config.core.dice.combat, mode.combat.winTest)
+      : null;
+  const hasLaserCard = (playerId: number) => state.players[playerId]?.hand.some((c) => c.type === "laser") ?? false;
+  const hasShieldOrHyperCard = (playerId: number) =>
+    state.players[playerId]?.hand.some((c) => c.type === "shield" || c.type === "hyperspace") ?? false;
 
+  // a staged laser/shield leaves the hand row entirely and shows up here instead — clicking
+  // it here (instead of in hand) is the undo: back into combatSel-less, back into the hand row
+  const combatCards: CombatCardChip[] = combatCardType
+    ? handOwner.hand
+        .filter((c) => c.type === combatCardType && combatSel.has(c.id))
+        .map((c) => ({ id: c.id, type: combatCardType, value: c.value ?? 0, onClick: () => s.toggleCombatSel(c.id) }))
+    : [];
+
+  let fightBox: FightBoxProps | null = combatReveal
+    ? // the dice reveal (or its settled outcome) — takes priority over the live `pc` state,
+      // since pc may already have moved on (to "counter", or cleared entirely) while this
+      // browser's own local animation is still catching up
+      (() => {
+        const iAmAttacker = s.isMe(combatReveal.attackerId);
+        const defenderIsDeciding =
+          myDecision && !combatReveal.attackerWins && seats[combatReveal.defenderId] === "human";
+        const message: string[] | null = !combatReveal.showOutcome
+          ? null
+          : combatReveal.attackerWins
+            ? iAmAttacker
+              ? combatReveal.spoil
+                ? [
+                    "Attack Succeeded",
+                    `Bounty: ${combatReveal.spoil} ore [${state.players[combatReveal.attackerId]!.cargo.length}/${
+                      statsOf(state, state.players[combatReveal.attackerId]!).cargo
+                    }]`,
+                  ]
+                : ["Attack Succeeded", "Nothing to loot (empty hold)"]
+              : s.isMe(combatReveal.defenderId)
+                ? combatReveal.spoil
+                  ? [
+                      "Defended",
+                      `Lost ${combatReveal.spoil} ore [${state.players[combatReveal.defenderId]!.cargo.length}/${
+                        statsOf(state, state.players[combatReveal.defenderId]!).cargo
+                      }]`,
+                    ]
+                  : ["Defended", "Nothing lost"]
+                : combatReveal.spoil
+                  ? ["Attack Succeeded", `Bounty: ${combatReveal.spoil} ore`]
+                  : ["Attack Succeeded", "Nothing to loot (empty hold)"]
+            : [iAmAttacker ? "Attack Failed" : "Defence Successful"];
+        return {
+          title: fightTitle(combatReveal.attackerId, combatReveal.defenderId, combatReveal.round > 1),
+          rows: fightRows(
+            combatReveal.attackerLasers,
+            combatReveal.defenderShields,
+            { attack: { value: combatReveal.attackFace, settled: combatReveal.attackSettled }, defence: combatReveal.attackSettled ? { value: combatReveal.defenceFace, settled: combatReveal.defenceSettled } : null },
+            combatReveal.autoRepel,
+          ),
+          message,
+          cards: [],
+          // the outcome sits on screen until explicitly acknowledged. A loss goes straight to
+          // the REAL counter-attack/end-fight choice for the defender's own browser (reusing
+          // the same buttons the live "counter" phase below would build); the attacker gets
+          // NO buttons at all on a loss — just waits, same as the spec asks — since the fight
+          // isn't over yet and there's nothing for them to decide. Every OTHER viewer (a win,
+          // or a spectator watching someone else's loss) gets their own local Confirm to
+          // dismiss their own copy — never a dispatch, so nobody needs to wait on anyone
+          // else's click; a stale reveal force-clears on its own once the real state moves on
+          // regardless (see the pendingCombat-watching effect above).
+          buttons: !combatReveal.showOutcome
+            ? []
+            : defenderIsDeciding
+              ? [
+                  ...(afford.counterAttack
+                    ? [
+                        {
+                          label: `Counter-attack${pickedIds("laser").length ? ` (+${selSum("laser")})` : ""}`,
+                          kind: "danger" as const,
+                          onClick: () => {
+                            setCombatReveal(null);
+                            s.setHoldAdvance(false);
+                            dispatch({ ...afford.counterAttack!, laserBoosters: pickedIds("laser") });
+                          },
+                        },
+                      ]
+                    : []),
+                  {
+                    label: declineIsOnTurn ? "End Turn" : "End Fight",
+                    onClick: () => {
+                      setCombatReveal(null);
+                      s.setHoldAdvance(false);
+                      onDeclineCounter();
+                    },
+                  },
+                ]
+              : !combatReveal.attackerWins && iAmAttacker
+                ? []
+                : [
+                    {
+                      label: "Confirm",
+                      kind: "primary" as const,
+                      onClick: () => {
+                        setCombatReveal(null);
+                        s.setHoldAdvance(false);
+                      },
+                    },
+                  ],
+        };
+      })()
+    : pc && pc.awaiting === "counter"
+      ? // the new attacker (the original defender) deciding whether to counter at all, and if
+        // so with which lasers — same local declare-then-dispatch staging the original attack
+        // used, just role-swapped; the table resets to blank (a fresh round hasn't happened
+        // yet), and this counter-declare is ALWAYS a real choice — a defender who currently
+        // holds no laser cards can still counter-attack bare-handed, so unlike the plain
+        // "add lasers" declare step below, this never auto-skips.
+        {
+          title: fightTitle(pc.defenderId, pc.attackerId, true),
+          rows: fightRows(null, null, null, false),
+          message: null,
+          cards: combatCards,
+          buttons:
+            myDecision && seats[pc.defenderId] === "human"
+              ? [
+                  ...(afford.counterAttack
+                    ? [
+                        {
+                          label: `Counter-attack${pickedIds("laser").length ? ` (+${selSum("laser")})` : ""}`,
+                          kind: "danger" as const,
+                          onClick: () => dispatch({ ...afford.counterAttack!, laserBoosters: pickedIds("laser") }),
+                        },
+                      ]
+                    : []),
+                  { label: declineIsOnTurn ? "End Turn" : "End Fight", onClick: onDeclineCounter },
+                ]
+              : [],
+        }
+      : pc
+        ? // defend or resolve — shared, everyone-sees-it box; the attacker's lasers are
+          // already fixed the instant `pc` exists (the "attack" action bundles them), so
+          // every viewer sees that row filled in from the very first render of this box
+          {
+            title: fightTitle(pc.attackerId, pc.defenderId, pc.round > 1),
+            rows: fightRows(afford.combat?.attackLasers ?? null, pc.defShields ?? null, null, false),
+            message:
+              pc.awaiting === "defend" && myDecision && seats[pc.defenderId] === "human" && hasShieldOrHyperCard(pc.defenderId)
+                ? "Optionally add shield boosters or Hyperspace, then Defend."
+                : null,
+            cards: combatCards,
+            buttons: !myDecision
+              ? []
+              : pc.awaiting === "defend" && seats[pc.defenderId] === "human" && hasShieldOrHyperCard(pc.defenderId)
+                ? [
+                    {
+                      label: `Defend${pickedIds("shield").length ? ` (+${selSum("shield")})` : ""}`,
+                      kind: "primary" as const,
+                      onClick: () => dispatch({ type: "combatDefend", shieldBoosters: pickedIds("shield") }),
+                    },
+                    ...(hyperspaceId
+                      ? [{ label: "Flee (hyperspace)", onClick: () => dispatch({ type: "combatDefend", hyperspaceBoosterId: hyperspaceId }) }]
+                      : []),
+                  ]
+                : pc.awaiting === "resolve" && !resolveDecisive && (seats[pc.attackerId] === "human" || seats[pc.defenderId] === "human")
+                  ? [{ label: "Roll the dice", kind: "primary" as const, onClick: () => dispatch({ type: "combatResolve" }) }]
+                  : [],
+          }
+        : attackTarget !== null && hasLaserCard(state.activePlayerIndex)
+          ? // the very first step: local to the attacker's own browser only — nothing is
+            // broadcast (pendingCombat doesn't exist yet), same as any other pre-dispatch
+            // staging in this app (armed engine cards, staged shields/lasers everywhere
+            // else). Skipped entirely (see the auto-fire effect below) when there's no
+            // laser card to even consider — straight to the shared box existing already
+            // past this step.
+            {
+              title: `Attacking ${mode.ships[state.players[attackTarget]!.colour].name}`,
+              rows: fightRows(null, null, null, false),
+              message: "Optionally add laser boosters, then click Attack.",
+              cards: combatCards,
+              buttons: [
+                {
+                  label: `Attack${pickedIds("laser").length ? ` (+${selSum("laser")})` : ""}`,
+                  kind: "danger" as const,
+                  onClick: () => dispatch({ type: "attack", targetPlayerId: attackTarget, laserBoosters: pickedIds("laser") }),
+                },
+                { label: "Cancel", onClick: () => s.setAttackTarget(null) },
+              ],
+            }
+          : null;
+
+  // auto-fire when there's nothing left to decide — mirrors the decisive-resolve pattern:
+  // no laser card at all to consider means the "declare" step is pure ceremony, so it's
+  // skipped rather than asking for a pointless Attack click
+  useEffect(() => {
+    if (attackTarget === null || pc || hasLaserCard(state.activePlayerIndex)) return;
+    const id = setTimeout(() => dispatch({ type: "attack", targetPlayerId: attackTarget, laserBoosters: [] }), reducedMotion ? 30 : 220);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, attackTarget, reducedMotion]);
+  // same idea for the defender's shield step — no shield/hyperspace card means "Defend" was
+  // never a real decision either
+  useEffect(() => {
+    if (!pc || pc.awaiting !== "defend" || !myDecision || suppress) return;
+    if (seats[pc.defenderId] !== "human" || hasShieldOrHyperCard(pc.defenderId)) return;
+    const id = setTimeout(() => dispatch({ type: "combatDefend", shieldBoosters: [] }), reducedMotion ? 30 : 220);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, pc, myDecision, suppress, reducedMotion]);
   // a decisive resolve (see resolveDecisive above) has no button to click — dispatch
   // combatResolve on its own, same short beat as every other auto-advance in this app, so
   // the reveal box (with its own real Confirm/next-step buttons) comes up on its own instead
@@ -747,123 +947,36 @@ export function GameScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, resolveDecisive, myDecision, suppress, reducedMotion]);
 
-  // a staged laser/shield leaves the hand row entirely and shows up here instead — clicking
-  // it here (instead of in hand) is the undo: back into combatSel-less, back into the hand row
-  const combatCards: CombatCardChip[] = combatCardType
-    ? handOwner.hand
-        .filter((c) => c.type === combatCardType && combatSel.has(c.id))
-        .map((c) => ({ id: c.id, type: combatCardType, value: c.value ?? 0, onClick: () => s.toggleCombatSel(c.id) }))
-    : [];
-
-  // the combat box replaces the plain guidance popup while a fight is staging, resolving,
-  // or being revealed — a fixed overlay (see HexPopup's note), not anchored to any ship
-  const combatBox: CombatBoxProps | null = combatReveal
-    ? {
-        title: `${mode.ships[state.players[combatReveal.attackerId]!.colour].name} ${
-          combatReveal.round > 1 ? "counter attacks" : "attacks"
-        } ${mode.ships[state.players[combatReveal.defenderId]!.colour].name}`,
-        sub: combatStatsLines(combatReveal.attackerLasers, combatReveal.defenderShields),
-        cards: [],
-        // the outcome sits on screen until explicitly acknowledged — a milestone-ish
-        // result (won a resource, or didn't) deserves a real "ok, got it" rather than
-        // vanishing on its own after a fixed pause. A loss goes straight to the REAL
-        // counter-attack/end-fight choice (reusing `buttons`, computed above from the very
-        // same pendingCombat.awaiting==="counter" this reveal is for) instead of a separate
-        // generic "Confirm" first — but only when there's an actual human decision to make
-        // AND this is that human's own browser; a bot's turn next, or a spectator watching
-        // someone else's decision, both just get a plain acknowledgment that dismisses their
-        // own local reveal overlay (setCombatReveal/setHoldAdvance are local-only — never a
-        // dispatch) while the real decider (or the bot timer) picks it up once this closes.
-        buttons: combatReveal.showOutcome
-          ? combatReveal.attackerWins || seats[combatReveal.defenderId] !== "human" || !myDecision
-            ? [
-                {
-                  label: "Confirm",
-                  kind: "primary" as const,
-                  onClick: () => {
-                    setCombatReveal(null);
-                    s.setHoldAdvance(false);
-                  },
-                },
-              ]
-            : buttons.map((b) => ({
-                ...b,
-                onClick: () => {
-                  setCombatReveal(null);
-                  s.setHoldAdvance(false);
-                  b.onClick();
-                },
-              }))
-          : [],
-        roll: {
-          attack: {
-            value: combatReveal.attackFace,
-            settled: combatReveal.attackSettled,
-            base: combatReveal.attackerLasers,
-            total: combatReveal.attackTotal,
-          },
-          defence: combatReveal.attackSettled
-            ? {
-                value: combatReveal.defenceFace,
-                settled: combatReveal.defenceSettled,
-                base: combatReveal.defenderShields,
-                total: combatReveal.defenceTotal,
-              }
-            : null,
-          autoRepel: combatReveal.autoRepel,
-          outcome: combatReveal.showOutcome
-            ? combatReveal.attackerWins
-              ? [
-                  "Attack Succeeded",
-                  combatReveal.spoil
-                    ? `Loot ${combatReveal.spoil} Orb [${state.players[combatReveal.attackerId]!.cargo.length}/${
-                        statsOf(state, state.players[combatReveal.attackerId]!).cargo
-                      }]`
-                    : "Nothing to Loot (empty hold)",
-                ]
-              : ["Defence Successful"]
-            : null,
-        },
-      }
-    : combatTitle
-      ? {
-          title: combatTitle,
-          sub: combatSub,
-          cards: combatCards,
-          buttons,
-        }
-      : null;
-
   // the fight is fully over and it was the OFF-turn player who called it off (End Fight) —
-  // the on-turn attacker gets one explicit "Attack Failed" / "End Turn" beat instead of just
-  // silently falling back to the ambient "click your ship" cue. Takes priority over the plain
-  // guidance popup, same family as combatBox/equipBox below. Visible to EVERY browser now (so
-  // a spectator, or the defender who just declined, can actually follow why the fight ended —
-  // same "box for everyone, real buttons only for the decider" split as combatBox itself),
-  // not just the attacker's own — attackFailedSummary holds THEIR playerId regardless (see its
-  // declaration), used only to gate the End Turn button below, not the box's visibility.
-  // attackerId can legitimately be 0, so this checks `!== null`, never plain truthiness.
-  const attackFailedBox =
-    attackFailedSummary !== null && !pc
-      ? {
-          lines:
-            attackFailedSummary.reason === "fled"
-              ? ["Attack Failed", "The defender escaped via hyperspace."]
-              : ["Attack Failed"],
-          actions: s.isMe(attackFailedSummary.attackerId)
-            ? [
-                {
-                  label: "End Turn",
-                  kind: "primary" as const,
-                  onClick: () => {
-                    setAttackFailedSummary(null);
-                    dispatch({ type: "endTurn" });
-                  },
-                },
-              ]
-            : [],
-        }
-      : null;
+  // the on-turn attacker gets one explicit "Attack Failed" / "End Turn" beat, folded into the
+  // SAME fight-box shape (a blank table, just the message + End Turn) instead of a separate
+  // popup type. Visible to EVERY browser (so a spectator, or the defender who just declined,
+  // can still see why the fight ended — same "box for everyone, real button only for the
+  // decider" split the rest of this box already uses), not just the attacker's own —
+  // attackFailedSummary holds THEIR playerId regardless (see its declaration), used only to
+  // gate the End Turn button, not the box's visibility. Only takes over once nothing else
+  // (a live fight, a reveal) is already claiming the box.
+  if (!fightBox && attackFailedSummary !== null) {
+    fightBox = {
+      title: "Fight over",
+      rows: fightRows(null, null, null, false),
+      message:
+        attackFailedSummary.reason === "fled" ? ["Attack Failed", "The defender escaped via hyperspace."] : ["Attack Failed"],
+      cards: [],
+      buttons: s.isMe(attackFailedSummary.attackerId)
+        ? [
+            {
+              label: "End Turn",
+              kind: "primary" as const,
+              onClick: () => {
+                setAttackFailedSummary(null);
+                dispatch({ type: "endTurn" });
+              },
+            },
+          ]
+        : [],
+    };
+  }
   // a spectator's/defender's own browser never clicks the End Turn button above (that's only
   // ever the attacker's), so without this their local attackFailedSummary would sit there
   // forever even once the attacker's real endTurn has already broadcast and moved play on —
@@ -1040,16 +1153,12 @@ export function GameScreen({
           onSkipAnimation={placing || (combatReveal && !combatReveal.showOutcome) || equipSpinId ? onSkipAnimation : null}
         />
 
-        {/* guidance popup / combat box: fixed overlays, like the zoom controls or the status
+        {/* guidance popup / fight box: fixed overlays, like the zoom controls or the status
            panel — outside the board's own pan/zoom transform, so they never collide with it */}
-        {!suppress && attackFailedBox && <HexPopup lines={attackFailedBox.lines} actions={attackFailedBox.actions} />}
-        {!suppress && !attackFailedBox && eventChoiceBox && <HexPopup lines={eventChoiceBox.lines} actions={eventChoiceBox.actions} />}
-        {!suppress && !attackFailedBox && !eventChoiceBox && popup && <HexPopup lines={popup.lines} />}
-        {/* attackFailedBox wins if both are somehow still true at once — it's the fight's
-           final word, and a stale combatReveal box (something else's decline having already
-           force-cleared it above) must never sit on top of it, same principle as `popup` */}
-        {!suppress && !attackFailedBox && combatBox && <CombatBox {...combatBox} />}
-        {!suppress && !combatBox && equipBox && <EquipmentPopup {...equipBox} />}
+        {!suppress && fightBox && <FightBox {...fightBox} />}
+        {!suppress && !fightBox && eventChoiceBox && <HexPopup lines={eventChoiceBox.lines} actions={eventChoiceBox.actions} />}
+        {!suppress && !fightBox && !eventChoiceBox && popup && <HexPopup lines={popup.lines} />}
+        {!suppress && !fightBox && equipBox && <EquipmentPopup {...equipBox} />}
         {scrapConfirm && (
           <div className="board-scrim" onClick={scrapConfirm.onCancel}>
             <div onClick={(e) => e.stopPropagation()}>

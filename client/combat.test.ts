@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { decisiveCombat, combatStatsLines } from "./combat.js";
+import { decisiveCombat, winProbability } from "./combat.js";
 
 // the actual configured dice: both sides roll 1-6, win test is "strict-greater" (attack must
 // exceed defence — a tie favours the defender) — see config/default.config.json
@@ -31,10 +31,28 @@ describe("decisiveCombat (strict-greater win test)", () => {
   });
 });
 
-describe("combatStatsLines", () => {
-  it("shows the attacker, the defender, and the signed handicap between them", () => {
-    expect(combatStatsLines(4, 2)).toEqual(["Attacker: 4 lasers", "Defender: 2 shields", "Handicap: +2"]);
-    expect(combatStatsLines(1, 1)).toEqual(["Attacker: 1 laser", "Defender: 1 shield", "Handicap: 0"]);
-    expect(combatStatsLines(2, 5)).toEqual(["Attacker: 2 lasers", "Defender: 5 shields", "Handicap: -3"]);
+describe("winProbability", () => {
+  it("handicap 0, strict-greater: only a strictly higher attack roll wins (15 of 36 pairs)", () => {
+    expect(winProbability(4, 4, DICE, WIN_TEST)).toBeCloseTo(15 / 36);
+  });
+  it("handicap 0, greater-or-equal: a tie also wins the attacker (21 of 36 pairs)", () => {
+    expect(winProbability(4, 4, DICE, "greater-or-equal")).toBeCloseTo(21 / 36);
+  });
+  it("is exactly 1 for a guaranteed win and exactly 0 for a guaranteed loss", () => {
+    expect(winProbability(10, 4, DICE, WIN_TEST)).toBe(1); // handicap +6
+    expect(winProbability(0, 5, DICE, WIN_TEST)).toBe(0); // handicap -5
+  });
+  it("a +1 handicap under strict-greater matches the same handicap under greater-or-equal", () => {
+    // strict needs a-d > -1 i.e. a >= d; greater-or-equal at handicap 0 needs the same a >= d
+    expect(winProbability(5, 4, DICE, WIN_TEST)).toBeCloseTo(winProbability(4, 4, DICE, "greater-or-equal"));
+  });
+});
+
+describe("decisiveCombat is winProbability's 0/1 boundary", () => {
+  it("returns null whenever winProbability is strictly between 0 and 1", () => {
+    const p = winProbability(4, 4, DICE, WIN_TEST);
+    expect(p).toBeGreaterThan(0);
+    expect(p).toBeLessThan(1);
+    expect(decisiveCombat(4, 4, DICE, WIN_TEST)).toBeNull();
   });
 });
