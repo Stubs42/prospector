@@ -117,15 +117,17 @@ export function affordances(state: GameState, opts: AffordanceOpts = {}): Afford
     canRerollEquipment: legal.some((a) => a.type === "rerollEquipment"),
     avoidableShipLoss: (() => {
       const active = state.players[state.activePlayerIndex];
-      if (!active) return false;
-      if (!legal.some((a) => a.type === "endMove") || legal.some((a) => a.type === "burn")) return false;
+      if (!active || active.turn.moved) return false;
+      // relevant whenever a move decision (a burn OR the free "stay/land here" endMove) is
+      // actually on offer — NOT just when endMove is the sole option: a forced single 0-cost
+      // burn (an unsafe landing with only one afforded escape) is every bit as "no real choice
+      // yet" as a lone endMove would be, and an unplayed reserve-fuel/engine card could still
+      // widen that same forced set into a real one — found live: a 0-fuel ship with an unused
+      // reserve-fuel card auto-fired its only reachable (free) burn target before the player
+      // ever got a chance to play the card and see if it opened up anything better.
+      if (!legal.some((a) => a.type === "endMove" || a.type === "burn")) return false;
       if (legal.some((a) => a.type === "useReserveFuel")) return true;
-      // an unplayed engine card only ever matters BEFORE the move is finalized — once
-      // p.turn.moved is true there's nothing left it could widen, so it must never keep the
-      // final "just end the move/turn" endMove stuck waiting on a card that can't do anything
-      // any more (found live: a real move that already completed sat showing a stray "0"
-      // coast ring instead of auto-advancing, because the player still held an engine card)
-      return !active.turn.moved && active.hand.some((c) => c.type === "engine");
+      return active.hand.some((c) => c.type === "engine");
     })(),
   };
 }

@@ -107,8 +107,12 @@ describe("affordances", () => {
     g.players[0]!.fuel = 0;
     const card = { id: "test-fuel", deck: "booster" as const, type: "reserveFuel" as const, value: 3, effect: "" };
     g = run(g, { type: "drawBooster" });
-    g.players[0]!.hand = [...g.players[0]!.hand, card];
-    while (g.players[0]!.hand.length > 4) g = run(g, { type: "discardBooster", cardId: g.players[0]!.hand[0]!.id });
+    // drawBooster may have already dealt a real reserve-fuel card of its own — filter it out
+    // first, so the only one in hand after adding ours is the one this test actually plays
+    // (otherwise a second, still-unplayed reserve-fuel card legitimately keeps
+    // avoidableShipLoss flagged below, since it could genuinely still help too)
+    g.players[0]!.hand = [...g.players[0]!.hand.filter((c) => c.type !== "reserveFuel"), card];
+    while (g.players[0]!.hand.length > 4) g = run(g, { type: "discardBooster", cardId: g.players[0]!.hand.find((c) => c.id !== card.id)!.id });
     g = run(g, { type: "drift" }); // carries the ship onto the outer cell (10,0) -> mustBurn
 
     let a = affordances(g);
@@ -169,6 +173,35 @@ describe("affordances", () => {
     expect(a.legal.some((x) => x.type === "useReserveFuel")).toBe(false);
     // no card could change the outcome — safe for a GUI's auto-advance to just proceed
     expect(a.avoidableShipLoss).toBe(false);
+  });
+
+  it("flags avoidableShipLoss for a FORCED sole 0-cost burn too, not just a sole endMove", () => {
+    // reported live: an unsafe landing (blocked by another ship) with 0 fuel left exactly one
+    // free (base-departure-cell) burn target reachable and no endMove at all — the old check
+    // only ever looked at "is endMove the sole option", so this forced-but-still-improvable
+    // single burn auto-fired instantly, never giving the player a chance to play their unused
+    // reserve-fuel card first and see if it opened up a real (non-forced) choice instead
+    let g = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "none" });
+    const base = g.players[0]!.pose.current;
+    const board = boardFor(g);
+    const before = board.neighbours(base)[0]!; // a real neighbour, "behind" the base
+    const driftTarget = { q: base.q + (base.q - before.q), r: base.r + (base.r - before.r) };
+    g.players[0]!.pose = { current: base, previous: before, atRest: false }; // still moving, on own base
+    g.players[0]!.placed = true;
+    g.players[0]!.fuel = 0;
+    const card = { id: "test-fuel", deck: "booster" as const, type: "reserveFuel" as const, value: 3, effect: "" };
+    g = run(g, { type: "drawBooster" });
+    g.players[0]!.hand = [...g.players[0]!.hand.filter((c) => c.type !== "reserveFuel"), card];
+    while (g.players[0]!.hand.length > 4) g = run(g, { type: "discardBooster", cardId: g.players[0]!.hand.find((c) => c.id !== card.id)!.id });
+    // block the natural drift landing with the other ship, forcing a burn away from it
+    g.players[1]!.pose = { current: driftTarget, previous: driftTarget, atRest: true };
+    g.players[1]!.placed = true;
+
+    const a = affordances(g);
+    expect(a.legal.some((x) => x.type === "endMove")).toBe(false); // landing unsafe, no free "stay"
+    expect(a.legal.some((x) => x.type === "useReserveFuel")).toBe(true);
+    expect(a.burnTargets.some((t) => t.cost === 0)).toBe(true); // a real, free escape burn exists
+    expect(a.avoidableShipLoss).toBe(true); // must not auto-fire that forced burn yet
   });
 
   it("does NOT flag avoidableShipLoss once a real burn already happened, even holding an unplayed engine card", () => {
