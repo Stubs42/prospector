@@ -61,6 +61,29 @@ describe("affordances", () => {
     }
   });
 
+  it("prices a free base-departure burn correctly BEFORE the implicit drift has actually run", () => {
+    // drift/burn are one decision now (see engine/index.ts's legalActions) — driftDone is
+    // still false for almost this whole window, so p.turn.moveStartedOnOwnBase (a real side
+    // effect of ensureDrifted, engine/game.ts) hasn't been set yet either, even though the
+    // ship is plainly sitting on its own base right now. burnCost/freeBurnCells (client/
+    // preview.ts) must speculate that the same way legalActions itself does, or a genuinely
+    // free 1-cell departure burn prices as costing real fuel — found live: a 0-fuel ship on
+    // its own base showed every reachable cell as a paid burn target (no "◇" diamond) instead
+    // of the free departure cells the engine was actually offering them for free.
+    const g = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "none" });
+    const placed = run(g, { type: "placeShip", cell: g.players[0]!.pose.current });
+    let s = run(placed, { type: "drawBooster" });
+    while (s.players[0]!.hand.length > s.config.modes.prospector.ships.yellow.booster) {
+      s = run(s, { type: "discardBooster", cardId: s.players[0]!.hand[0]!.id });
+    }
+    s.players[0]!.fuel = 0; // no fuel at all — only the free base-departure cell can move it
+    expect(s.players[0]!.turn.driftDone).toBe(false);
+    expect(boardFor(s).baseOwnerAt(s.players[0]!.pose.current) === s.players[0]!.homeBase).toBe(true);
+    const a = affordances(s);
+    expect(a.burnTargets.length).toBeGreaterThan(0);
+    for (const t of a.burnTargets) expect(t.cost).toBe(0);
+  });
+
   it("extraEngines widens the reachable set", () => {
     let g = createGame({ seed: 9, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "none" });
     g.board.resources = {};
