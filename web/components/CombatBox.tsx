@@ -45,17 +45,27 @@ export interface CombatRollView {
 
 export interface CombatBoxProps {
   title: string;
-  sub?: string | null;
+  /** a single caption line, or several (e.g. the attacker/defender/handicap breakdown) */
+  sub?: string | string[] | null;
   cards: CombatCardChip[];
   buttons: PanelButton[];
   roll?: CombatRollView | null;
 }
 
 export function CombatBox({ title, sub, cards, buttons, roll = null }: CombatBoxProps) {
+  const subLines = sub == null ? [] : Array.isArray(sub) ? sub : [sub];
   return (
     <ActionBox className="combatbox-box">
       <div className="actionbox-title">{title}</div>
-      {sub && <div className="actionbox-sub">{sub}</div>}
+      {subLines.length > 0 && (
+        <div className="actionbox-sub-block">
+          {subLines.map((line, i) => (
+            <div key={i} className="actionbox-sub">
+              {line}
+            </div>
+          ))}
+        </div>
+      )}
 
       {cards.length > 0 && (
         <div className="combat-chips">

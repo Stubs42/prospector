@@ -6,7 +6,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { score, statsOf } from "../../engine/index.js";
-import { waitingOn } from "../../client/index.js";
+import { waitingOn, decisiveCombat, combatStatsLines } from "../../client/index.js";
 import { boardFor } from "../../engine/game.js";
 import { hexKey } from "../../engine/hex.js";
 import type { BoosterCard, Colour, Hex } from "../../engine/index.js";
@@ -366,6 +366,13 @@ export function GameScreen({
       round: number;
       spoil?: string | null;
     };
+    // a handicap outside the range any roll could change (see decisiveCombat) makes the
+    // dice-cycling reveal pure theatre for an outcome that was never really in question —
+    // settle both dice on their real faces immediately instead of spinning through it, same
+    // as the reducedMotion path already does
+    const skipRollAnimation =
+      reducedMotion ||
+      decisiveCombat(d.attackerLasers, d.defenderShields, state.config.core.dice.combat, mode.combat.winTest) !== null;
     s.setHoldAdvance(true);
     let cancelled = false;
     const gate = new SkipGate();
@@ -395,7 +402,7 @@ export function GameScreen({
     // jumps straight to the real roll — it was already decided the instant combat
     // resolved, this is purely the reveal.
     const spin = async (real: number, apply: (face: number, settled: boolean) => void): Promise<void> => {
-      if (reducedMotion) {
+      if (skipRollAnimation) {
         apply(real, true);
         await gate.wait(40);
         return;
@@ -667,10 +674,17 @@ export function GameScreen({
     : attackTarget !== null
       ? `Attacking ${mode.ships[state.players[attackTarget]!.colour].name}`
       : null;
-  const combatSub = pc
-    ? `attack ${afford.combat?.attackLasers} laser + d6  vs  defence ${afford.combat?.defenceShields} shield + d6`
+  const combatSub: string | string[] | null = pc
+    ? combatStatsLines(afford.combat?.attackLasers ?? 0, afford.combat?.defenceShields ?? 0)
     : attackTarget !== null
       ? "Pick laser boosters, then declare."
+      : null;
+  // a handicap outside the range any roll could change (decisiveCombat) — the "Roll the
+  // dice" step is pointless theatre once we already know who wins, so it's skipped
+  // entirely (see the auto-resolve effect below) rather than asking for a pointless click.
+  const resolveDecisive =
+    pc && pc.awaiting === "resolve"
+      ? decisiveCombat(afford.combat?.attackLasers ?? 0, afford.combat?.defenceShields ?? 0, state.config.core.dice.combat, mode.combat.winTest)
       : null;
 
   // declining a counter-attack reads as two different real moves depending on WHO declines:
@@ -700,7 +714,9 @@ export function GameScreen({
     if (hyperspaceId)
       buttons.push({ label: "Flee (hyperspace)", onClick: () => dispatch({ type: "combatDefend", hyperspaceBoosterId: hyperspaceId }) });
   } else if (pc && pc.awaiting === "resolve" && (seats[pc.attackerId] === "human" || seats[pc.defenderId] === "human")) {
-    buttons.push({ label: "Roll the dice", kind: "primary", onClick: () => dispatch({ type: "combatResolve" }) });
+    // decisive: nothing to click here — the auto-resolve effect below dispatches
+    // combatResolve on its own, straight into the reveal box (which has its own Confirm)
+    if (!resolveDecisive) buttons.push({ label: "Roll the dice", kind: "primary", onClick: () => dispatch({ type: "combatResolve" }) });
   } else if (pc && pc.awaiting === "counter" && seats[pc.defenderId] === "human") {
     if (afford.counterAttack)
       buttons.push({
@@ -719,6 +735,18 @@ export function GameScreen({
     buttons.push({ label: "Cancel", onClick: () => s.setAttackTarget(null) });
   }
 
+  // a decisive resolve (see resolveDecisive above) has no button to click — dispatch
+  // combatResolve on its own, same short beat as every other auto-advance in this app, so
+  // the reveal box (with its own real Confirm/next-step buttons) comes up on its own instead
+  // of waiting on a "Roll the dice" click that could never have changed anything
+  useEffect(() => {
+    if (!resolveDecisive || !pc || !myDecision || suppress) return;
+    if (!(seats[pc.attackerId] === "human" || seats[pc.defenderId] === "human")) return;
+    const id = setTimeout(() => dispatch({ type: "combatResolve" }), reducedMotion ? 30 : 260);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, resolveDecisive, myDecision, suppress, reducedMotion]);
+
   // a staged laser/shield leaves the hand row entirely and shows up here instead — clicking
   // it here (instead of in hand) is the undo: back into combatSel-less, back into the hand row
   const combatCards: CombatCardChip[] = combatCardType
@@ -734,6 +762,7 @@ export function GameScreen({
         title: `${mode.ships[state.players[combatReveal.attackerId]!.colour].name} ${
           combatReveal.round > 1 ? "counter attacks" : "attacks"
         } ${mode.ships[state.players[combatReveal.defenderId]!.colour].name}`,
+        sub: combatStatsLines(combatReveal.attackerLasers, combatReveal.defenderShields),
         cards: [],
         // the outcome sits on screen until explicitly acknowledged — a milestone-ish
         // result (won a resource, or didn't) deserves a real "ok, got it" rather than
@@ -808,29 +837,42 @@ export function GameScreen({
   // the fight is fully over and it was the OFF-turn player who called it off (End Fight) —
   // the on-turn attacker gets one explicit "Attack Failed" / "End Turn" beat instead of just
   // silently falling back to the ambient "click your ship" cue. Takes priority over the plain
-  // guidance popup, same family as combatBox/equipBox below. Gated to the real attacker's own
-  // browser (attackFailedSummary holds THEIR playerId, not a plain boolean — see its
-  // declaration — since online the browser that clicked decline is a different seat entirely).
+  // guidance popup, same family as combatBox/equipBox below. Visible to EVERY browser now (so
+  // a spectator, or the defender who just declined, can actually follow why the fight ended —
+  // same "box for everyone, real buttons only for the decider" split as combatBox itself),
+  // not just the attacker's own — attackFailedSummary holds THEIR playerId regardless (see its
+  // declaration), used only to gate the End Turn button below, not the box's visibility.
   // attackerId can legitimately be 0, so this checks `!== null`, never plain truthiness.
   const attackFailedBox =
-    attackFailedSummary !== null && !pc && s.isMe(attackFailedSummary.attackerId)
+    attackFailedSummary !== null && !pc
       ? {
           lines:
             attackFailedSummary.reason === "fled"
               ? ["Attack Failed", "The defender escaped via hyperspace."]
               : ["Attack Failed"],
-          actions: [
-            {
-              label: "End Turn",
-              kind: "primary" as const,
-              onClick: () => {
-                setAttackFailedSummary(null);
-                dispatch({ type: "endTurn" });
-              },
-            },
-          ],
+          actions: s.isMe(attackFailedSummary.attackerId)
+            ? [
+                {
+                  label: "End Turn",
+                  kind: "primary" as const,
+                  onClick: () => {
+                    setAttackFailedSummary(null);
+                    dispatch({ type: "endTurn" });
+                  },
+                },
+              ]
+            : [],
         }
       : null;
+  // a spectator's/defender's own browser never clicks the End Turn button above (that's only
+  // ever the attacker's), so without this their local attackFailedSummary would sit there
+  // forever even once the attacker's real endTurn has already broadcast and moved play on —
+  // clear it the instant the turn actually changes away from that attacker, on every browser
+  useEffect(() => {
+    if (attackFailedSummary !== null && state.activePlayerIndex !== attackFailedSummary.attackerId) {
+      setAttackFailedSummary(null);
+    }
+  }, [state.activePlayerIndex, attackFailedSummary]);
 
   // an event card (drawn from the booster deck, see engine/events.ts) paused mid-resolve,
   // waiting on the drawer to pick an option — same family as attackFailedBox/equipBox, gated
