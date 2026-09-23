@@ -4,17 +4,20 @@
  * kind of small, click-outside-to-close control living in the topbar. Once online, this
  * collapses down to just the room code + a Leave button — the humans/bots/"New game" controls
  * next to it don't apply to a live networked room (see Topbar.tsx).
+ *
+ * The display name and the "host a game" setup (humans/bots/upgrade) are controlled straight
+ * off `prefs` (persisted to localStorage on every change, same as Settings.tsx) instead of
+ * local state, so the last-used values are still there next time this opens. Room code is
+ * deliberately NOT remembered — it's a one-off token for whichever room you're joining right
+ * now, not a setting.
  */
 import { useEffect, useRef, useState } from "react";
 import type { Session } from "../useSession.js";
+import type { Prefs } from "../prefs.js";
 
-export function OnlineLobby({ s }: { s: Session }) {
+export function OnlineLobby({ s, prefs, setPrefs }: { s: Session; prefs: Prefs; setPrefs: (p: Prefs) => void }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"host" | "join">("host");
-  const [displayName, setDisplayName] = useState("");
-  const [hostHumans, setHostHumans] = useState(1);
-  const [hostBots, setHostBots] = useState(1);
-  const [upgrade, setUpgrade] = useState<"none" | "random" | "select">("select");
   const [roomCode, setRoomCode] = useState("");
   const ref = useRef<HTMLDivElement>(null);
 
@@ -26,6 +29,8 @@ export function OnlineLobby({ s }: { s: Session }) {
     document.addEventListener("mousedown", away);
     return () => document.removeEventListener("mousedown", away);
   }, [open]);
+
+  const set = <K extends keyof Prefs>(k: K, v: Prefs[K]) => setPrefs({ ...prefs, [k]: v });
 
   if (s.online.status === "online") {
     return (
@@ -40,7 +45,10 @@ export function OnlineLobby({ s }: { s: Session }) {
     );
   }
 
-  const name = () => displayName.trim() || "Player";
+  // no online-specific name set yet — fall back to the general "Your name" setting, then a
+  // plain default; the placeholder below shows the same chain so it's clear what'll be used
+  const settingsName = prefs.playerName.trim();
+  const name = () => prefs.onlineDisplayName.trim() || settingsName || "Player";
 
   return (
     <div className="online-lobby" ref={ref}>
@@ -62,18 +70,21 @@ export function OnlineLobby({ s }: { s: Session }) {
             <input
               type="text"
               maxLength={16}
-              placeholder="Player"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder={settingsName || "Player"}
+              value={prefs.onlineDisplayName}
+              onChange={(e) => set("onlineDisplayName", e.target.value)}
             />
           </div>
           {tab === "host" ? (
             <>
               <div className="settings-row">
                 <span>Humans</span>
-                <select value={hostHumans} onChange={(e) => setHostHumans(Number(e.target.value))}>
+                <select
+                  value={prefs.onlineHostHumans}
+                  onChange={(e) => set("onlineHostHumans", Number(e.target.value))}
+                >
                   {[1, 2, 3, 4, 5, 6].map((n) => (
-                    <option key={n} value={n} disabled={n + hostBots > 6 || n + hostBots < 2}>
+                    <option key={n} value={n} disabled={n + prefs.onlineHostBots > 6 || n + prefs.onlineHostBots < 2}>
                       {n}
                     </option>
                   ))}
@@ -81,9 +92,9 @@ export function OnlineLobby({ s }: { s: Session }) {
               </div>
               <div className="settings-row">
                 <span>Bots</span>
-                <select value={hostBots} onChange={(e) => setHostBots(Number(e.target.value))}>
+                <select value={prefs.onlineHostBots} onChange={(e) => set("onlineHostBots", Number(e.target.value))}>
                   {[0, 1, 2, 3, 4, 5].map((n) => (
-                    <option key={n} value={n} disabled={hostHumans + n < 2 || hostHumans + n > 6}>
+                    <option key={n} value={n} disabled={prefs.onlineHostHumans + n < 2 || prefs.onlineHostHumans + n > 6}>
                       {n}
                     </option>
                   ))}
@@ -91,13 +102,20 @@ export function OnlineLobby({ s }: { s: Session }) {
               </div>
               <div className="settings-row">
                 <span>Upgrade at start</span>
-                <select value={upgrade} onChange={(e) => setUpgrade(e.target.value as typeof upgrade)}>
+                <select
+                  value={prefs.onlineHostUpgrade}
+                  onChange={(e) => set("onlineHostUpgrade", e.target.value as Prefs["onlineHostUpgrade"])}
+                >
                   <option value="none">NONE</option>
                   <option value="random">RANDOM</option>
                   <option value="select">SELECT</option>
                 </select>
               </div>
-              <button onClick={() => s.hostOnline(name(), hostHumans, hostBots, upgrade, "standard")}>
+              <button
+                onClick={() =>
+                  s.hostOnline(name(), prefs.onlineHostHumans, prefs.onlineHostBots, prefs.onlineHostUpgrade, "standard")
+                }
+              >
                 Host game
               </button>
             </>
