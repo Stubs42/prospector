@@ -587,14 +587,24 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     // but still stamp its own pendingActionTypeRef with a guess that the next (unrelated) real
     // broadcast would then be wrongly attributed to — exactly the shape of a reported "move
     // animation glitches" bug, since the anim-deriving special cases key off actionType.
-    isMe(state.activePlayerIndex) &&
-    // never auto-fire the free "stay here" endMove while a reserve-fuel or engine card in
-    // hand could still open up a real burn target (or save the ship, if the landing was
-    // unsafe) — see Affordances.avoidableShipLoss
-    !afford.avoidableShipLoss
+    isMe(state.activePlayerIndex)
       ? needsImplicitDriftFirst
-        ? ({ type: "drift" } as Action)
-        : (soleAutoCandidate ?? soleClosingAction)
+        ? // revealing the pending start-of-game upgrade offer is never optional and never
+          // something a card could make unnecessary — unlike a real burn/endMove, it doesn't
+          // finalize the move at all, so it must never be held back by avoidableShipLoss
+          // (found live: a perfectly ordinary starting hand containing an engine or
+          // reserve-fuel card made avoidableShipLoss true from the very first render, purely
+          // because a legal speculative burn/endMove already existed pre-drift — blocking
+          // the WHOLE autoAction, not just a real move-finalizing one, so the implicit drift
+          // never fired at all; the player was stuck looking at real, pre-upgrade-cost burn
+          // targets until they clicked one themselves to trigger the reveal manually)
+          ({ type: "drift" } as Action)
+        : // never auto-fire the free "stay here" endMove while a reserve-fuel or engine card
+          // in hand could still open up a real burn target (or save the ship, if the landing
+          // was unsafe) — see Affordances.avoidableShipLoss
+          !afford.avoidableShipLoss
+          ? (soleAutoCandidate ?? soleClosingAction)
+          : null
       : null;
   useEffect(() => {
     if (!autoAction) return;

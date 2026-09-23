@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { AUTO_HIDE } from "./useSession.js";
 import { createGame, applyAction, legalActions } from "../engine/index.js";
+import { affordances } from "../client/index.js";
 import type { Action, GameState } from "../engine/index.js";
 
 function run(s: GameState, a: Action): GameState {
@@ -172,6 +173,35 @@ describe("a pending start-of-game upgrade offer surfaces before any real move de
     s = run(s, { type: "drawBooster" });
     expect(s.players[0]!.startEquipment).toBeNull();
     expect(needsImplicitDriftFirst(s)).toBe(false);
+  });
+
+  // reimplements useSession's exact (fixed) autoAction ternary shape: needsImplicitDriftFirst
+  // must short-circuit straight to {type:"drift"} BEFORE avoidableShipLoss is ever consulted —
+  // found live: an ordinary starting hand that happened to include an engine card made
+  // avoidableShipLoss true from the very first render (a legal speculative burn already
+  // existed pre-drift), which gated the WHOLE autoAction in the old code, not just a real
+  // move-finalizing one — so the implicit drift never fired at all, and the player was stuck
+  // looking at real, pre-upgrade-cost burn targets until they clicked one themselves.
+  function autoActionType(s: GameState): Action["type"] | null {
+    if (needsImplicitDriftFirst(s)) return "drift";
+    return null; // this test only cares about the drift branch
+  }
+
+  it("fires the implicit drift even when an engine card in hand makes avoidableShipLoss true", () => {
+    let s = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "select" });
+    s = run(s, { type: "placeShip", cell: s.players[0]!.pose.current });
+    s = run(s, { type: "drawBooster" });
+    // force an engine card into hand regardless of what was actually drawn, guaranteeing
+    // avoidableShipLoss's own condition is met
+    const p = s.players[0]!;
+    p.hand = [...p.hand, { id: "test-engine", deck: "booster", type: "engine", value: 1, effect: "" }];
+    while (p.hand.length > s.config.modes.prospector.ships[p.colour].booster) {
+      s = run(s, { type: "discardBooster", cardId: s.players[0]!.hand.find((c) => c.id !== "test-engine")!.id });
+    }
+    expect(s.players[0]!.hand.some((c) => c.type === "engine")).toBe(true);
+    expect(s.players[0]!.turn.driftDone).toBe(false);
+    expect(affordances(s).avoidableShipLoss).toBe(true); // confirms the premise
+    expect(autoActionType(s)).toBe("drift"); // must still fire, not get blocked to null
   });
 });
 
