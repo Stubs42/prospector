@@ -128,8 +128,22 @@ describe("a pending start-of-game upgrade offer surfaces before any real move de
   // behind a real (and about-to-be-wrong) decision — found live.
   function needsImplicitDriftFirst(s: GameState): boolean {
     const p = s.players[s.activePlayerIndex];
-    return !!p && !p.turn.driftDone && !!p.startEquipment;
+    return !!p && p.turn.boosterDrawn && !p.turn.driftDone && !!p.startEquipment;
   }
+
+  it("is false before drawBooster, even with a start-of-game upgrade offer pending", () => {
+    // found live: startEquipment is set from populateGame for every player until their
+    // first move ever — without the boosterDrawn check, this fired an illegal "drift"
+    // dispatch (drift requires boosterDrawn) the instant a fresh turn began, before
+    // drawBooster ever ran, silently failing and replacing the correct drawBooster
+    // auto-fire with nothing — stalling the very first action of every turn
+    let s = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "select" });
+    s = run(s, { type: "placeShip", cell: s.players[0]!.pose.current });
+    expect(s.players[0]!.startEquipment).not.toBeNull();
+    expect(s.players[0]!.turn.boosterDrawn).toBe(false);
+    expect(legalActions(s).every((a) => a.type === "drawBooster" || a.type === "scrapShip")).toBe(true);
+    expect(needsImplicitDriftFirst(s)).toBe(false);
+  });
 
   it("is true the instant a fresh turn with a start-of-game upgrade offer begins", () => {
     let s = createGame({ seed: 3, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "select" });
