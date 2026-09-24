@@ -86,7 +86,12 @@
           "reserveFuel": { "1": 4, "2": 3, "3": 2 },
           "engine":      { "1": 4, "2": 3, "3": 2 },
           "hyperspace":  3,
-          "event": { "pirate-ambush": 2, "hyperspace-quake": 1, "salvage-cache": 1 }
+          "event": {
+            "pirate-ambush": 2, "hyperspace-quake": 1, "salvage-cache": 1,
+            "asteroid-field-1": 1, "asteroid-field-2": 1, "asteroid-field-3": 1,
+            "helium-cloud-1": 1, "helium-cloud-2": 1, "helium-cloud-3": 1,
+            "engine-failure": 1, "ship-wreck": 1, "hidden-ore": 1
+          }
         },
         "equipment": {
           "perType": 6,

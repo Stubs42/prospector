@@ -23,7 +23,9 @@ import { type Hex, ORIGIN, distance, hexKey, parseHexKey, spiral } from "./hex.j
 import { rollCoordinateUntil, rollCombat } from "./dice.js";
 import { resolveCombat, pickSpoil } from "./combat.js";
 import { hyperspaceLand } from "./movement.js";
-import { log, loseShip, resourceKeySet, freeFor, rollCoordinateUntilSafeOrAny, statsOf } from "./game.js";
+import { log, loseShip, resourceKeySet, freeFor, rollCoordinateUntilSafeOrAny, statsOf, equipCard } from "./game.js";
+import { drawN, bottomCards } from "./cards.js";
+import { canEquip } from "./ship.js";
 import type { EventCondition, GameState, OreColour, PendingEventChoice, PlayerState } from "./types.js";
 import type { BoardModel } from "./board.js";
 import type { Rng } from "./rng.js";
@@ -239,10 +241,120 @@ const SALVAGE_CACHE: EventDefinition = {
   },
 };
 
+/** Asteroid Field / Helium Cloud come as 3 separate physical cards each (X = 1/2/3), not one
+   card with a configurable amount — so this is a small factory, not a config-driven single
+   definition, mirroring how the content pipeline mints one distinct id per amount. */
+function makeAsteroidField(amount: 1 | 2 | 3): EventDefinition {
+  const text = `Your ship has to manoeuvre through an asteroid field. You lose ${amount} fuel.`;
+  return {
+    id: `asteroid-field-${amount}`,
+    title: "Asteroid Field",
+    text,
+    resolve(ctx) {
+      ctx.requestChoice("accept", text, ACCEPT_OPTION);
+    },
+    onChoice(ctx, _choice, optionId) {
+      if (optionId !== "accept") return;
+      ctx.drawer.fuel = Math.max(0, ctx.drawer.fuel - amount); // the first unchecked fuel loss
+      // in the codebase — every other loss is gated by an affordability check beforehand
+      log(ctx.state, "eventFuelLost", { player: ctx.drawer.id, amount });
+    },
+  };
+}
+
+function makeHeliumCloud(amount: 1 | 2 | 3): EventDefinition {
+  const text = `You crossed a helium cloud. Collect ${amount} fuel.`;
+  return {
+    id: `helium-cloud-${amount}`,
+    title: "Helium Cloud",
+    text,
+    resolve(ctx) {
+      ctx.requestChoice("accept", text, ACCEPT_OPTION);
+    },
+    onChoice(ctx, _choice, optionId) {
+      if (optionId !== "accept") return;
+      const { drawer } = ctx;
+      drawer.fuel = Math.min(drawer.fuel + amount, drawer.fuelMax); // same idiom as useReserveFuel
+      log(ctx.state, "eventFuelGained", { player: drawer.id, amount });
+    },
+  };
+}
+
+const ENGINE_FAILURE: EventDefinition = {
+  id: "engine-failure",
+  title: "Engine Failure",
+  text: "Your engines fail to fire. You may only drift this turn.",
+  resolve(ctx) {
+    ctx.requestChoice("accept", ENGINE_FAILURE.text, ACCEPT_OPTION);
+  },
+  onChoice(ctx, _choice, optionId) {
+    if (optionId !== "accept") return;
+    ctx.drawer.turn.engineFailure = true; // cleared by the next freshTurn(), same as every
+    // other per-turn transient flag — see engine/index.ts's legalActions for where this bites
+    log(ctx.state, "eventEngineFailure", { player: ctx.drawer.id });
+  },
+};
+
+const SHIP_WRECK: EventDefinition = {
+  id: "ship-wreck",
+  title: "Ship Wreck",
+  text: "You found a ship wreck. Collect a random upgrade.",
+  resolve(ctx) {
+    ctx.requestChoice("accept", SHIP_WRECK.text, ACCEPT_OPTION);
+  },
+  onChoice(ctx, _choice, optionId) {
+    if (optionId !== "accept") return;
+    const { state, drawer, rng } = ctx;
+    const caps = state.config.modes.prospector.upgradeCaps;
+    const { cards, deck } = drawN(state.decks.equipment, 1, rng, state.config.core.cards.reshuffleDiscardWhenEmpty);
+    state.decks.equipment = deck;
+    const card = cards[0];
+    if (!card) return; // deck ran dry — nothing to grant
+    if (!canEquip(statsOf(state, drawer), card.stat, caps)) {
+      // already at cap for this stat — mirrors offerEquipment's own all-maxed fallback
+      state.decks.equipment = bottomCards(state.decks.equipment, [card]);
+      log(state, "equipmentDiscarded", { player: drawer.id, reason: "shipWreck" });
+      return;
+    }
+    equipCard(drawer, card);
+    log(state, "equipped", { player: drawer.id, card: card.id, stat: card.stat, amount: card.amount, reason: "shipWreck" });
+  },
+};
+
+const HIDDEN_ORE: EventDefinition = {
+  id: "hidden-ore",
+  title: "Hidden Ore",
+  text: "Your sensors detected an unknown ore. Pick it up if you have room.",
+  resolve(ctx) {
+    ctx.requestChoice("accept", HIDDEN_ORE.text, ACCEPT_OPTION);
+  },
+  onChoice(ctx, _choice, optionId) {
+    if (optionId !== "accept") return;
+    const { state, drawer } = ctx;
+    const mode = state.config.modes.prospector;
+    const tiles = Object.entries(state.board.resources);
+    if (tiles.length === 0) return; // nothing on the board right now
+    const [key, colour] = tiles.reduce((a, b) => (mode.resources.values[b[1]]! < mode.resources.values[a[1]]! ? b : a));
+    if (drawer.cargo.length >= statsOf(state, drawer).cargo) return; // no room
+    delete state.board.resources[key];
+    drawer.cargo.push(colour);
+    log(state, "eventOreLoaded", { player: drawer.id, colour });
+  },
+};
+
 export const EVENTS: Record<string, EventDefinition> = {
   [PIRATE_AMBUSH.id]: PIRATE_AMBUSH,
   [HYPERSPACE_QUAKE.id]: HYPERSPACE_QUAKE,
   [SALVAGE_CACHE.id]: SALVAGE_CACHE,
+  [makeAsteroidField(1).id]: makeAsteroidField(1),
+  [makeAsteroidField(2).id]: makeAsteroidField(2),
+  [makeAsteroidField(3).id]: makeAsteroidField(3),
+  [makeHeliumCloud(1).id]: makeHeliumCloud(1),
+  [makeHeliumCloud(2).id]: makeHeliumCloud(2),
+  [makeHeliumCloud(3).id]: makeHeliumCloud(3),
+  [ENGINE_FAILURE.id]: ENGINE_FAILURE,
+  [SHIP_WRECK.id]: SHIP_WRECK,
+  [HIDDEN_ORE.id]: HIDDEN_ORE,
 };
 
 // ---------------------------------------------------------------------------

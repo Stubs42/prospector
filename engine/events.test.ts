@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { createGame, applyAction, boardFor } from "./game.js";
+import { legalActions } from "./index.js";
 import { playersInRadius, evalCondition } from "./events.js";
 import type { Action, BoosterCard, GameState } from "./types.js";
 
@@ -47,8 +48,9 @@ describe("pirate-ambush", () => {
   });
 
   it("a winning roll is a no-op — cargo and the board are untouched", () => {
-    // seed 3 happens to roll a pirate loss against this drawer's shields
-    const before = setup(3);
+    // seed 2 happens to roll a pirate loss against this drawer's shields (re-picked when the
+    // 5 new event cards were added — the deck-shuffle RNG draw shifts with deck composition)
+    const before = setup(2);
     const cargoBefore = before.players[0]!.cargo.length;
     const resourcesBefore = Object.keys(before.board.resources).length;
     let s = run(before, { type: "drawBooster" });
@@ -157,6 +159,102 @@ describe("salvage-cache", () => {
     expect(s.pendingEventChoice).toBeNull();
     expect(s.players[0]!.cargo).toHaveLength(cargoBefore);
     expect(Object.keys(s.board.resources)).toHaveLength(resourcesBefore);
+  });
+});
+
+describe("asteroid-field", () => {
+  it("loses the card's fixed amount of fuel, floored at 0", () => {
+    let s = createGame({ seed: 1, colours: ["black", "white"], startPlayer: 0, upgradeAtStart: "none" });
+    s = { ...s, phase: "start" };
+    s.players[0]!.fuel = 1;
+    s = withEventOnTop(s, "asteroid-field-3");
+    let r = run(s, { type: "drawBooster" });
+    r = run(r, { type: "resolveEventChoice", optionId: "accept" });
+    expect(r.players[0]!.fuel).toBe(0); // floored, not -2
+    expect(r.log.some((e) => e.event === "eventFuelLost" && e.detail!.amount === 3)).toBe(true);
+  });
+});
+
+describe("helium-cloud", () => {
+  it("gains the card's fixed amount of fuel, capped at fuelMax", () => {
+    let s = createGame({ seed: 1, colours: ["black", "white"], startPlayer: 0, upgradeAtStart: "none" });
+    s = { ...s, phase: "start" };
+    const fuelMax = s.players[0]!.fuelMax;
+    s.players[0]!.fuel = fuelMax - 1;
+    s = withEventOnTop(s, "helium-cloud-2");
+    let r = run(s, { type: "drawBooster" });
+    r = run(r, { type: "resolveEventChoice", optionId: "accept" });
+    expect(r.players[0]!.fuel).toBe(fuelMax); // capped, not fuelMax + 1
+    expect(r.log.some((e) => e.event === "eventFuelGained" && e.detail!.amount === 2)).toBe(true);
+  });
+});
+
+describe("engine-failure", () => {
+  it("sets turn.engineFailure, collapsing this turn's burn options to just the free drift target", () => {
+    let s = createGame({ seed: 1, colours: ["black", "white"], startPlayer: 0, upgradeAtStart: "none" });
+    s = { ...s, phase: "start" };
+    s = withEventOnTop(s, "engine-failure");
+    let r = run(s, { type: "drawBooster" });
+    expect(r.players[0]!.turn.engineFailure).toBe(false); // not yet — still pending accept
+    r = run(r, { type: "resolveEventChoice", optionId: "accept" });
+    expect(r.players[0]!.turn.engineFailure).toBe(true);
+    expect(r.log.some((e) => e.event === "eventEngineFailure")).toBe(true);
+
+    // with plenty of fuel still in the tank, legalActions would normally offer several paid
+    // burn targets beyond whatever's free — engineFailure must produce the exact same burn
+    // set as an ordinary 0-fuel turn (free base-departure cells included), not fewer or more
+    r.players[0]!.fuel = r.players[0]!.fuelMax;
+    const withFailure = legalActions(r).filter((a) => a.type === "burn");
+    const zeroFuelNoFlag = { ...r, players: r.players.map((p, i) => (i === 0 ? { ...p, fuel: 0, turn: { ...p.turn, engineFailure: false } } : p)) };
+    const withoutFailure = legalActions(zeroFuelNoFlag).filter((a) => a.type === "burn");
+    expect(withFailure).toEqual(withoutFailure);
+    expect(legalActions(r).some((a) => a.type === "endMove")).toBe(true); // the free option survives
+  });
+});
+
+describe("ship-wreck", () => {
+  it("grants a random equipment card outright when the stat isn't already capped", () => {
+    let s = createGame({ seed: 1, colours: ["black", "white"], startPlayer: 0, upgradeAtStart: "none" });
+    s = { ...s, phase: "start" };
+    const equipBefore = s.players[0]!.equipment.length;
+    const deckBefore = s.decks.equipment.draw.length;
+    s = withEventOnTop(s, "ship-wreck");
+    let r = run(s, { type: "drawBooster" });
+    r = run(r, { type: "resolveEventChoice", optionId: "accept" });
+    const totalBefore = deckBefore + s.decks.equipment.discard.length;
+    const totalAfter = r.decks.equipment.draw.length + r.decks.equipment.discard.length;
+    const granted = r.players[0]!.equipment.length > equipBefore;
+    // either a card was granted (left the deck for player.equipment — total drops by 1), or
+    // it was already maxed and bottomCards put it straight back (total unchanged)
+    expect(totalAfter).toBe(granted ? totalBefore - 1 : totalBefore);
+    expect(deckBefore).toBeGreaterThan(0); // sanity: there was something to draw
+  });
+});
+
+describe("hidden-ore", () => {
+  it("picks up the lowest-value ore on the board when there's cargo room", () => {
+    let s = createGame({ seed: 1, colours: ["black", "white"], startPlayer: 0, upgradeAtStart: "none" });
+    s = { ...s, phase: "start" };
+    s.board.resources = { "5,5": "red", "6,6": "green", "7,7": "yellow" }; // green is cheapest
+    s.players[0]!.cargo = [];
+    s = withEventOnTop(s, "hidden-ore");
+    let r = run(s, { type: "drawBooster" });
+    r = run(r, { type: "resolveEventChoice", optionId: "accept" });
+    expect(r.players[0]!.cargo).toEqual(["green"]);
+    expect(r.board.resources["6,6"]).toBeUndefined();
+    expect(Object.keys(r.board.resources)).toHaveLength(2);
+  });
+
+  it("does nothing when cargo is already full", () => {
+    let s = createGame({ seed: 1, colours: ["black", "white"], startPlayer: 0, upgradeAtStart: "none" });
+    s = { ...s, phase: "start" };
+    s.board.resources = { "5,5": "green" };
+    s.players[0]!.cargo = Array(10).fill("red"); // comfortably over any real cargo cap
+    s = withEventOnTop(s, "hidden-ore");
+    let r = run(s, { type: "drawBooster" });
+    r = run(r, { type: "resolveEventChoice", optionId: "accept" });
+    expect(r.players[0]!.cargo).toHaveLength(10); // untouched
+    expect(r.board.resources["5,5"]).toBe("green"); // untouched
   });
 });
 

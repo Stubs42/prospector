@@ -40,6 +40,24 @@ EVENT_META = {
         "title": "Salvage Cache",
         "effect": "pick a nearby cell to seed and load a resource, or let it drift",
     },
+    "asteroid-field-1": {"title": "Asteroid Field", "effect": "lose 1 fuel"},
+    "asteroid-field-2": {"title": "Asteroid Field", "effect": "lose 2 fuel"},
+    "asteroid-field-3": {"title": "Asteroid Field", "effect": "lose 3 fuel"},
+    "helium-cloud-1": {"title": "Helium Cloud", "effect": "gain 1 fuel"},
+    "helium-cloud-2": {"title": "Helium Cloud", "effect": "gain 2 fuel"},
+    "helium-cloud-3": {"title": "Helium Cloud", "effect": "gain 3 fuel"},
+    "engine-failure": {
+        "title": "Engine Failure",
+        "effect": "no burn this turn — only the free drift target is available",
+    },
+    "ship-wreck": {
+        "title": "Ship Wreck",
+        "effect": "collect a random upgrade, if not already at its cap",
+    },
+    "hidden-ore": {
+        "title": "Hidden Ore",
+        "effect": "pick up the lowest-value ore on the board, if you have cargo room",
+    },
 }
 
 

@@ -7,7 +7,16 @@ import type { Action, GameState } from "../engine/index.js";
 function run(s: GameState, a: Action): GameState {
   const r = applyAction(s, a);
   if (!r.ok) throw new Error(`${a.type}: ${r.error}`);
-  return r.state;
+  let next = r.state;
+  // event cards aren't under test here — auto-accept any that land on an incidental draw
+  // (every event now pauses on a choice, even a no-op "accept") so it doesn't block whatever
+  // this test is actually scripting
+  while (next.pendingEventChoice) {
+    const r2 = applyAction(next, { type: "resolveEventChoice", optionId: next.pendingEventChoice.options[0]!.id });
+    if (!r2.ok) throw new Error(`resolveEventChoice: ${r2.error}`);
+    next = r2.state;
+  }
+  return next;
 }
 
 /**
