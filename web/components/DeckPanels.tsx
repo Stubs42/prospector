@@ -59,19 +59,38 @@ const SUPPLY_FRAME_WIDTH = theme.cards.boosterWidth;
 
 export function DeckPanels({ state }: { state: GameState }) {
   const boosterTotal = state.decks.booster.draw.length + state.decks.booster.discard.length;
+  const eventTotal = state.decks.event.draw.length + state.decks.event.discard.length;
   const equipmentTotal = state.decks.equipment.draw.length + state.decks.equipment.discard.length;
   const topDiscard = state.decks.booster.discard[state.decks.booster.discard.length - 1] ?? null;
+  const topEventDiscard = state.decks.event.discard[state.decks.event.discard.length - 1] ?? null;
   return (
     <>
-      <div className="deck-panel">
-        <DeckStack label="BOOSTERS" value={`${state.decks.booster.draw.length}/${boosterTotal}`}>
-          <div className="card-art-wrap">
-            <CardBackArt />
-          </div>
-        </DeckStack>
-        <DeckStack label="PLAYED" value={`${state.decks.booster.discard.length}/${boosterTotal}`}>
-          {topDiscard ? <BoosterCardFace card={topDiscard} /> : <EmptyCardSlot />}
-        </DeckStack>
+      {/* a shared positioning column — the event deck's own frame sits directly below the
+         booster one (not crammed into one wider row, so the event discard, the one everybody
+         actually looks at when something happens, stays visually distinct from "just another
+         booster pile"); stacking them via a flex wrapper instead of two independent
+         position:absolute frames avoids hand-tuning a second fixed pixel offset */}
+      <div className="deck-panel-column">
+        <div className="deck-panel">
+          <DeckStack label="BOOSTERS" value={`${state.decks.booster.draw.length}/${boosterTotal}`}>
+            <div className="card-art-wrap">
+              <CardBackArt />
+            </div>
+          </DeckStack>
+          <DeckStack label="PLAYED" value={`${state.decks.booster.discard.length}/${boosterTotal}`}>
+            {topDiscard ? <BoosterCardFace card={topDiscard} /> : <EmptyCardSlot />}
+          </DeckStack>
+        </div>
+        <div className="deck-panel">
+          <DeckStack label="EVENTS" value={`${state.decks.event.draw.length}/${eventTotal}`}>
+            <div className="card-art-wrap">
+              <CardBackArt />
+            </div>
+          </DeckStack>
+          <DeckStack label="EVENT PLAYED" value={`${state.decks.event.discard.length}/${eventTotal}`}>
+            {topEventDiscard ? <BoosterCardFace card={topEventDiscard} /> : <EmptyCardSlot />}
+          </DeckStack>
+        </div>
       </div>
       <div className="supply-panel">
         <div className="supply-frame" style={{ width: SUPPLY_FRAME_WIDTH }}>
