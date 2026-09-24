@@ -363,6 +363,26 @@ export function GameScreen({
     ? spiral(quakeHighlightAt.epicentre, quakeHighlightAt.radius).filter((h) => !board.offField(h))
     : null;
 
+  // a BOT's own event draw gets no live/synced eventCardBox at all (see that derivation's own
+  // comment) — every viewer instead gets this persistent info toast, fed straight off the
+  // eventDrawn log entry (logged the instant the card is drawn, before resolve() even runs, so
+  // it isn't coupled to how fast the bot resolves the actual pendingEventChoice). Includes who
+  // drew it, since "you/your" card text reads oddly once it's not addressed to the viewer.
+  const eventDrawnLogLen = useRef(state.log.length);
+  useEffect(() => {
+    if (state.log.length <= eventDrawnLogLen.current) {
+      eventDrawnLogLen.current = state.log.length;
+      return;
+    }
+    const drawn = state.log.slice(eventDrawnLogLen.current).find((e) => e.event === "eventDrawn");
+    eventDrawnLogLen.current = state.log.length;
+    if (!drawn) return;
+    const d = drawn.detail as { player: number; title: string; text: string };
+    if (seats[d.player] !== "bot") return; // a human drawer's own live box already covers this
+    const name = s.names[d.player] ?? "?";
+    showInfo({ id: `eventdrawn-${d.player}-${state.log.length}`, lines: [d.title, d.text, `Drawn by ${name} (bot).`] });
+  }, [state.log.length]);
+
   // runs after the reveal effect above on the same render (declaration order), so it only
   // ever overwrites lastPoseRef AFTER that effect has already read the still-previous value
   useEffect(() => {
@@ -1089,14 +1109,23 @@ export function GameScreen({
   }, [state.activePlayerIndex, attackFailedSummary]);
 
   // an event card (drawn from the booster deck, see engine/events.ts) paused mid-resolve,
-  // waiting on the drawer to answer — same family as FightBox, NOT gated to the drawer's own
-  // browser (unlike equipBox below): every connected browser renders the identical card off
-  // the same state.pendingEventChoice, only `buttons` differs — empty for anyone who isn't
-  // the drawer, so a spectator just watches and waits instead of seeing nothing at all until
-  // the drawer answers (the old eventBanner's whole reason for existing, now folded into the
-  // one persistent box instead of a separate transient toast)
+  // waiting on the drawer to answer. When the drawer is a real human, this stays exactly as
+  // PR #87 designed it: synced/visible to every connected browser (only `buttons` differ —
+  // real for the drawer, empty for everyone else), closing for all once the drawer actually
+  // confirms — a human takes a real, readable amount of time to do that, which is what gives
+  // everyone else time to read it too.
+  //
+  // When the drawer is a BOT, that pacing doesn't exist: a bot resolves the instant it's
+  // legal to, often within one render, so this synced box would flash and vanish before any
+  // human watching could read it — found live ("a bot drew a helium cloud... popped up and
+  // disappeared again"). So a bot's draw renders NO live box here at all (below, eventCardBox
+  // is null whenever the drawer is a bot); instead every human viewer gets a persistent,
+  // per-viewer info toast (a separate eventDrawn-log-watching effect, below) that stays up
+  // until THEY dismiss it or the next message replaces it — decoupled from how fast the bot
+  // itself resolved. See web/infoToast.ts.
+  const drawerIsBot = state.pendingEventChoice ? seats[state.pendingEventChoice.playerId] === "bot" : false;
   const eventCardBox =
-    state.pendingEventChoice
+    state.pendingEventChoice && !drawerIsBot
       ? {
           eventId: state.pendingEventChoice.eventId,
           title: state.pendingEventChoice.title,
