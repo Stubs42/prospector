@@ -16,6 +16,7 @@ import { FightBox, type FightBoxProps, type FightTableRow, type CombatCardChip }
 import { EventCardBox } from "./EventCardBox.js";
 import { EquipmentPopup } from "./EquipmentPopup.js";
 import { HexPopup } from "./HexPopup.js";
+import { useInfoToast } from "../infoToast.js";
 import { LogOverlay } from "./LogOverlay.js";
 import { RulesPopup } from "./RulesPopup.js";
 import { Topbar } from "./Topbar.js";
@@ -90,6 +91,9 @@ export function GameScreen({
   const [scrapConfirmOpen, setScrapConfirmOpen] = useState(
     () => typeof location !== "undefined" && new URLSearchParams(location.search).get("scrap") === "1",
   );
+  // the generic "just keep a player informed" popup — see web/infoToast.ts. Lowest-priority
+  // tier of the box stack below (rendered only when none of the decision-bearing boxes are up)
+  const { toast: infoToast, show: showInfo, dismiss: dismissInfo } = useInfoToast();
 
   const { state, seats, afford, activeIsBot, isWaitingOnBot, needPassGate, driftGhost } = s;
   const { armed, combatSel, attackTarget } = s.staging;
@@ -253,6 +257,13 @@ export function GameScreen({
           s.playMoveAnim(quakeAnim);
           await gate.wait(reducedMotion ? 20 : quakeAnim.phaseMs);
           if (cancelled) return;
+          // purely informational, non-blocking — only the affected seat's own browser shows
+          // it ("Your ship..."), and it never gates the reveal loop or any dispatch; see
+          // web/infoToast.ts's doc comment for why a stalling "wait for their click" approach
+          // was deliberately avoided
+          if (s.isMe(d.player)) {
+            showInfo({ id: `quake-${d.player}-${d.cell.q},${d.cell.r}`, lines: ["Your ship was transported to a new location."] });
+          }
         } else {
           setHyperspaceReveal({ playerId: d.player, pose: frozen });
           const dice = [...d.dice].sort((a, b) => b.step - a.step); // coarse to fine: ring 3, 2, 1
@@ -1284,6 +1295,11 @@ export function GameScreen({
         {!suppress && !fightBox && eventCardBox && <EventCardBox {...eventCardBox} />}
         {!suppress && !fightBox && !eventCardBox && popup && <HexPopup lines={popup.lines} />}
         {!suppress && !fightBox && !eventCardBox && equipBox && <EquipmentPopup {...equipBox} />}
+        {/* the generic "just keep a player informed" toast (web/infoToast.ts) — lowest
+           priority of all: never preempts a real decision, just doesn't render while one's up */}
+        {!suppress && !fightBox && !eventCardBox && !popup && !equipBox && infoToast && (
+          <HexPopup lines={infoToast.lines} actions={[{ label: "OK", kind: "primary", onClick: dismissInfo }]} />
+        )}
         {scrapConfirm && (
           <div className="board-scrim" onClick={scrapConfirm.onCancel}>
             <div onClick={(e) => e.stopPropagation()}>
