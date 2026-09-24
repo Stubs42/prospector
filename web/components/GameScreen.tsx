@@ -311,15 +311,20 @@ export function GameScreen({
   // own relocation (the ring-snap reveal above).
   const [quakeSpinning, setQuakeSpinning] = useState(false);
   const [quakeHighlightAt, setQuakeHighlightAt] = useState<{ epicentre: Hex; radius: number } | null>(null);
-  const quakeLogLen = useRef(state.log.length);
+  // same "only advance once a run actually finishes uncancelled" discipline as seedProcessed/
+  // hyperspaceProcessed above — NOT a plain ref eagerly advanced in the effect body. Found
+  // live: with several bots acting in quick succession, this effect could re-run (state.log
+  // growing again for an unrelated reason) while its own spin was still mid-flight; the eager
+  // ref version advanced its cursor immediately, so the aborted run's stale `quakeSpinning`/
+  // holdAdvance(true) were never undone once the re-run's own diff came up empty — a stuck
+  // "waiting forever" freeze (bots stop moving; refreshing the tab was the only way out). A
+  // state cursor re-derives the SAME still-pending entry on a mid-flight re-run instead of
+  // silently skipping past it, exactly like the other two reveal effects already do correctly.
+  const [quakeProcessed, setQuakeProcessed] = useState(() => state.log.length);
   useEffect(() => {
-    if (state.log.length <= quakeLogLen.current) {
-      quakeLogLen.current = state.log.length;
-      return;
-    }
-    const entry = state.log.slice(quakeLogLen.current).find((e) => e.event === "hyperspaceQuakeEpicentre");
-    quakeLogLen.current = state.log.length;
-    if (!entry) return;
+    const newEntries = state.log.slice(quakeProcessed).filter((e) => e.event === "hyperspaceQuakeEpicentre");
+    if (newEntries.length === 0) return;
+    const entry = newEntries[newEntries.length - 1]!;
     const d = entry.detail as { dice: { step: number; colour: Colour }[]; cell: Hex; radius: number };
     let cancelled = false;
     setQuakeSpinning(true);
@@ -346,6 +351,7 @@ export function GameScreen({
       setSpinPath(null);
       setQuakeSpinning(false);
       setQuakeHighlightAt({ epicentre: d.cell, radius: d.radius });
+      setQuakeProcessed(state.log.length);
       s.setHoldAdvance(false);
     })();
     return () => {
@@ -353,7 +359,7 @@ export function GameScreen({
       skipGateRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.log.length]);
+  }, [state.log.length, quakeProcessed]);
   // the highlight itself outlives the spin (stays up through the Accept click) — only cleared
   // once this quake's own choice is actually answered (or a fresh game starts)
   useEffect(() => {
@@ -482,15 +488,22 @@ export function GameScreen({
       s.setHoldAdvance(false);
     }
   }, [state.pendingCombat]);
-  const combatLogLen = useRef(state.log.length);
+  // same state-cursor discipline as the reveal effects above (only advance once this reveal
+  // is actually set up, not eagerly in the effect body) — found live alongside the quake
+  // epicentre bug: a mid-flight re-run (another log entry lands while this reveal's dice-spin
+  // is still ticking) used to advance an eager ref cursor immediately, so an aborted run's
+  // stale combatReveal/holdAdvance(true) never got cleaned up once the re-run's own check came
+  // up empty — a stuck "waiting forever" freeze. Also fixes a related bug: the old version
+  // only ever looked at the SINGLE last log entry, so a combat-result entry buried earlier in
+  // a multi-entry batch (anything logged after it in the same dispatch) was silently missed
+  // entirely — this now scans the whole newly-added slice like every other reveal effect does.
+  const [combatProcessed, setCombatProcessed] = useState(() => state.log.length);
   useEffect(() => {
-    if (state.log.length <= combatLogLen.current) {
-      combatLogLen.current = state.log.length;
-      return;
-    }
-    const entry = state.log[state.log.length - 1]!;
-    combatLogLen.current = state.log.length;
-    if (entry.event !== "attackSucceeded" && entry.event !== "attackFailed") return;
+    const newEntries = state.log
+      .slice(combatProcessed)
+      .filter((e) => e.event === "attackSucceeded" || e.event === "attackFailed");
+    if (newEntries.length === 0) return;
+    const entry = newEntries[newEntries.length - 1]!;
     const d = entry.detail as {
       attacker: number;
       defender: number;
@@ -575,6 +588,7 @@ export function GameScreen({
       // clickable, not even scrap). The reveal is already fully settled; release it now —
       // there's nothing left here for holdAdvance to protect.
       setCombatReveal((cr) => (cr ? { ...cr, showOutcome: true } : cr));
+      setCombatProcessed(state.log.length);
       if (entry.event === "attackFailed" && s.isMe(d.attacker)) s.setHoldAdvance(false);
     })();
     return () => {
@@ -582,7 +596,7 @@ export function GameScreen({
       if (skipGateRef.current === gate) skipGateRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.log.length]);
+  }, [state.log.length, combatProcessed]);
 
   const anim = s.animLive; // a move is actively playing — hold back prompts/targets
   const suppress = anim || scrapConfirmOpen || placing || !!hyperspaceReveal; // also true while placing / the scrap dialog is up
