@@ -160,7 +160,11 @@ export function legalActions(state: GameState, opts?: LegalOpts): Action[] {
         );
         const hardCap = state.config.core.movement.burnMaxCells;
         const stepBudget = Math.min(cap, hardCap) + freeCells;
-        const fuelBudget = Math.min(p.fuel + Math.max(0, opts?.extraFuel ?? 0), p.fuelMax);
+        // Engine Failure (an event card, see engine/events.ts) collapses this turn's fuel
+        // budget to zero — same shape as an ordinary 0-fuel turn, so the BFS below naturally
+        // yields nothing beyond whatever free base-departure cells are still available, same
+        // as it always would for a player with no fuel and no playable booster
+        const fuelBudget = p.turn.engineFailure ? 0 : Math.min(p.fuel + Math.max(0, opts?.extraFuel ?? 0), p.fuelMax);
 
         // A burn may turn and may pass through outer cells — and resource/ship-occupied
         // cells — on its way in; only the destination must be inner and clear (matches

@@ -94,7 +94,7 @@
  },
  "decks": {
   "booster": {
-   "count": 49,
+   "count": 58,
    "cards": [
     {
      "id": "booster-shield-1-01",
@@ -442,6 +442,78 @@
      "value": null,
      "effect": "pick a nearby cell to seed and load a resource, or let it drift",
      "eventId": "salvage-cache"
+    },
+    {
+     "id": "event-asteroid-field-1-01",
+     "deck": "booster",
+     "type": "event",
+     "value": null,
+     "effect": "lose 1 fuel",
+     "eventId": "asteroid-field-1"
+    },
+    {
+     "id": "event-asteroid-field-2-01",
+     "deck": "booster",
+     "type": "event",
+     "value": null,
+     "effect": "lose 2 fuel",
+     "eventId": "asteroid-field-2"
+    },
+    {
+     "id": "event-asteroid-field-3-01",
+     "deck": "booster",
+     "type": "event",
+     "value": null,
+     "effect": "lose 3 fuel",
+     "eventId": "asteroid-field-3"
+    },
+    {
+     "id": "event-helium-cloud-1-01",
+     "deck": "booster",
+     "type": "event",
+     "value": null,
+     "effect": "gain 1 fuel",
+     "eventId": "helium-cloud-1"
+    },
+    {
+     "id": "event-helium-cloud-2-01",
+     "deck": "booster",
+     "type": "event",
+     "value": null,
+     "effect": "gain 2 fuel",
+     "eventId": "helium-cloud-2"
+    },
+    {
+     "id": "event-helium-cloud-3-01",
+     "deck": "booster",
+     "type": "event",
+     "value": null,
+     "effect": "gain 3 fuel",
+     "eventId": "helium-cloud-3"
+    },
+    {
+     "id": "event-engine-failure-01",
+     "deck": "booster",
+     "type": "event",
+     "value": null,
+     "effect": "no burn this turn \u2014 only the free drift target is available",
+     "eventId": "engine-failure"
+    },
+    {
+     "id": "event-ship-wreck-01",
+     "deck": "booster",
+     "type": "event",
+     "value": null,
+     "effect": "collect a random upgrade, if not already at its cap",
+     "eventId": "ship-wreck"
+    },
+    {
+     "id": "event-hidden-ore-01",
+     "deck": "booster",
+     "type": "event",
+     "value": null,
+     "effect": "pick up the lowest-value ore on the board, if you have cargo room",
+     "eventId": "hidden-ore"
     }
    ]
   },

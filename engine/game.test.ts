@@ -53,7 +53,7 @@ describe("createGame", () => {
   });
 
   it("builds full decks", () => {
-    expect(g.decks.booster.draw).toHaveLength(49); // 45 real boosters + 4 event cards
+    expect(g.decks.booster.draw).toHaveLength(58); // 45 real boosters + 13 event cards
     // 36 equipment minus 4 players * 3 drawn (default upgradeAtStart "select" — pending until chosen)
     expect(g.decks.equipment.draw).toHaveLength(36 - 4 * 3);
   });
@@ -65,8 +65,11 @@ describe("createGame", () => {
 
 describe("base picked independently of ship colour", () => {
   const board = boardFor(createGame({ seed: 1 }));
-  // black's ship stats/visuals, but sitting at the blue base — a permutation with no overlap
-  const s0 = createGame({ seed: 5, colours: ["black", "red"], bases: ["blue", "white"] });
+  // black's ship stats/visuals, but sitting at the blue base — a permutation with no overlap.
+  // startPlayer pinned to 0 so this test's assumption (P() === the active player) doesn't
+  // depend on the roll-off's own RNG draw, which shifts with any change to deck composition
+  // upstream of it (e.g. adding/removing event cards) — not what this test is about at all
+  const s0 = createGame({ seed: 5, colours: ["black", "red"], bases: ["blue", "white"], startPlayer: 0 });
   const P = () => s0.players[0]!;
 
   it("starts on its home base's cells, not its ship colour's", () => {
@@ -441,11 +444,11 @@ describe("hyperspace", () => {
     });
 
     it("landing back in range keeps the same attack live, unresolved", () => {
-      // seed 31 happens to land the defender back within the attacker's reach (re-picked when
-      // the salvage-cache event count changed 2->1 — the deck-shuffle RNG draw during
-      // createGame consumes differently whenever the booster deck's own composition changes,
-      // shifting which seed lands where downstream; re-pick again here if it ever drifts)
-      const s0 = setupAdjacentCombat(31);
+      // seed 29 happens to land the defender back within the attacker's reach (re-picked when
+      // the 5 new event cards were added — the deck-shuffle RNG draw during createGame
+      // consumes differently whenever the booster deck's own composition changes, shifting
+      // which seed lands where downstream; re-pick again here if it ever drifts)
+      const s0 = setupAdjacentCombat(29);
       const before = s0.pendingCombat!;
       const s = run(s0, { type: "combatDefend", hyperspaceBoosterId: s0.players[1]!.hand[0]!.id });
       expect(s.pendingCombat).toMatchObject({ attackerId: before.attackerId, defenderId: before.defenderId, round: before.round, awaiting: "defend" });
@@ -748,7 +751,10 @@ describe("burn can cross outer cells on the way to an inner destination", () => 
     // made the cell behind it unreachable within the step budget entirely), when a real
     // burn straight over that resource would have succeeded. Ships already fly over other
     // ships the same way; resources now do too — only the destination cell must be clear.
-    let s = createGame({ seed: 7, colours: ["red", "black"], startPlayer: 0, upgradeAtStart: "none" });
+    // seed 1 happens to draw no event card during the filler drawBooster below (re-picked
+    // when the 5 new event cards were added — a seed that used to draw nothing notable could
+    // now draw e.g. an Asteroid Field and dock fuel this test isn't expecting)
+    let s = createGame({ seed: 1, colours: ["red", "black"], startPlayer: 0, upgradeAtStart: "none" });
     s.board.resources = { "1,0": "green" }; // directly between the ship and its target
     const R = () => s.players[0]!;
     R().pose = { current: { q: 0, r: 0 }, previous: { q: 0, r: 0 }, atRest: true };
