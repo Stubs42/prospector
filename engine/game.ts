@@ -311,6 +311,7 @@ function freshTurn(): PlayerState["turn"] {
     postMoveActionTaken: null,
     engineBoostThisTurn: 0,
     boostersUsed: [],
+    engineFailure: false,
   };
 }
 
@@ -613,7 +614,7 @@ function arriveHomeBaseIfAny(state: GameState, board: BoardModel, p: PlayerState
 }
 
 /** apply a chosen equipment card to a player's ship — permanent stat bump + fuel-tank refit */
-function equipCard(p: PlayerState, card: EquipmentCard): void {
+export function equipCard(p: PlayerState, card: EquipmentCard): void {
   p.equipment.push(card);
   if (card.stat === "fuelTanks") {
     const grant = card.grantFuel ?? card.amount;

@@ -26,6 +26,10 @@ describe("auto-advance never fires a combat/voluntary action on its own", () => 
     expect(AUTO_HIDE.has("scrapShip")).toBe(true);
     expect(AUTO_HIDE.has("useReserveFuel")).toBe(true);
   });
+
+  it("excludes resolveEventChoice, so a single-option event card always requires a click", () => {
+    expect(AUTO_HIDE.has("resolveEventChoice")).toBe(true);
+  });
 });
 
 /**

@@ -78,6 +78,12 @@ export const AUTO_HIDE = new Set<Action["type"]>([
   // click + CombatBox (laser-booster picker) — auto-firing the raw action here skipped that
   // whole flow and attacked with no confirmation and no chance to spend boosters
   "attack",
+  // an event card's accept/choice box must always be read and clicked, even when it offers
+  // only a single "Continue" option (the common case now that every event pauses here, not
+  // just salvage-cache) — without this, a lone option is indistinguishable from any other
+  // "only one legal action" case and would auto-fire itself before the player ever sees the
+  // card, defeating the whole point of the box
+  "resolveEventChoice",
 ]);
 
 /** how long a freshly-drawn card keeps its "new" pulse */
