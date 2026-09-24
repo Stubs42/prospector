@@ -3,7 +3,7 @@
  * motion it makes is a rigid-body move / flip / tumble — nothing a cardboard piece couldn't do.
  */
 import type { BoosterCard as BoosterCardT, BoosterType, Colour, OreColour, StatKey } from "../../engine/index.js";
-import { BoosterCardArt, HyperspaceCardArt } from "./CardArt.js";
+import { BoosterCardArt, HyperspaceCardArt, EventCardFace } from "./CardArt.js";
 import { ASPECT_FILL } from "./aspects.js";
 
 /** which booster types have real card art, mapped to the ship stat whose tiered icon they
@@ -204,6 +204,13 @@ export function BoosterCardFace({
     return (
       <div className={cls("card-art-wrap")} style={{ cursor: clickable ? "pointer" : "default" }} onClick={onClick}>
         <HyperspaceCardArt />
+      </div>
+    );
+  }
+  if (card.type === "event" && card.eventId) {
+    return (
+      <div className={cls("card-art-wrap")} style={{ cursor: clickable ? "pointer" : "default" }} onClick={onClick}>
+        <EventCardFace eventId={card.eventId} title={card.title ?? card.eventId} text={card.effect} />
       </div>
     );
   }

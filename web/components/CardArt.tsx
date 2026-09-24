@@ -18,6 +18,7 @@ import type { Colour, ShipStats, StatKey } from "../../engine/index.js";
 import { CARD_ART, PORTRAIT_ASPECT, SHIP_NOSE_BY_COLOUR, tierIconFor } from "../cardAssets.js";
 import { theme } from "../theme.js";
 import { ASPECT_TAG } from "./aspects.js";
+import { EventCardIcon } from "./EventCardIcons.js";
 
 /** a rectangle positioned as a fraction of the card's own box (0..1) */
 interface FracBox {
@@ -168,6 +169,63 @@ export function HyperspaceCardArt() {
       <CardText x={BOOSTER_LABEL.x} y={BOOSTER_LABEL.y + t.titleOffsetY} frac={t.titleFontSize} cardHeight={h} color="#000">
         HYPERSPACE
       </CardText>
+    </div>
+  );
+}
+
+// event cards share the same booster-tier frame/screen as HyperspaceCardArt above, but split
+// the screen into 3 stacked bands instead of one icon+label pair — a title alone reads fine
+// for the "used up, no amount" hyperspace card, but the user specifically asked for events to
+// show "the title, the symbol/icon, and text below" like a real card, so a short body-text
+// band is a genuinely new layout element here (icon shrinks to make room for it).
+const EVENT_ICON: FracBox = { x: 0.22, y: 0.2, w: 0.56, h: 0.3 };
+const EVENT_LABEL = { x: 0.5, y: 0.55 };
+
+/** an event card's face — same real frame/screen art as HyperspaceCardArt, plus a short
+   body-text band (the card's own short `effect` string) below the icon/title, since an event
+   card is meant to sit on the discard pile and read at a glance, not just show a name. Used by
+   kit.tsx's BoosterCardFace (type === "event") and DeckPanels.tsx's event discard stack. */
+export function EventCardFace({ eventId, title, text }: { eventId: string; title: string; text: string }) {
+  const t = theme.cards.booster;
+  const w = theme.cards.boosterWidth;
+  const h = w / PORTRAIT_ASPECT;
+  return (
+    <div className="card-art" style={{ position: "relative", width: w, height: h }}>
+      <Layer box={FULL} svg={CARD_ART.framePortraitOuter} />
+      <Layer box={BOOSTER_SCREEN} svg={CARD_ART.framePortraitInner} />
+      <div
+        className="event-card-icon-layer"
+        style={{
+          position: "absolute",
+          left: `${EVENT_ICON.x * 100}%`,
+          top: `${EVENT_ICON.y * 100}%`,
+          width: `${EVENT_ICON.w * 100}%`,
+          height: `${EVENT_ICON.h * 100}%`,
+          color: "var(--card-hyperspace)",
+        }}
+      >
+        <EventCardIcon eventId={eventId} />
+      </div>
+      <CardText x={EVENT_LABEL.x} y={EVENT_LABEL.y + t.titleOffsetY} frac={t.titleFontSize * 0.82} cardHeight={h} color="#000">
+        {title.toUpperCase()}
+      </CardText>
+      <div
+        style={{
+          position: "absolute",
+          left: "8%",
+          top: "63%",
+          width: "84%",
+          height: "20%",
+          fontSize: h * 0.072,
+          lineHeight: 1.15,
+          fontWeight: 600,
+          color: "#000",
+          textAlign: "center",
+          overflow: "hidden",
+        }}
+      >
+        {text}
+      </div>
     </div>
   );
 }

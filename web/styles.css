@@ -155,8 +155,8 @@ button.danger { border-color: #6a3a2f; }
 /* the 4 shared deck piles — fixed screen overlays (see DeckPanels.tsx), same family as
    .status-panel: top-right mirrors its top-left identity panel (booster deck), lower-right
    sits clear of both .zoomctl and .handpanel (bottom-left). */
-.deck-panel, .supply-panel { position: absolute; z-index: 20; pointer-events: none; }
-.deck-panel { right: 12px; top: 12px; }
+.deck-panel-column, .supply-panel { position: absolute; z-index: 20; pointer-events: none; }
+.deck-panel-column { right: 12px; top: 12px; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
 /* stacked, not side by side — ore above upgrades, both frames the same width (set inline
    from theme.cards.boosterWidth in DeckPanels.tsx) so they line up as one column */
 .supply-panel { right: 12px; bottom: 14px; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
@@ -345,6 +345,10 @@ button.danger { border-color: #6a3a2f; }
    card" accent, the same colour every card already has via booster-hyperspace */
 .eventcard-icon { width: 44px; height: 44px; color: var(--card-hyperspace); }
 .eventcard-icon .cicon { width: 100%; height: 100%; }
+/* EventCardFace's own icon slot (CardArt.tsx) — same "fill the layer" rule as .eventcard-icon
+   above, scoped separately since this one lives inside a real card face, not the popup */
+.event-card-icon-layer { pointer-events: none; }
+.event-card-icon-layer .cicon { width: 100%; height: 100%; }
 
 /* FightBox's stats table (Lasers/Shields/Win/Attack/Defend/Result) — two aligned columns,
    values right-aligned with tabular (fixed-width) digits so they don't jitter as the dice
