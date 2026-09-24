@@ -60,6 +60,10 @@ export interface BoardProps {
      path connecting them so far, and (while a round is still spinning) a rotating mark
      cycling live around the last dot before it settles into the next dot */
   spinPath?: { dots: Hex[]; live: Hex | null } | null;
+  /** hyperspace-quake's epicentre + radius, revealed before the player accepts — every cell
+     in it blinks violet so the affected area is visible before anyone commits (see
+     GameScreen's quakeHighlight state) */
+  quakeHighlight?: readonly Hex[] | null;
   /** resource cells the active player can load from right now — the ore chip itself pulses */
   loadCells: readonly Hex[];
   burnTargets: { cell: Hex; cost: number }[];
@@ -98,6 +102,7 @@ export function Board({
   spinHighlight = null,
   spinPoint = null,
   spinPath = null,
+  quakeHighlight = null,
   loadCells,
   burnTargets,
   driftGhost,
@@ -668,6 +673,24 @@ export function Board({
             <circle cx={x} cy={y} r={S * 0.42} fillOpacity={0.12} strokeWidth={2.4}
               className="ship-blink" style={{ "--blink-normal": col, "--blink-hi": hi } as CSSProperties} />
           </g>
+        );
+      })}
+
+      {/* hyperspace-quake's revealed epicentre + radius — plain blinking violet circles, not
+         clickable (informational only, unlike the launch-cell markers above) */}
+      {quakeHighlight?.map((hx) => {
+        const { x, y } = px(hx);
+        return (
+          <circle
+            key={`quake-${hexKey(hx)}`}
+            cx={x}
+            cy={y}
+            r={S * 0.42}
+            fillOpacity={0.16}
+            strokeWidth={2.4}
+            className="ship-blink"
+            style={{ "--blink-normal": "var(--card-hyperspace)", "--blink-hi": "#d8c4f2" } as CSSProperties}
+          />
         );
       })}
 

@@ -82,7 +82,11 @@ export function evalCondition(state: GameState, p: PlayerState, cond: EventCondi
    of losing the ship on a bad landing as any other hyperspace jump in the game. */
 export function jumpToHyperspace(state: GameState, board: BoardModel, p: PlayerState, rng: Rng, reason: string): void {
   const { roll, target } = rollCoordinateUntilSafeOrAny(state, board, rng);
-  log(state, "hyperspaceRoll", { player: p.id, dice: roll.dice, cell: target });
+  // `reason` distinguishes this from an ordinary player-chosen jump (web/components/
+  // GameScreen.tsx keys its reveal animation off it: a quake-caused relocation skips the
+  // per-ship finding-spin in favour of a plain ring-snap + dot-catch-up, since the epicentre
+  // itself already played that ceremony once, before Accept)
+  log(state, "hyperspaceRoll", { player: p.id, dice: roll.dice, cell: target, reason });
   const land = hyperspaceLand(target, board, freeFor(state, board, p.id));
   if (land.lost) {
     loseShip(state, board, p, reason);
