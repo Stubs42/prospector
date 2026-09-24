@@ -7,7 +7,16 @@ import type { Action, BoosterCard, EquipmentCard, GameState, SeatKind } from "./
 function run(state: GameState, action: Action): GameState {
   const r = applyAction(state, action);
   if (!r.ok) throw new Error(`action ${action.type} failed: ${r.error}`);
-  return r.state;
+  let next = r.state;
+  // event cards are covered separately in engine/events.test.ts — here, auto-accept any that
+  // land on an incidental draw (every event now pauses on a choice, even a no-op "accept")
+  // so it doesn't block whatever move sequence a given test is actually scripting
+  while (next.pendingEventChoice) {
+    const r2 = applyAction(next, { type: "resolveEventChoice", optionId: next.pendingEventChoice.options[0]!.id });
+    if (!r2.ok) throw new Error(`resolveEventChoice: ${r2.error}`);
+    next = r2.state;
+  }
+  return next;
 }
 
 describe("createGame", () => {

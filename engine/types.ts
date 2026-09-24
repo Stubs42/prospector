@@ -207,6 +207,10 @@ export interface PlayerState {
     engineBoostThisTurn: number;
     /** booster card ids already consumed this turn (can't be replayed) */
     boostersUsed: string[];
+    /** set by the Engine Failure event; forces this turn's burn options down to just the
+       0-cost drift target, same shape as having no fuel and no playable booster. Cleared by
+       the next freshTurn(), same as every other transient field here. */
+    engineFailure: boolean;
   };
 }
 

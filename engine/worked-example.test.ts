@@ -16,7 +16,16 @@ import type { Action, GameState, OreColour } from "./types.js";
 function run(s: GameState, a: Action): GameState {
   const r = applyAction(s, a);
   if (!r.ok) throw new Error(`${a.type}: ${r.error}`);
-  return r.state;
+  let next = r.state;
+  // this worked example isn't testing event cards — auto-accept any that land on a filler
+  // draw (every event now pauses on a choice, even a no-op "accept", since the accept-gate
+  // change) so an incidental event draw doesn't block the scripted move sequence below
+  while (next.pendingEventChoice) {
+    const r2 = applyAction(next, { type: "resolveEventChoice", optionId: next.pendingEventChoice.options[0]!.id });
+    if (!r2.ok) throw new Error(`resolveEventChoice: ${r2.error}`);
+    next = r2.state;
+  }
+  return next;
 }
 
 /** advance a filler player's turn without moving anywhere meaningful */

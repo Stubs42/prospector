@@ -22,12 +22,23 @@ describe("pirate-ambush", () => {
     return withEventOnTop(s, "pirate-ambush");
   }
 
+  it("pauses on a single-option accept gate before the raid actually happens — no roll logged yet", () => {
+    const s = run(setup(1), { type: "drawBooster" });
+    expect(s.pendingEventChoice).not.toBeNull();
+    expect(s.pendingEventChoice!.options).toEqual([{ id: "accept", label: "Continue" }]);
+    expect(s.log.some((e) => e.event === "pirateAmbushRoll")).toBe(false);
+    const blocked = applyAction(s, { type: "drift" });
+    expect(blocked.ok).toBe(false);
+  });
+
   it("a losing roll removes one ore and reseeds it on the board", () => {
     // seed 1 happens to roll a pirate win against this drawer's shields
     const before = setup(1);
     const cargoBefore = before.players[0]!.cargo.length;
     const resourcesBefore = Object.keys(before.board.resources).length;
-    const s = run(before, { type: "drawBooster" });
+    let s = run(before, { type: "drawBooster" });
+    expect(s.pendingEventChoice!.eventId).toBe("pirate-ambush");
+    s = run(s, { type: "resolveEventChoice", optionId: "accept" });
     const ambush = s.log.find((e) => e.event === "pirateAmbushRoll")!;
     expect(ambush.detail!.pirateWins).toBe(true);
     expect(s.players[0]!.cargo).toHaveLength(cargoBefore - 1);
@@ -40,7 +51,8 @@ describe("pirate-ambush", () => {
     const before = setup(3);
     const cargoBefore = before.players[0]!.cargo.length;
     const resourcesBefore = Object.keys(before.board.resources).length;
-    const s = run(before, { type: "drawBooster" });
+    let s = run(before, { type: "drawBooster" });
+    s = run(s, { type: "resolveEventChoice", optionId: "accept" });
     const ambush = s.log.find((e) => e.event === "pirateAmbushRoll")!;
     expect(ambush.detail!.pirateWins).toBe(false);
     expect(s.players[0]!.cargo).toHaveLength(cargoBefore);
@@ -51,7 +63,8 @@ describe("pirate-ambush", () => {
   it("empty cargo is also a no-op, even on a pirate win", () => {
     const before = setup(1); // still a pirate win, but nothing aboard this time
     before.players[0]!.cargo = [];
-    const s = run(before, { type: "drawBooster" });
+    let s = run(before, { type: "drawBooster" });
+    s = run(s, { type: "resolveEventChoice", optionId: "accept" });
     expect(s.log.find((e) => e.event === "pirateAmbushRoll")!.detail!.pirateWins).toBe(true);
     expect(s.players[0]!.cargo).toHaveLength(0);
     expect(s.log.some((e) => e.event === "eventOreLost")).toBe(false);
@@ -84,7 +97,8 @@ describe("hyperspace-quake", () => {
     };
     s = withEventOnTop(s, "hyperspace-quake");
 
-    const result = run(s, { type: "drawBooster" });
+    let result = run(s, { type: "drawBooster" });
+    result = run(result, { type: "resolveEventChoice", optionId: "accept" });
     const jumped = new Set(
       result.log.filter((e) => e.event === "hyperspaceRoll").map((e) => e.detail!.player as number),
     );

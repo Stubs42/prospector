@@ -5,11 +5,19 @@
  * has, a pirate ambush is exactly a real combat roll against a synthetic defender, a reseeded
  * ore is exactly what `loseShip` already does for a whole cargo hold, narrowed to one item.
  *
- * Deliberately NOT a declarative JSON interpreter: the three events below have irreducibly
- * different shapes (dice-gated single-target, unconditional AOE, choice-gated single-target),
- * so a shared "target+condition+action" schema would need nearly as many special cases as there
- * are events. The real reuse is at the primitive level (below); a new event composes them in a
- * few lines rather than fighting a one-size-fits-all interpreter.
+ * Deliberately NOT a declarative JSON interpreter: the events below have irreducibly different
+ * shapes (dice-gated single-target, unconditional AOE, choice-gated single-target), so a shared
+ * "target+condition+action" schema would need nearly as many special cases as there are events.
+ * The real reuse is at the primitive level (below); a new event composes them in a few lines
+ * rather than fighting a one-size-fits-all interpreter.
+ *
+ * Every event pauses on `state.pendingEventChoice` before its effect actually commits — even
+ * one with no real decision to make. `resolve()` computes whatever needs to be known up front
+ * (a dice roll, an epicentre) and calls `ctx.requestChoice(...)`; for a plain "read the card and
+ * continue" event this means passing the shared `ACCEPT_OPTION` (a single {id:"accept"} choice)
+ * instead of real options. `onChoice()` performs the actual mutation once the drawer answers.
+ * This is what lets the client show one unified, spectator-visible card box for every event
+ * (not just the ones with a real choice like salvage-cache) — see web/components/EventCardBox.
  */
 import { type Hex, ORIGIN, distance, hexKey, parseHexKey, spiral } from "./hex.js";
 import { rollCoordinateUntil, rollCombat } from "./dice.js";
@@ -131,11 +139,19 @@ function eventParams<T>(state: GameState, eventId: string): Partial<T> {
   return (state.config.modes.prospector.events[eventId] ?? {}) as Partial<T>;
 }
 
+/** the single option every accept-gated (no real choice) event offers — see ACCEPT_OPTION's
+   use below and the module doc comment on the accept-gate convention. */
+const ACCEPT_OPTION = [{ id: "accept", label: "Continue" }];
+
 const PIRATE_AMBUSH: EventDefinition = {
   id: "pirate-ambush",
   title: "Pirate Ambush",
   text: "A raider drops out of the dark and opens fire before you can react.",
   resolve(ctx) {
+    ctx.requestChoice("accept", PIRATE_AMBUSH.text, ACCEPT_OPTION);
+  },
+  onChoice(ctx, _choice, optionId) {
+    if (optionId !== "accept") return;
     const { state, drawer, rng } = ctx;
     const mode = state.config.modes.prospector;
     const { pirateLasers = 2 } = eventParams<{ pirateLasers: number }>(state, "pirate-ambush");
@@ -166,9 +182,18 @@ const HYPERSPACE_QUAKE: EventDefinition = {
   text: "Local spacetime buckles — every ship caught nearby is thrown into a blind jump.",
   resolve(ctx) {
     const { state, board, rng } = ctx;
-    const { radius = 2, conditions = [] } = eventParams<{ radius: number; conditions: EventCondition[] }>(state, "hyperspace-quake");
+    const { radius = 2 } = eventParams<{ radius: number; conditions: EventCondition[] }>(state, "hyperspace-quake");
+    // the epicentre is picked now (not in onChoice) so the client can reveal/highlight it
+    // before the player accepts — see PR E's radius-highlight animation
     const { roll, target: epicentre } = rollCoordinateUntilSafeOrAny(state, board, rng);
     log(state, "hyperspaceQuakeEpicentre", { dice: roll.dice, cell: epicentre, radius });
+    ctx.requestChoice("accept", HYPERSPACE_QUAKE.text, ACCEPT_OPTION, { epicentre });
+  },
+  onChoice(ctx, choice, optionId) {
+    if (optionId !== "accept") return;
+    const { state, board, rng } = ctx;
+    const { radius = 2, conditions = [] } = eventParams<{ radius: number; conditions: EventCondition[] }>(state, "hyperspace-quake");
+    const epicentre = choice.context!.epicentre as Hex;
     const affected = playersInRadius(state, epicentre, radius).filter((p) => conditions.every((c) => evalCondition(state, p, c)));
     for (const p of affected) jumpToHyperspace(state, board, p, rng, "hyperspace quake");
   },
@@ -184,13 +209,18 @@ const SALVAGE_CACHE: EventDefinition = {
     const res = resourceKeySet(state);
     const empties = spiral(drawer.pose.current, radius).filter((h) => board.isInner(h) && !res.has(hexKey(h)) && !board.baseOwnerAt(h));
     const candidates = rng.shuffle(empties).slice(0, maxOptions);
-    if (candidates.length === 0) return; // nothing nearby this time — pure flavour
+    if (candidates.length === 0) {
+      // nothing nearby this time — still show the card (unified with every other event) so it
+      // isn't silently swallowed, just with nothing to pick
+      ctx.requestChoice("pick-cell", "The cache has already drifted out of range.", ACCEPT_OPTION);
+      return;
+    }
     const options = candidates.map((h, i) => ({ id: hexKey(h), label: `Cache site ${i + 1}` }));
     options.push({ id: "skip", label: "Let it drift" });
     ctx.requestChoice("pick-cell", "A salvage cache drifts nearby. Investigate?", options, { cells: candidates.map(hexKey) });
   },
   onChoice(ctx, _choice, optionId) {
-    if (optionId === "skip") return;
+    if (optionId === "skip" || optionId === "accept") return;
     const { state, board, drawer, rng } = ctx;
     const mode = state.config.modes.prospector;
     const cell = parseHexKey(optionId);
