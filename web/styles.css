@@ -338,6 +338,10 @@ button.danger { border-color: #6a3a2f; }
 .actionbox-sub-block { display: flex; flex-direction: column; gap: 0.1rem; }
 .actionbox-buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center; margin-top: 0.3rem; }
 
+/* EventCardBox's situational line (e.g. salvage-cache's "found a site" vs. "already drifted
+   out of range") — stands apart from the card's fixed flavour text above it */
+.eventcard-prompt { color: var(--ink); font-weight: 600; }
+
 /* FightBox's stats table (Lasers/Shields/Win/Attack/Defend/Result) — two aligned columns,
    values right-aligned with tabular (fixed-width) digits so they don't jitter as the dice
    animate through different face values every frame. A blank cell (stat not known yet) is

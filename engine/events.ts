@@ -256,7 +256,17 @@ function makeCtx(state: GameState, board: BoardModel, rng: Rng, drawer: PlayerSt
     rng,
     drawer,
     requestChoice: (stage, prompt, options, context) => {
-      state.pendingEventChoice = { eventId, playerId: drawer.id, stage, prompt, options, ...(context ? { context } : {}) };
+      const def = EVENTS[eventId]!;
+      state.pendingEventChoice = {
+        eventId,
+        playerId: drawer.id,
+        stage,
+        title: def.title,
+        text: def.text,
+        prompt,
+        options,
+        ...(context ? { context } : {}),
+      };
     },
   };
 }

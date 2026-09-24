@@ -140,11 +140,16 @@ export interface EventCondition {
 
 /** an event paused mid-resolve, waiting on a choice from `playerId` (always the drawer today —
    events never ask a non-active player anything). `stage`/`context` are opaque to the engine,
-   interpreted only by the event definition itself when the choice comes back. */
+   interpreted only by the event definition itself when the choice comes back. `title`/`text`
+   are the event's fixed card-face content (same as its `eventDrawn` log entry); `prompt` is the
+   situational line for THIS particular pause (may vary by branch — see salvage-cache's "found a
+   site" vs. "already drifted out of range"). */
 export interface PendingEventChoice {
   eventId: string;
   playerId: number;
   stage: string;
+  title: string;
+  text: string;
   prompt: string;
   options: { id: string; label: string }[];
   context?: Record<string, unknown>;
