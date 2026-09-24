@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { score, statsOf } from "../../engine/index.js";
 import { waitingOn, decisiveCombat, winProbability } from "../../client/index.js";
 import { boardFor } from "../../engine/game.js";
-import { hexKey } from "../../engine/hex.js";
+import { hexKey, spiral } from "../../engine/hex.js";
 import type { BoosterCard, Colour, Hex } from "../../engine/index.js";
 import { Board } from "./Board.js";
 import { HandPanel, type PanelButton } from "./HandPanel.js";
@@ -21,11 +21,12 @@ import { RulesPopup } from "./RulesPopup.js";
 import { Topbar } from "./Topbar.js";
 import { StatusPanel } from "./StatusPanel.js";
 import { DeckPanels } from "./DeckPanels.js";
-import type { Prefs } from "../prefs.js";
+import { movePhaseMs, type Prefs } from "../prefs.js";
 import { spinCoordinateDice, SkipGate, type CoordinateSpinPath } from "../spin.js";
 import { theme } from "../theme.js";
 import type { Session } from "../useSession.js";
 import type { GameState, PlayerState } from "../../engine/types.js";
+import type { MoveAnim } from "../anim.js";
 
 // final ranking for the game-over popup: same total-value score the engine already uses to
 // pick winnerIds, but broken into a full ordering — ties broken by counting the most
@@ -221,32 +222,59 @@ export function GameScreen({
     let cancelled = false;
     (async () => {
       for (const entry of newEntries) {
-        const d = entry.detail as { player: number; dice: { step: number; colour: Colour }[] };
+        const d = entry.detail as { player: number; dice: { step: number; colour: Colour }[]; cell: Hex; reason?: string };
         const frozen = lastPoseRef.current[d.player];
         if (!frozen) continue; // no known "before" pose to hold on screen — skip rather than crash the reveal
-        setHyperspaceReveal({ playerId: d.player, pose: frozen });
         s.setHoldAdvance(true);
         const gate = new SkipGate();
         skipGateRef.current = gate;
-        const dice = [...d.dice].sort((a, b) => b.step - a.step); // coarse to fine: ring 3, 2, 1
-        await spinCoordinateDice(
-          dice,
-          (c) => board.directionOf(c),
-          ALL_COLOURS,
-          setSpinPath,
-          () => cancelled,
-          gate,
-          {
-            reducedMotion,
-            totalMs: theme.spin.resourceDurationMs,
-            startIntervalMs: theme.spin.startIntervalMs,
-            endIntervalMs: theme.spin.endIntervalMs,
-          },
-        );
-        if (cancelled) return;
-        await gate.wait(reducedMotion ? 20 : 250); // let the landed path linger a beat
-        setSpinPath(null);
-        setHyperspaceReveal(null);
+        if (d.reason === "hyperspace quake") {
+          // a quake-caused relocation skips the finding-spin entirely — the epicentre reveal
+          // (below) already played that ceremony once for the whole group; each affected
+          // ship's own landing just needs the ring already at its real, already-committed
+          // position (no tween — same as any other hyperspace jump) with the dot animating
+          // to catch up to it, exactly the "later-dispatch braking" shape anim.ts's
+          // deriveMoveAnim already renders correctly (c0 === target: ring holds still, only
+          // the dot moves) — built by hand here since this replays a log entry, not a live
+          // dispatch, so the usual automatic deriveMoveAnim-on-dispatch path never sees it
+          const quakeAnim: MoveAnim = {
+            playerId: d.player,
+            kind: "slide",
+            p0: frozen.current,
+            c0: d.cell,
+            target: d.cell,
+            startedAt: performance.now(),
+            phaseMs: movePhaseMs(prefs),
+          };
+          // Board's own rAF loop (see its onMoveAnimEnd) clears this automatically once the
+          // tween finishes — no manual endMoveAnim call needed, same as any real dispatched
+          // move; this wait is only so the reveal LOOP doesn't race ahead to the next
+          // affected ship before this one is visually done (a skip click still cuts it short)
+          s.playMoveAnim(quakeAnim);
+          await gate.wait(reducedMotion ? 20 : quakeAnim.phaseMs);
+          if (cancelled) return;
+        } else {
+          setHyperspaceReveal({ playerId: d.player, pose: frozen });
+          const dice = [...d.dice].sort((a, b) => b.step - a.step); // coarse to fine: ring 3, 2, 1
+          await spinCoordinateDice(
+            dice,
+            (c) => board.directionOf(c),
+            ALL_COLOURS,
+            setSpinPath,
+            () => cancelled,
+            gate,
+            {
+              reducedMotion,
+              totalMs: theme.spin.resourceDurationMs,
+              startIntervalMs: theme.spin.startIntervalMs,
+              endIntervalMs: theme.spin.endIntervalMs,
+            },
+          );
+          if (cancelled) return;
+          setSpinPath(null);
+          setHyperspaceReveal(null);
+        }
+        await gate.wait(reducedMotion ? 20 : 250); // let the reveal linger a beat
         await gate.wait(reducedMotion ? 20 : 200);
       }
       if (!cancelled) {
@@ -260,6 +288,70 @@ export function GameScreen({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.log.length, hyperspaceProcessed]);
+
+  // --- hyperspace-quake's epicentre reveal: before the drawer can accept, replay the SAME
+  // coordinate-dice spin resource seeding/an ordinary hyperspace jump already use — but
+  // landing on the epicentre itself, found the moment the event was drawn (see
+  // engine/events.ts's HYPERSPACE_QUAKE.resolve, which requests the accept choice with the
+  // epicentre already in `context`). Once the spin lands, every cell in range blinks violet
+  // (quakeHighlight, below, fed to Board) so the affected area is visible before anyone
+  // commits — the Accept button itself stays hidden (see eventCardBox's own gating) until
+  // this whole reveal finishes, since accepting is also what triggers each affected ship's
+  // own relocation (the ring-snap reveal above).
+  const [quakeSpinning, setQuakeSpinning] = useState(false);
+  const [quakeHighlightAt, setQuakeHighlightAt] = useState<{ epicentre: Hex; radius: number } | null>(null);
+  const quakeLogLen = useRef(state.log.length);
+  useEffect(() => {
+    if (state.log.length <= quakeLogLen.current) {
+      quakeLogLen.current = state.log.length;
+      return;
+    }
+    const entry = state.log.slice(quakeLogLen.current).find((e) => e.event === "hyperspaceQuakeEpicentre");
+    quakeLogLen.current = state.log.length;
+    if (!entry) return;
+    const d = entry.detail as { dice: { step: number; colour: Colour }[]; cell: Hex; radius: number };
+    let cancelled = false;
+    setQuakeSpinning(true);
+    (async () => {
+      s.setHoldAdvance(true);
+      const gate = new SkipGate();
+      skipGateRef.current = gate;
+      const dice = [...d.dice].sort((a, b) => b.step - a.step); // coarse to fine: ring 3, 2, 1
+      await spinCoordinateDice(
+        dice,
+        (c) => board.directionOf(c),
+        ALL_COLOURS,
+        setSpinPath,
+        () => cancelled,
+        gate,
+        {
+          reducedMotion,
+          totalMs: theme.spin.resourceDurationMs,
+          startIntervalMs: theme.spin.startIntervalMs,
+          endIntervalMs: theme.spin.endIntervalMs,
+        },
+      );
+      if (cancelled) return;
+      setSpinPath(null);
+      setQuakeSpinning(false);
+      setQuakeHighlightAt({ epicentre: d.cell, radius: d.radius });
+      s.setHoldAdvance(false);
+    })();
+    return () => {
+      cancelled = true;
+      skipGateRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.log.length]);
+  // the highlight itself outlives the spin (stays up through the Accept click) — only cleared
+  // once this quake's own choice is actually answered (or a fresh game starts)
+  useEffect(() => {
+    if (state.pendingEventChoice?.eventId !== "hyperspace-quake") setQuakeHighlightAt(null);
+  }, [state.pendingEventChoice]);
+  const quakeHighlightCells = quakeHighlightAt
+    ? spiral(quakeHighlightAt.epicentre, quakeHighlightAt.radius).filter((h) => !board.offField(h))
+    : null;
+
   // runs after the reveal effect above on the same render (declaration order), so it only
   // ever overwrites lastPoseRef AFTER that effect has already read the still-previous value
   useEffect(() => {
@@ -999,13 +1091,19 @@ export function GameScreen({
           title: state.pendingEventChoice.title,
           text: state.pendingEventChoice.text,
           prompt: state.pendingEventChoice.prompt,
-          buttons: s.isMe(state.pendingEventChoice.playerId)
-            ? state.pendingEventChoice.options.map((o) => ({
-                label: o.label,
-                ...(o.id === "skip" ? {} : { kind: "primary" as const }),
-                onClick: () => dispatch({ type: "resolveEventChoice", optionId: o.id }),
-              }))
-            : [],
+          // hyperspace-quake specifically holds its Accept button back until the epicentre
+          // reveal (spin + radius highlight, above) has actually finished — accepting is what
+          // triggers every affected ship's own relocation, so it shouldn't be clickable before
+          // the player has even seen where the epicentre landed
+          buttons:
+            s.isMe(state.pendingEventChoice.playerId) &&
+            !(state.pendingEventChoice.eventId === "hyperspace-quake" && !quakeHighlightAt)
+              ? state.pendingEventChoice.options.map((o) => ({
+                  label: o.label,
+                  ...(o.id === "skip" ? {} : { kind: "primary" as const }),
+                  onClick: () => dispatch({ type: "resolveEventChoice", optionId: o.id }),
+                }))
+              : [],
         }
       : null;
 
@@ -1157,6 +1255,7 @@ export function GameScreen({
           scores={sc.byPlayer}
           highlight={suppress ? { cells: [], kind: null } : interactive ? highlight : { cells: [], kind: null }}
           spinPath={spinPath}
+          quakeHighlight={quakeHighlightCells}
           loadCells={loadCellsForBoard}
           // an about-to-auto-fire drift (needsImplicitDriftFirst, useSession.ts) means these
           // targets are pre-upgrade-cost and already stale — showing them for the ~220ms

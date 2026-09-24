@@ -865,6 +865,12 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
     newCardIds,
     /** the action about to auto-fire on its own, if any — GUIs should hide it as a click target */
     autoAction,
+    /** drive Board's own moveAnim/moveFrame tween from a synthetic, locally-built MoveAnim —
+       for a reveal that isn't itself a real dispatch's before/after diff (see the hyperspace-
+       quake relocation reveal in GameScreen: each affected ship's landing is replayed off its
+       own hyperspaceRoll log entry, not off a live dispatch, so the usual automatic
+       deriveMoveAnim-on-dispatch pipeline never sees it) */
+    playMoveAnim: playAnim,
     endMoveAnim: endAnim,
     dispatch,
     dispatchBurn,
