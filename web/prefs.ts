@@ -24,6 +24,10 @@ export interface Prefs {
   onlineHostHumans: number;
   onlineHostBots: number;
   onlineHostUpgrade: "none" | "random" | "select";
+  /** seconds before an informational message box (one the game isn't waiting on anyone to
+     close — see web/infoToast.ts) closes itself; 0 = never auto-close, read it at your own
+     pace and dismiss it (or let the next one replace it) by hand */
+  autoCloseSeconds: number;
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -37,6 +41,7 @@ export const DEFAULT_PREFS: Prefs = {
   onlineHostHumans: 1,
   onlineHostBots: 1,
   onlineHostUpgrade: "select",
+  autoCloseSeconds: 0,
 };
 
 const MOVE_PHASE_MS: Record<Prefs["moveSpeed"], number> = { slow: 780, normal: 440, fast: 220 };

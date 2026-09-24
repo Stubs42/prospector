@@ -81,6 +81,16 @@ export function Settings({ prefs, onChange }: { prefs: Prefs; onChange: (p: Pref
               <option value="fast">fast</option>
             </select>
           </div>
+          <div className="settings-row" title="Seconds before a message box the game isn't waiting on closes itself. 0 = never.">
+            <span>Auto-close info messages (s)</span>
+            <input
+              type="number"
+              min={0}
+              max={120}
+              value={prefs.autoCloseSeconds}
+              onChange={(e) => set("autoCloseSeconds", Math.max(0, Number(e.target.value) || 0))}
+            />
+          </div>
         </div>
       )}
     </div>
