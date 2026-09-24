@@ -31,7 +31,7 @@ function requireData(): { config: Config; boardJson: BoardJson; content: Content
   return { config: _config, boardJson: _boardJson, content: _content };
 }
 import { makeRng, type Rng } from "./rng.js";
-import { drawN, discardCards, bottomCards } from "./cards.js";
+import { drawN, drawCard, discardCards, bottomCards } from "./cards.js";
 import { drift, burn, atRestPose, straightPath, hyperspaceLand } from "./movement.js";
 import { resolveStats, movementInputs, canEquip } from "./ship.js";
 import { rollCoordinateUntil, rollCombat, type CoordinateRoll } from "./dice.js";
@@ -101,7 +101,11 @@ export function createGame(opts: CreateGameOptions = {}): GameState {
     board: { resources: {} },
     supply: { green: 0, yellow: 0, red: 0 },
     initialPlayerCount: playerCount,
-    decks: { booster: { draw: [], discard: [] }, equipment: { draw: [], discard: [] } },
+    decks: {
+      booster: { draw: [], discard: [] },
+      event: { draw: [], discard: [] },
+      equipment: { draw: [], discard: [] },
+    },
     phase: "start",
     pendingCombat: null,
     pendingEquipment: null,
@@ -178,6 +182,7 @@ function populateGame(
 
   withRng(state, (rng) => {
     let boosterDraw = rng.shuffle(content.decks.booster.cards);
+    const eventDraw = rng.shuffle(content.decks.event.cards);
     let equipmentDraw = rng.shuffle(content.decks.equipment.cards);
     const equipmentDiscard: EquipmentCard[] = [];
 
@@ -219,6 +224,7 @@ function populateGame(
     state.initialPlayerCount = colours.length;
     state.decks = {
       booster: { draw: boosterDraw, discard: [] },
+      event: { draw: eventDraw, discard: [] },
       equipment: { draw: equipmentDraw, discard: equipmentDiscard },
     };
   });
@@ -757,20 +763,49 @@ export function applyAction(prev: GameState, action: Action): StepResult {
     case "drawBooster": {
       if (state.phase !== "start" || p.turn.boosterDrawn) return fail("already drew this turn");
       withRng(state, (rng) => {
-        const { cards, deck } = drawN(
-          state.decks.booster,
-          state.config.core.turn.boostersDrawnPerTurn,
-          rng,
-          state.config.core.cards.reshuffleDiscardWhenEmpty,
-        );
-        state.decks.booster = deck;
-        const events = cards.filter((c) => c.type === "event");
-        const realCards = cards.filter((c) => c.type !== "event");
-        p.hand.push(...realCards);
-        // event cards never sit in hand — they run their workflow immediately and go straight
-        // to discard, same as a booster that's already been played
-        state.decks.booster = discardCards(state.decks.booster, events);
-        for (const card of events) runEvent(state, board, p, card.eventId!, rng);
+        const mode = state.config.modes.prospector;
+        const reshuffle = state.config.core.cards.reshuffleDiscardWhenEmpty;
+        // the event deck is entirely separate from the booster deck (engine/types.ts's
+        // GameState.decks) — each of this turn's draws independently rolls a fixed
+        // probability to decide which pool it comes from, instead of the old "draw N cards
+        // from one shared pile, then filter out whichever happened to be events" — that made
+        // the effective event rate a function of the shared pile's own composition (and, worse,
+        // of how many real boosters were currently parked in hands vs. still in the pile),
+        // rather than a real, stable, designer-set frequency
+        for (let i = 0; i < state.config.core.turn.boostersDrawnPerTurn; i++) {
+          const wantEvent = rng.next() < mode.decks.event.drawChance;
+          let card: BoosterCard | null = null;
+          if (wantEvent) {
+            const r = drawCard(state.decks.event, rng, reshuffle);
+            state.decks.event = r.deck;
+            card = r.card;
+            if (!card) {
+              // event pool truly empty (even after its own reshuffle) — fall back to a
+              // booster instead of silently skipping this draw
+              const r2 = drawCard(state.decks.booster, rng, reshuffle);
+              state.decks.booster = r2.deck;
+              card = r2.card;
+            }
+          } else {
+            const r = drawCard(state.decks.booster, rng, reshuffle);
+            state.decks.booster = r.deck;
+            card = r.card;
+            if (!card) {
+              const r2 = drawCard(state.decks.event, rng, reshuffle);
+              state.decks.event = r2.deck;
+              card = r2.card;
+            }
+          }
+          if (!card) continue; // both decks genuinely exhausted
+          if (card.type === "event") {
+            // event cards never sit in hand — they run their workflow immediately and go
+            // straight to their own discard pile, same as a booster that's already been played
+            state.decks.event = discardCards(state.decks.event, [card]);
+            runEvent(state, board, p, card.eventId!, rng);
+          } else {
+            p.hand.push(card);
+          }
+        }
       });
       p.turn.boosterDrawn = true;
       p.placed = true; // launch cell choice is locked once the turn proper begins

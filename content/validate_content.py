@@ -16,6 +16,7 @@ PROSPECTOR = os.path.join(ROOT, "content", "prospector.json")
 # Rulebook (Part I, Components) — the physical box.
 EXPECT = {
     "booster": 45,
+    "event": 13,
     "equipment": 36,
     "fuel": 43,
     "resourceTiles": 27,
@@ -37,11 +38,13 @@ def main():
     m = cfg["modes"]["prospector"]
 
     booster = pro["decks"]["booster"]["cards"]
+    event = pro["decks"]["event"]["cards"]
     equipment = pro["decks"]["equipment"]["cards"]
     fuel = pro["decks"]["fuel"]["cards"]
 
     # --- box totals ---
     ok("booster deck total", len(booster) == EXPECT["booster"], f"{len(booster)} vs {EXPECT['booster']}")
+    ok("event deck total", len(event) == EXPECT["event"], f"{len(event)} vs {EXPECT['event']}")
     ok("equipment deck total", len(equipment) == EXPECT["equipment"], f"{len(equipment)} vs {EXPECT['equipment']}")
     ok("fuel card total", len(fuel) == EXPECT["fuel"], f"{len(fuel)} vs {EXPECT['fuel']}")
     ok("resource tile total", comp["resourceTiles"]["total"] == EXPECT["resourceTiles"],
@@ -57,6 +60,12 @@ def main():
             ok(f"booster {group} +{v_str}", got == want, f"{got} vs {want}")
     got_hyper = sum(1 for c in booster if c["type"] == "hyperspace")
     ok("booster hyperspace", got_hyper == bcfg["hyperspace"], f"{got_hyper} vs {bcfg['hyperspace']}")
+
+    # --- event composition matches config exactly ---
+    ecfg2 = m["decks"]["event"]["counts"]
+    for event_id, want in ecfg2.items():
+        got = sum(1 for c in event if c.get("eventId") == event_id)
+        ok(f"event {event_id}", got == want, f"{got} vs {want}")
 
     # --- equipment composition ---
     ecfg = m["decks"]["equipment"]
@@ -84,7 +93,7 @@ def main():
                 ok(f"{ship['colour']} {stat} <= cap", val <= cap, f"{val} > {cap}")
 
     # --- ids unique across all decks ---
-    all_ids = [c["id"] for c in booster] + [c["id"] for c in equipment] + [c["id"] for c in fuel]
+    all_ids = [c["id"] for c in booster] + [c["id"] for c in event] + [c["id"] for c in equipment] + [c["id"] for c in fuel]
     all_ids += [c["id"] for c in comp["cones"]] + [t["id"] for t in comp["resourceTiles"]["tiles"]]
     ok("all ids unique", len(all_ids) == len(set(all_ids)), f"{len(all_ids) - len(set(all_ids))} dup(s)")
 

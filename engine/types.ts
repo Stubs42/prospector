@@ -64,8 +64,17 @@ export interface ProspectorConfig {
       reserveFuel: Record<string, number>;
       engine: Record<string, number>;
       hyperspace: number;
-      /** eventId -> how many copies are mixed into the booster deck */
-      event: Record<string, number>;
+    };
+    /** the event deck is entirely separate from the booster deck (see engine/game.ts's
+       drawBooster) — event frequency is an independent per-draw probability, not a function of
+       how many events happen to still be mixed into the booster pile, so it can't be diluted
+       or amplified by anything about the booster deck's own size or hoarding dynamics. */
+    event: {
+      /** chance [0,1] that a single card draw pulls from the event deck instead of the
+         booster deck — rolled fresh per draw, independent of either pool's size */
+      drawChance: number;
+      /** eventId -> how many copies are in the event deck */
+      counts: Record<string, number>;
     };
     equipment: {
       perType: number;
@@ -120,6 +129,8 @@ export interface BoosterCard {
   effect: string;
   /** only meaningful when type === "event" — which entry of the event registry this card runs */
   eventId?: string;
+  /** only meaningful when type === "event" — the card face's title (see EventCardFace) */
+  title?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -317,6 +328,7 @@ export interface GameState {
   initialPlayerCount: number;
   decks: {
     booster: { draw: BoosterCard[]; discard: BoosterCard[] };
+    event: { draw: BoosterCard[]; discard: BoosterCard[] };
     equipment: { draw: EquipmentCard[]; discard: EquipmentCard[] };
   };
   phase: TurnPhase;

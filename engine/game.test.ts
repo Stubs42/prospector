@@ -53,7 +53,9 @@ describe("createGame", () => {
   });
 
   it("builds full decks", () => {
-    expect(g.decks.booster.draw).toHaveLength(58); // 45 real boosters + 13 event cards
+    // booster and event are separate decks now (see engine/game.ts's drawBooster)
+    expect(g.decks.booster.draw).toHaveLength(45);
+    expect(g.decks.event.draw).toHaveLength(13);
     // 36 equipment minus 4 players * 3 drawn (default upgradeAtStart "select" — pending until chosen)
     expect(g.decks.equipment.draw).toHaveLength(36 - 4 * 3);
   });
@@ -444,11 +446,11 @@ describe("hyperspace", () => {
     });
 
     it("landing back in range keeps the same attack live, unresolved", () => {
-      // seed 29 happens to land the defender back within the attacker's reach (re-picked when
-      // the 5 new event cards were added — the deck-shuffle RNG draw during createGame
-      // consumes differently whenever the booster deck's own composition changes, shifting
+      // seed 2 happens to land the defender back within the attacker's reach (re-picked when
+      // the event deck became separate from the booster deck — the deck-shuffle RNG draw
+      // during createGame consumes differently whenever deck composition changes, shifting
       // which seed lands where downstream; re-pick again here if it ever drifts)
-      const s0 = setupAdjacentCombat(29);
+      const s0 = setupAdjacentCombat(2);
       const before = s0.pendingCombat!;
       const s = run(s0, { type: "combatDefend", hyperspaceBoosterId: s0.players[1]!.hand[0]!.id });
       expect(s.pendingCombat).toMatchObject({ attackerId: before.attackerId, defenderId: before.defenderId, round: before.round, awaiting: "defend" });
