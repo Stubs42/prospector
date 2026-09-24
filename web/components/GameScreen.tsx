@@ -995,6 +995,7 @@ export function GameScreen({
   const eventCardBox =
     state.pendingEventChoice
       ? {
+          eventId: state.pendingEventChoice.eventId,
           title: state.pendingEventChoice.title,
           text: state.pendingEventChoice.text,
           prompt: state.pendingEventChoice.prompt,

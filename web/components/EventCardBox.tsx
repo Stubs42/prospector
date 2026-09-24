@@ -10,9 +10,11 @@
  * pan/zoom transform), not board content.
  */
 import { ActionBox, HexButton } from "./ActionBox.js";
+import { EventCardIcon } from "./EventCardIcons.js";
 import type { PanelButton } from "./HandPanel.js";
 
 export interface EventCardBoxProps {
+  eventId: string;
   title: string;
   text: string;
   /** the situational line for this particular pause — may differ from `text` (see
@@ -21,9 +23,12 @@ export interface EventCardBoxProps {
   buttons: PanelButton[];
 }
 
-export function EventCardBox({ title, text, prompt, buttons }: EventCardBoxProps) {
+export function EventCardBox({ eventId, title, text, prompt, buttons }: EventCardBoxProps) {
   return (
     <ActionBox className="eventcard-box">
+      <div className="eventcard-icon">
+        <EventCardIcon eventId={eventId} />
+      </div>
       <div className="actionbox-title">{title}</div>
       <div className="actionbox-sub-block">
         <div className="actionbox-sub">{text}</div>
