@@ -44,7 +44,11 @@ function fillerTurn(s: GameState): GameState {
 
 describe("worked example — yellow's out-and-back", () => {
   it("launches, coasts, loads a resource, and delivers it home", () => {
-    let s = createGame({ seed: 9, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "none" });
+    // seed 1 (re-picked when the event deck became separate from the booster deck — the
+    // deck-shuffle RNG draw shifts with any change to deck composition, and this scripted
+    // sequence needs every intermediate assertion to hold exactly, including that no
+    // incidental event card alters yellow's own fuel/cargo/equipment along the way)
+    let s = createGame({ seed: 1, colours: ["yellow", "black"], startPlayer: 0, upgradeAtStart: "none" });
     // deterministic stage: clear the random seeding, keep supply for the reseed check
     s.board.resources = {};
     const Y = () => s.players[0]!;

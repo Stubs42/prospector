@@ -27,6 +27,7 @@ export interface ContentJson {
   upgradeCaps: Record<string, number>;
   decks: {
     booster: { count: number; cards: BoosterCard[] };
+    event: { count: number; cards: BoosterCard[] };
     equipment: { count: number; cards: EquipmentCard[] };
     fuel: { cards: { id: string; value: number }[]; sharedField: { count: number; value: number } };
   };

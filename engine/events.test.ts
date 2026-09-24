@@ -10,9 +10,28 @@ function run(state: GameState, action: Action): GameState {
   return r.state;
 }
 
+// the event deck is separate from the booster deck now (see engine/game.ts's drawBooster) —
+// forcing a specific event to draw deterministically means both putting it on top of the
+// EVENT deck (not the booster one) and pinning the draw-chance gate to 100%, so drawBooster
+// is guaranteed to roll "event" at all, not just guaranteed to draw this exact card once it
+// does. Same "override one config leaf" pattern already used elsewhere in this file (see the
+// hyperspace-quake radius/conditions override below) — no new engine-side test hook needed.
 function withEventOnTop(state: GameState, eventId: string): GameState {
   const card: BoosterCard = { id: "test-event", deck: "booster", type: "event", value: null, effect: "", eventId };
-  return { ...state, decks: { ...state.decks, booster: { ...state.decks.booster, draw: [card, ...state.decks.booster.draw] } } };
+  return {
+    ...state,
+    decks: { ...state.decks, event: { ...state.decks.event, draw: [card, ...state.decks.event.draw] } },
+    config: {
+      ...state.config,
+      modes: {
+        ...state.config.modes,
+        prospector: {
+          ...state.config.modes.prospector,
+          decks: { ...state.config.modes.prospector.decks, event: { ...state.config.modes.prospector.decks.event, drawChance: 1 } },
+        },
+      },
+    },
+  };
 }
 
 describe("pirate-ambush", () => {

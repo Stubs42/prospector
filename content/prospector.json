@@ -94,7 +94,7 @@
  },
  "decks": {
   "booster": {
-   "count": 58,
+   "count": 45,
    "cards": [
     {
      "id": "booster-shield-1-01",
@@ -410,14 +410,20 @@
      "type": "hyperspace",
      "value": null,
      "effect": "jump: reroll position via coordinate dice; also playable as combat defence"
-    },
+    }
+   ]
+  },
+  "event": {
+   "count": 13,
+   "cards": [
     {
      "id": "event-pirate-ambush-01",
      "deck": "booster",
      "type": "event",
      "value": null,
      "effect": "roll shields vs. a raider; lose your most valuable ore on a loss",
-     "eventId": "pirate-ambush"
+     "eventId": "pirate-ambush",
+     "title": "Pirate Ambush"
     },
     {
      "id": "event-pirate-ambush-02",
@@ -425,7 +431,8 @@
      "type": "event",
      "value": null,
      "effect": "roll shields vs. a raider; lose your most valuable ore on a loss",
-     "eventId": "pirate-ambush"
+     "eventId": "pirate-ambush",
+     "title": "Pirate Ambush"
     },
     {
      "id": "event-hyperspace-quake-01",
@@ -433,7 +440,8 @@
      "type": "event",
      "value": null,
      "effect": "every ship near a random epicentre is hyperspace-jumped",
-     "eventId": "hyperspace-quake"
+     "eventId": "hyperspace-quake",
+     "title": "Hyperspace Quake"
     },
     {
      "id": "event-salvage-cache-01",
@@ -441,7 +449,8 @@
      "type": "event",
      "value": null,
      "effect": "pick a nearby cell to seed and load a resource, or let it drift",
-     "eventId": "salvage-cache"
+     "eventId": "salvage-cache",
+     "title": "Salvage Cache"
     },
     {
      "id": "event-asteroid-field-1-01",
@@ -449,7 +458,8 @@
      "type": "event",
      "value": null,
      "effect": "lose 1 fuel",
-     "eventId": "asteroid-field-1"
+     "eventId": "asteroid-field-1",
+     "title": "Asteroid Field"
     },
     {
      "id": "event-asteroid-field-2-01",
@@ -457,7 +467,8 @@
      "type": "event",
      "value": null,
      "effect": "lose 2 fuel",
-     "eventId": "asteroid-field-2"
+     "eventId": "asteroid-field-2",
+     "title": "Asteroid Field"
     },
     {
      "id": "event-asteroid-field-3-01",
@@ -465,7 +476,8 @@
      "type": "event",
      "value": null,
      "effect": "lose 3 fuel",
-     "eventId": "asteroid-field-3"
+     "eventId": "asteroid-field-3",
+     "title": "Asteroid Field"
     },
     {
      "id": "event-helium-cloud-1-01",
@@ -473,7 +485,8 @@
      "type": "event",
      "value": null,
      "effect": "gain 1 fuel",
-     "eventId": "helium-cloud-1"
+     "eventId": "helium-cloud-1",
+     "title": "Helium Cloud"
     },
     {
      "id": "event-helium-cloud-2-01",
@@ -481,7 +494,8 @@
      "type": "event",
      "value": null,
      "effect": "gain 2 fuel",
-     "eventId": "helium-cloud-2"
+     "eventId": "helium-cloud-2",
+     "title": "Helium Cloud"
     },
     {
      "id": "event-helium-cloud-3-01",
@@ -489,7 +503,8 @@
      "type": "event",
      "value": null,
      "effect": "gain 3 fuel",
-     "eventId": "helium-cloud-3"
+     "eventId": "helium-cloud-3",
+     "title": "Helium Cloud"
     },
     {
      "id": "event-engine-failure-01",
@@ -497,7 +512,8 @@
      "type": "event",
      "value": null,
      "effect": "no burn this turn \u2014 only the free drift target is available",
-     "eventId": "engine-failure"
+     "eventId": "engine-failure",
+     "title": "Engine Failure"
     },
     {
      "id": "event-ship-wreck-01",
@@ -505,7 +521,8 @@
      "type": "event",
      "value": null,
      "effect": "collect a random upgrade, if not already at its cap",
-     "eventId": "ship-wreck"
+     "eventId": "ship-wreck",
+     "title": "Ship Wreck"
     },
     {
      "id": "event-hidden-ore-01",
@@ -513,7 +530,8 @@
      "type": "event",
      "value": null,
      "effect": "pick up the lowest-value ore on the board, if you have cargo room",
-     "eventId": "hidden-ore"
+     "eventId": "hidden-ore",
+     "title": "Hidden Ore"
     }
    ]
   },

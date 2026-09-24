@@ -664,10 +664,24 @@ export function useSession(prefs: Prefs, reducedMotion: boolean) {
         ),
       };
       // DEBUG ONLY — force-draw a specific event card (pirate-ambush / hyperspace-quake /
-      // salvage-cache) by putting it on top of the booster deck before the real drawBooster
-      // step below runs, so this exercises the exact same engine code path a real draw would
+      // salvage-cache / ...) by putting it on top of the (now separate) event deck, and
+      // forcing the draw-chance gate to 100% so the real drawBooster step below is guaranteed
+      // to pull it — this exercises the exact same engine code path a real draw would
       const card = { id: "debug-event", deck: "booster" as const, type: "event" as const, value: null, effect: "", eventId: eventtest };
-      s = { ...s, decks: { ...s.decks, booster: { ...s.decks.booster, draw: [card, ...s.decks.booster.draw] } } };
+      s = {
+        ...s,
+        decks: { ...s.decks, event: { ...s.decks.event, draw: [card, ...s.decks.event.draw] } },
+        config: {
+          ...s.config,
+          modes: {
+            ...s.config.modes,
+            prospector: {
+              ...s.config.modes.prospector,
+              decks: { ...s.config.modes.prospector.decks, event: { ...s.config.modes.prospector.decks.event, drawChance: 1 } },
+            },
+          },
+        },
+      };
     }
     for (const step of [{ type: "drawBooster" }, { type: "drift" }] as Action[]) {
       if (legalActions(s).some((a) => a.type === step.type)) {

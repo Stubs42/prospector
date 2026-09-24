@@ -87,16 +87,28 @@ def build_booster_deck(cfg):
             "value": None,
             "effect": "jump: reroll position via coordinate dice; also playable as combat defence",
         })
-    for event_id, count in b.get("event", {}).items():
+    return cards
+
+
+def build_event_deck(cfg):
+    """The event deck is entirely separate from the booster deck — see engine/game.ts's
+    drawBooster, which rolls an independent per-draw probability (decks.event.drawChance)
+    to pick this deck instead of the booster one, rather than mixing events into one pile."""
+    e = cfg["modes"]["prospector"]["decks"]["event"]
+    cards = []
+    for event_id, count in e.get("counts", {}).items():
         meta = EVENT_META[event_id]
         for cid in _ids(f"event-{event_id}", count):
             cards.append({
                 "id": cid,
-                "deck": "booster",
+                "deck": "booster",  # matches engine BoosterCard's literal "deck" tag — this
+                                     # field isn't branched on anywhere, only `type`/`eventId`
+                                     # are; the event DECK itself is a separate pool
                 "type": "event",
                 "value": None,
                 "effect": meta["effect"],
                 "eventId": event_id,
+                "title": meta["title"],
             })
     return cards
 
@@ -211,6 +223,7 @@ def main():
     json.dump(components, open(OUT_COMPONENTS, "w", encoding="utf-8"), indent=1)
 
     booster = build_booster_deck(cfg)
+    event = build_event_deck(cfg)
     equipment = build_equipment_deck(cfg)
     fuel = build_fuel_deck(cfg)
     prospector = {
@@ -221,6 +234,7 @@ def main():
         "upgradeCaps": cfg["modes"]["prospector"]["upgradeCaps"],
         "decks": {
             "booster": {"count": len(booster), "cards": booster},
+            "event": {"count": len(event), "cards": event},
             "equipment": {"count": len(equipment), "cards": equipment},
             "fuel": fuel,
         },
@@ -232,8 +246,8 @@ def main():
     print(f"  coordinate dice: {components['coordinateDice']['count']}  "
           f"cones: {len(components['cones'])}  resource tiles: {components['resourceTiles']['total']}")
     print(f"wrote {OUT_PROSPECTOR}")
-    print(f"  booster deck: {len(booster)}   equipment deck: {len(equipment)}   "
-          f"fuel cards: {len(fuel['cards'])}")
+    print(f"  booster deck: {len(booster)}   event deck: {len(event)}   "
+          f"equipment deck: {len(equipment)}   fuel cards: {len(fuel['cards'])}")
     print(f"  ships: {len(prospector['ships'])}")
 
 

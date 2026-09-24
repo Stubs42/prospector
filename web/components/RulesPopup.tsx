@@ -74,7 +74,7 @@ export function RulesPopup({ config, onClose }: { config: Config; onClose: () =>
     },
   ];
 
-  const eventRows = Object.entries(decks.booster.event ?? {})
+  const eventRows = Object.entries(decks.event.counts ?? {})
     .filter(([, count]) => count > 0)
     .map(([id, count]) => {
       const def = EVENTS[id];
