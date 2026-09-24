@@ -26,7 +26,7 @@ import { movePhaseMs, type Prefs } from "../prefs.js";
 import { spinCoordinateDice, SkipGate, type CoordinateSpinPath } from "../spin.js";
 import { theme } from "../theme.js";
 import type { Session } from "../useSession.js";
-import type { GameState, PlayerState } from "../../engine/types.js";
+import type { GameState, PendingEventChoice, PlayerState } from "../../engine/types.js";
 import type { MoveAnim } from "../anim.js";
 
 // final ranking for the game-over popup: same total-value score the engine already uses to
@@ -591,6 +591,15 @@ export function GameScreen({
   // "Gate interactive UI to the deciding player online"). s.isMe is always true offline, so
   // hot-seat behavior is unchanged.
   const interactive = !activeIsBot && !needPassGate && s.isMe(state.activePlayerIndex);
+  // an info toast (web/infoToast.ts) is happy to sit through however many other players'/bots'
+  // turns pass, but the instant it becomes THIS viewer's own actionable turn, any leftover
+  // toast is force-cleared — "closes on confirm or the next popup, latest by the time it's
+  // your own turn again" is the spec; a stale toast about something 3 turns ago shouldn't be
+  // sitting over the board blocking a player who now has real decisions of their own to make
+  useEffect(() => {
+    if (interactive) dismissInfo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [interactive]);
   const overLimit = afford.overLimit;
   // turn 1: the ship must be placed on a base cell before anything else. `needsLaunch` is the
   // plain, ungated fact (used below for the passive status label, which must read the same for
@@ -1124,8 +1133,25 @@ export function GameScreen({
   // until THEY dismiss it or the next message replaces it — decoupled from how fast the bot
   // itself resolved. See web/infoToast.ts.
   const drawerIsBot = state.pendingEventChoice ? seats[state.pendingEventChoice.playerId] === "bot" : false;
+  // a non-deciding viewer's copy of a HUMAN drawer's box (no buttons — nothing waits on THEM)
+  // also respects prefs.autoCloseSeconds, same as the bot-drawn info toast below: reference
+  // equality is enough to identify "this exact still-pending instance" since the engine blocks
+  // every other action while pendingEventChoice is set, so its object identity is guaranteed
+  // stable for as long as it's up — a fresh draw (even the same event/player again later) is
+  // always a genuinely new object. Never applies to the decider's own box (that would silently
+  // auto-confirm nothing — it just stops SHOWING it locally — but auto-closing a box that
+  // actually needs YOUR decision would be wrong, so this is gated to non-deciders only).
+  const [eventBoxDismissed, setEventBoxDismissed] = useState<PendingEventChoice | null>(null);
+  const eventBoxLocallyClosed = state.pendingEventChoice !== null && state.pendingEventChoice === eventBoxDismissed;
+  useEffect(() => {
+    const pc = state.pendingEventChoice;
+    if (!pc || drawerIsBot || s.isMe(pc.playerId) || prefs.autoCloseSeconds <= 0) return;
+    const id = window.setTimeout(() => setEventBoxDismissed(pc), prefs.autoCloseSeconds * 1000);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.pendingEventChoice, drawerIsBot, prefs.autoCloseSeconds]);
   const eventCardBox =
-    state.pendingEventChoice && !drawerIsBot
+    state.pendingEventChoice && !drawerIsBot && !eventBoxLocallyClosed
       ? {
           eventId: state.pendingEventChoice.eventId,
           title: state.pendingEventChoice.title,
@@ -1220,6 +1246,19 @@ export function GameScreen({
     : interactive && overLimit
       ? { lines: ["Too many cards!", "Discard one to continue"] }
       : null;
+
+  // an info toast is the one box the game never waits on — prefs.autoCloseSeconds (0 = never)
+  // lets the player close it on a timer instead of always by hand. Only ticks while the toast
+  // is ACTUALLY being shown (matches the same priority gate the render below uses): time spent
+  // hidden behind a real decision box doesn't count against the player's read time, and it
+  // restarts fresh whenever a new message replaces the old one (`infoToast?.id` in the deps).
+  const infoToastVisible = !scrapConfirmOpen && !fightBox && !eventCardBox && !popup && !equipBox && !!infoToast;
+  useEffect(() => {
+    if (!infoToastVisible || prefs.autoCloseSeconds <= 0) return;
+    const id = window.setTimeout(dismissInfo, prefs.autoCloseSeconds * 1000);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [infoToastVisible, infoToast?.id, prefs.autoCloseSeconds]);
 
   // clicking your own base (off a burn target) asks to scrap — available any time during the move
   const scrapCells = interactive && !pc && attackTarget === null && !launchPhase ? board.baseCells(p.homeBase) : [];
@@ -1325,9 +1364,16 @@ export function GameScreen({
         {!suppress && !fightBox && !eventCardBox && popup && <HexPopup lines={popup.lines} />}
         {!suppress && !fightBox && !eventCardBox && equipBox && <EquipmentPopup {...equipBox} />}
         {/* the generic "just keep a player informed" toast (web/infoToast.ts) — lowest
-           priority of all: never preempts a real decision, just doesn't render while one's up */}
-        {!suppress && !fightBox && !eventCardBox && !popup && !equipBox && infoToast && (
-          <HexPopup lines={infoToast.lines} actions={[{ label: "OK", kind: "primary", onClick: dismissInfo }]} />
+           priority of all: never preempts a real decision, just doesn't render while one's up.
+           Deliberately NOT gated by `suppress` (unlike the decision boxes above) — `suppress`
+           is mostly "a move/spin animation is playing on the board," which has nothing to do
+           with whether this informational overlay should be visible; gating on it made the
+           toast flicker in and out behind ordinary bot movement right after it appeared
+           (found live: a bot's salvage-cache toast "popped up and disappeared again" — it was
+           still there, just hidden behind the bot's very next burn animation). Still respects
+           scrapConfirmOpen, the one true full-screen-dialog case. */}
+        {infoToastVisible && infoToast && (
+          <HexPopup lines={infoToast.lines} actions={[{ label: "Close", kind: "primary", onClick: dismissInfo }]} />
         )}
         {scrapConfirm && (
           <div className="board-scrim" onClick={scrapConfirm.onCancel}>

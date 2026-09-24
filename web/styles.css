@@ -795,6 +795,10 @@ circle.cell-hit { pointer-events: all; }
   width: 120px; background: var(--panel-2); color: var(--ink);
   border: 1px solid var(--line); border-radius: 5px; padding: 0.25rem 0.4rem; font: inherit;
 }
+.settings-row input[type="number"] {
+  width: 52px; background: var(--panel-2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 5px; padding: 0.25rem 0.4rem; font: inherit;
+}
 
 /* online lobby (host/join a networked room) — shares .settings-panel/.settings-row's look */
 .online-lobby { position: relative; display: flex; align-items: center; gap: 0.4rem; }
