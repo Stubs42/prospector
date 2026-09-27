@@ -11,6 +11,7 @@ interface GameRow {
   state: unknown;
   seats: unknown;
   names: unknown;
+  schema_version: number;
 }
 interface PlayerRow {
   game_id: string;
@@ -34,12 +35,16 @@ export class FakePool {
         state: params[1],
         seats: JSON.parse(params[2]),
         names: JSON.parse(params[3]),
+        schema_version: params[4],
       });
       return { rows: [{ id }] };
     }
     if (sql.includes("UPDATE games SET state")) {
       const row = this.games.find((g) => g.id === params[0]);
-      if (row) row.state = params[1];
+      if (row) {
+        row.state = params[1];
+        row.schema_version = params[2];
+      }
       return { rows: [] };
     }
     if (sql.includes("UPDATE games SET names")) {
@@ -57,9 +62,16 @@ export class FakePool {
       });
       return { rows: [] };
     }
-    if (sql.includes("SELECT id, room_code, state, seats, names FROM games")) {
+    if (sql.includes("SELECT id, room_code, state, seats, names, schema_version FROM games")) {
       return {
-        rows: this.games.map((g) => ({ id: g.id, room_code: g.room_code, state: g.state, seats: g.seats, names: g.names })),
+        rows: this.games.map((g) => ({
+          id: g.id,
+          room_code: g.room_code,
+          state: g.state,
+          seats: g.seats,
+          names: g.names,
+          schema_version: g.schema_version,
+        })),
       };
     }
     if (sql.includes("SELECT game_id, player_index")) {
@@ -70,6 +82,11 @@ export class FakePool {
       if (!p) return { rows: [] };
       const g = this.games.find((gm) => gm.id === p.game_id);
       return { rows: g ? [{ game_id: p.game_id, room_code: g.room_code, player_index: p.player_index }] : [] };
+    }
+    if (sql.includes("DELETE FROM games")) {
+      this.games = this.games.filter((g) => g.id !== params[0]);
+      this.players = this.players.filter((p) => p.game_id !== params[0]);
+      return { rows: [] };
     }
     throw new Error(`FakePool: unhandled query: ${sql}`);
   }

@@ -19,9 +19,18 @@ CREATE TABLE IF NOT EXISTS games (
   -- display name per seat — GameState has no concept of a player's display name at all, so
   -- this (like seats) is plain server-owned metadata, never derived from engine state
   names jsonb NOT NULL DEFAULT '[]',
+  -- stamped with engine's STATE_SCHEMA_VERSION at write time; a game whose stamp doesn't
+  -- match the running server's version gets discarded on boot instead of restored (see
+  -- STATE_SCHEMA_VERSION's own doc comment) — default 0 so rows written before this column
+  -- existed always mismatch a real (>=1) version and get cleaned up rather than crash a client
+  schema_version int NOT NULL DEFAULT 0,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- ALTER ... ADD COLUMN IF NOT EXISTS so this stays idempotent for a database created by an
+-- older version of this file, before schema_version existed
+ALTER TABLE games ADD COLUMN IF NOT EXISTS schema_version int NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS game_players (
   game_id uuid NOT NULL REFERENCES games(id) ON DELETE CASCADE,

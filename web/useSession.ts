@@ -48,6 +48,13 @@ function saveOnlineSession(s: SavedOnlineSession | null): void {
   }
 }
 
+/** Forget any saved reconnect token — used by the top-level ErrorBoundary's recovery action,
+   so a crash caused by rejoining a room whose state a deploy made incompatible doesn't just
+   recur on reload; see ErrorBoundary.tsx. */
+export function clearSavedOnlineSession(): void {
+  saveOnlineSession(null);
+}
+
 export interface OnlineState {
   status: "offline" | "connecting" | "online";
   roomCode: string | null;

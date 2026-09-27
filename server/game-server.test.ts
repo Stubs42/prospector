@@ -2,10 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { WebSocket } from "ws";
 import { legalActions } from "../engine/index.js";
 import { stepBot } from "../client/index.js";
+import { STATE_SCHEMA_VERSION } from "../engine/index.js";
 import { fakePool, FakePool } from "./testFakePool.js";
 import { getRoom, removeRoom } from "./rooms.js";
 import { createRoom, joinRoom, handleAction, handleDisconnect, reconnect, restoreRoom } from "./game-server.js";
-import { findByReconnectToken, loadAllGames } from "./persistence.js";
+import { deleteGameRecord, findByReconnectToken, loadAllGames } from "./persistence.js";
 
 function fakeSocket(): WebSocket & { sent: unknown[] } {
   const sent: unknown[] = [];
@@ -243,6 +244,30 @@ describe("game-server", () => {
       const [stored] = await loadAllGames(pool);
       const restored = restoreRoom(stored!);
       expect(restored.seats).toEqual(["human", "bot", "bot"]);
+    } finally {
+      removeRoom(room.roomCode);
+    }
+  });
+
+  it("stamps every stored game with the running build's schema version, and deleteGameRecord removes it", async () => {
+    // regression test: a stored game written under an older GameState shape must be
+    // recognizable as stale on boot (see main.ts's discard-on-version-mismatch loop) rather
+    // than silently handed to new client code, which is what crashed a browser into a black
+    // screen after a deploy changed the booster/event deck layout
+    const hostWs = fakeSocket();
+    const room = await createRoom(pool, hostWs, {
+      type: "createRoom",
+      displayName: "Alice",
+      humans: 1,
+      bots: 1,
+      upgradeAtStart: "none",
+      variant: "standard",
+    });
+    try {
+      const [stored] = await loadAllGames(pool);
+      expect(stored!.schemaVersion).toBe(STATE_SCHEMA_VERSION);
+      await deleteGameRecord(pool, stored!.id);
+      expect(await loadAllGames(pool)).toEqual([]);
     } finally {
       removeRoom(room.roomCode);
     }

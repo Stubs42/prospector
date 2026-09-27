@@ -9,11 +9,11 @@ import { existsSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer, type WebSocket } from "ws";
-import { provideGameData } from "../engine/index.js";
+import { provideGameData, STATE_SCHEMA_VERSION } from "../engine/index.js";
 import { loadConfig, loadBoardJson, loadContent } from "../engine/data.js";
 import type { ClientMessage } from "../client/index.js";
 import { makePool, ensureSchema } from "./db.js";
-import { loadAllGames, findByReconnectToken } from "./persistence.js";
+import { loadAllGames, deleteGameRecord, findByReconnectToken } from "./persistence.js";
 import { addRoom, getRoom } from "./rooms.js";
 import { createRoom, joinRoom, reconnect, handleAction, handleDisconnect, restoreRoom } from "./game-server.js";
 
@@ -48,8 +48,23 @@ async function main(): Promise<void> {
   await ensureSchema(pool);
 
   // repopulate the in-memory room registry from Postgres so a restart doesn't lose games in
-  // progress — sockets reattach as clients reconnect with their stored token
-  for (const stored of await loadAllGames(pool)) addRoom(restoreRoom(stored));
+  // progress — sockets reattach as clients reconnect with their stored token. A stored game
+  // whose schema_version doesn't match this build's STATE_SCHEMA_VERSION was written by code
+  // with a different GameState shape (e.g. a since-changed deck layout); restoring it would
+  // hand the new client code — and any reconnecting browser — data it can't safely render, so
+  // it's deleted instead of restored. That in-progress game is lost, but no client crashes.
+  let discarded = 0;
+  for (const stored of await loadAllGames(pool)) {
+    if (stored.schemaVersion !== STATE_SCHEMA_VERSION) {
+      discarded++;
+      await deleteGameRecord(pool, stored.id);
+      continue;
+    }
+    addRoom(restoreRoom(stored));
+  }
+  if (discarded > 0) {
+    console.warn(`Discarded ${discarded} stored game(s) from a different schema version on boot.`);
+  }
 
   const server = createServer((req, res) => {
     const url = req.url ?? "/";
