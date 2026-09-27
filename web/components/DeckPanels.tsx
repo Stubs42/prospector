@@ -63,6 +63,12 @@ export function DeckPanels({ state }: { state: GameState }) {
   const equipmentTotal = state.decks.equipment.draw.length + state.decks.equipment.discard.length;
   const topDiscard = state.decks.booster.discard[state.decks.booster.discard.length - 1] ?? null;
   const topEventDiscard = state.decks.event.discard[state.decks.event.discard.length - 1] ?? null;
+  // the event system is currently disabled (decks.event.drawChance === 0 — see engine/types.ts's
+  // doc comment on that field for why) — showing a deck pile that can structurally never move
+  // would just be confusing table clutter, so hide it entirely rather than display a
+  // permanently-idle "13/13" counter. The deck itself is still built/shuffled every game
+  // (nothing engine-side was reverted), this is presentation-only.
+  const eventsEnabled = state.config.modes.prospector.decks.event.drawChance > 0;
   return (
     <>
       {/* a shared positioning column — the event deck's own frame sits directly below the
@@ -81,16 +87,18 @@ export function DeckPanels({ state }: { state: GameState }) {
             {topDiscard ? <BoosterCardFace card={topDiscard} /> : <EmptyCardSlot />}
           </DeckStack>
         </div>
-        <div className="deck-panel">
-          <DeckStack label="EVENTS" value={`${state.decks.event.draw.length}/${eventTotal}`}>
-            <div className="card-art-wrap">
-              <CardBackArt />
-            </div>
-          </DeckStack>
-          <DeckStack label="EVENT PLAYED" value={`${state.decks.event.discard.length}/${eventTotal}`}>
-            {topEventDiscard ? <BoosterCardFace card={topEventDiscard} /> : <EmptyCardSlot />}
-          </DeckStack>
-        </div>
+        {eventsEnabled && (
+          <div className="deck-panel">
+            <DeckStack label="EVENTS" value={`${state.decks.event.draw.length}/${eventTotal}`}>
+              <div className="card-art-wrap">
+                <CardBackArt />
+              </div>
+            </DeckStack>
+            <DeckStack label="EVENT PLAYED" value={`${state.decks.event.discard.length}/${eventTotal}`}>
+              {topEventDiscard ? <BoosterCardFace card={topEventDiscard} /> : <EmptyCardSlot />}
+            </DeckStack>
+          </div>
+        )}
       </div>
       <div className="supply-panel">
         <div className="supply-frame" style={{ width: SUPPLY_FRAME_WIDTH }}>

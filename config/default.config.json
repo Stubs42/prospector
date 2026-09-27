@@ -88,7 +88,7 @@
           "hyperspace":  3
         },
         "event": {
-          "drawChance": 0.1,
+          "drawChance": 0,
           "counts": {
             "pirate-ambush": 2, "hyperspace-quake": 1, "salvage-cache": 1,
             "asteroid-field-1": 1, "asteroid-field-2": 1, "asteroid-field-3": 1,
