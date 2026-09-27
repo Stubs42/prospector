@@ -71,7 +71,14 @@ export interface ProspectorConfig {
        or amplified by anything about the booster deck's own size or hoarding dynamics. */
     event: {
       /** chance [0,1] that a single card draw pulls from the event deck instead of the
-         booster deck — rolled fresh per draw, independent of either pool's size */
+         booster deck — rolled fresh per draw, independent of either pool's size.
+         DISABLED (0) as of 2026-09-27 — the user decided the whole event-card system (built
+         2026-09-24, PRs #86-96) made the game too unpredictable and disturbed its flow,
+         introducing too much luck for strategy to matter. The engine/content/UI machinery is
+         deliberately left intact, not reverted, in case events get revisited later — this one
+         config value is the entire on/off switch (0 = never rolls an event; every draw always
+         pulls from the booster deck instead). See memory event-system-disabled for the full
+         writeup. */
       drawChance: number;
       /** eventId -> how many copies are in the event deck */
       counts: Record<string, number>;
