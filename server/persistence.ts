@@ -3,7 +3,7 @@
    against a fake pool and easy to later swap for a different store without touching
    rooms.ts/game-server.ts. */
 import type pg from "pg";
-import type { GameState } from "../engine/index.js";
+import { STATE_SCHEMA_VERSION, type GameState } from "../engine/index.js";
 import type { Seat } from "../client/index.js";
 
 export interface StoredPlayer {
@@ -20,6 +20,7 @@ export interface StoredGame {
   seats: Seat[];
   names: string[];
   players: StoredPlayer[];
+  schemaVersion: number;
 }
 
 export async function createGameRecord(
@@ -30,14 +31,26 @@ export async function createGameRecord(
   names: string[],
 ): Promise<string> {
   const res = await pool.query<{ id: string }>(
-    "INSERT INTO games (room_code, state, seats, names) VALUES ($1, $2, $3, $4) RETURNING id",
-    [roomCode, state, JSON.stringify(seats), JSON.stringify(names)],
+    "INSERT INTO games (room_code, state, seats, names, schema_version) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+    [roomCode, state, JSON.stringify(seats), JSON.stringify(names), STATE_SCHEMA_VERSION],
   );
   return res.rows[0]!.id;
 }
 
 export async function updateGameState(pool: pg.Pool, gameId: string, state: GameState): Promise<void> {
-  await pool.query("UPDATE games SET state = $2, updated_at = now() WHERE id = $1", [gameId, state]);
+  // re-stamps schema_version on every write too, not just at creation — the state a running
+  // server writes is always shaped by whatever code that server is currently running
+  await pool.query("UPDATE games SET state = $2, schema_version = $3, updated_at = now() WHERE id = $1", [
+    gameId,
+    state,
+    STATE_SCHEMA_VERSION,
+  ]);
+}
+
+/** Permanently removes a stored game (and its players, via ON DELETE CASCADE) — used on boot
+   to clean up rows a version mismatch left un-restorable, so they don't pile up forever. */
+export async function deleteGameRecord(pool: pg.Pool, gameId: string): Promise<void> {
+  await pool.query("DELETE FROM games WHERE id = $1", [gameId]);
 }
 
 /** Names change only on a join (or at creation), unlike state — a separate write keeps that
@@ -55,9 +68,14 @@ export async function addPlayer(pool: pg.Pool, gameId: string, player: StoredPla
 
 /** Every persisted game, for repopulating the in-memory room registry on server boot. */
 export async function loadAllGames(pool: pg.Pool): Promise<StoredGame[]> {
-  const games = await pool.query<{ id: string; room_code: string; state: GameState; seats: Seat[]; names: string[] }>(
-    "SELECT id, room_code, state, seats, names FROM games",
-  );
+  const games = await pool.query<{
+    id: string;
+    room_code: string;
+    state: GameState;
+    seats: Seat[];
+    names: string[];
+    schema_version: number;
+  }>("SELECT id, room_code, state, seats, names, schema_version FROM games");
   const players = await pool.query<{
     game_id: string;
     player_index: number;
@@ -83,6 +101,7 @@ export async function loadAllGames(pool: pg.Pool): Promise<StoredGame[]> {
     seats: g.seats,
     names: g.names,
     players: (byGame.get(g.id) ?? []).sort((a, b) => a.playerIndex - b.playerIndex),
+    schemaVersion: g.schema_version,
   }));
 }
 

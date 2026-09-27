@@ -1,5 +1,15 @@
 import type { Hex } from "./hex.js";
 
+/** Bump this whenever a change to GameState's shape (or to content/config it embeds
+   assumptions about) would make an older persisted GameState unsafe to hand to the current
+   client/engine code — e.g. the booster/event deck split. The server stamps every game it
+   writes to Postgres with the version in effect when it wrote it, and discards (rather than
+   restores) any stored game whose stamp doesn't match its own on boot, instead of replaying
+   incompatible old data into new code. There is no migration story: a version bump means
+   in-progress games from before the matching deploy are lost, not upgraded. See memory
+   stale-persisted-game-crash for why this exists. */
+export const STATE_SCHEMA_VERSION = 1;
+
 // ---------------------------------------------------------------------------
 // Config (subset of config/config.schema.json the engine actually reads)
 // ---------------------------------------------------------------------------
